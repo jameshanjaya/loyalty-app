@@ -1,6 +1,7 @@
 import { bytesToHex, hashPin, randomBytes, randomId } from "../crypto";
 import { membersCsv, membersXlsx, type ExportRow } from "../export";
 import { clip, httpsUrl, prettyWa } from "../format";
+import { orderLabel, orderPlatform } from "../orders";
 import { html, readCookie, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
 import { validOutletPin, weakPin } from "../phone";
@@ -112,6 +113,11 @@ export async function handleAdmin(app: App): Promise<Response | null> {
         pointsIssued: formatPoints(points.issued),
         pointsRedeemed: formatPoints(points.redeemed),
         pendingMissions,
+        orderClicks: (await repo.orderClickCounts(db, startOfWibMonth(now), brandId)).map((row) => ({
+          brand: brands.find((b) => b.id === row.brand_id)?.short_name || row.brand_id,
+          platform: orderLabel(row.platform, row.platform),
+          n: row.n,
+        })),
       }),
     );
   }
@@ -243,7 +249,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (path === "/admin/aturan" && request.method === "GET") {
-    return html(rulesPage(await repo.listBrands(db, false), url.searchParams));
+    return html(rulesPage(await repo.listBrands(db, false), await repo.listOrderLinks(db, null), url.searchParams));
   }
 
   if (path.startsWith("/admin/aturan/") && request.method === "POST") {
@@ -254,6 +260,25 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const patch = readBrand(form);
     if (!patch) return back("/admin/aturan", "aturan");
     await repo.saveBrand(db, id, patch);
+    const stores = await readStorePair(form);
+    if (!stores) return back("/admin/aturan", "aturan");
+    await repo.upsertOrderLink(db, { id: randomId(), brandId: id, outletId: null, platform: "gofood", label: "GoFood", url: stores.gofood, sort: 1 });
+    await repo.upsertOrderLink(db, { id: randomId(), brandId: id, outletId: null, platform: "grabfood", label: "GrabFood", url: stores.grabfood, sort: 2 });
+    const extraRaw = String(form.get("extra_url") || "").trim();
+    if (extraRaw) {
+      const extraUrl = httpsUrl(extraRaw);
+      const platform = orderPlatform(String(form.get("extra_platform") || ""));
+      if (!extraUrl || !platform || platform === "gofood" || platform === "grabfood") return back("/admin/aturan", "aturan");
+      await repo.insertOrderLink(db, {
+        id: randomId(),
+        brandId: id,
+        outletId: null,
+        platform,
+        label: orderLabel(platform, clip(String(form.get("extra_label") || ""), 24)),
+        url: extraUrl,
+        sort: 5,
+      });
+    }
     return ok("/admin/aturan", "simpan");
   }
 
@@ -261,7 +286,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const outlets = await repo.listOutlets(db);
     const brands = await repo.listBrands(db, false);
     const view = outlets.map((o) => ({ ...o, brand_name: brands.find((b) => b.id === o.brand_id)?.name || o.brand_id }));
-    return html(outletsPage(view, brands, url.searchParams));
+    return html(outletsPage(view, brands, await repo.listOrderLinks(db, null), url.searchParams));
   }
 
   if (path === "/admin/outlet" && request.method === "POST") {
@@ -274,6 +299,24 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     if (!made.ok) return back("/admin/outlet", made.error);
     await repo.insertOutlet(db, { id: randomId(), brandId: brand.id, name, pinHash: made.hash, pinSalt: made.salt, now });
     return ok("/admin/outlet", "outlet");
+  }
+
+  if (path.startsWith("/admin/outlet/") && path.endsWith("/pesan") && request.method === "POST") {
+    const id = decodeURIComponent(path.slice("/admin/outlet/".length, -"/pesan".length));
+    const outlet = await repo.getOutlet(db, id);
+    if (!outlet) return back("/admin/outlet", "aturan");
+    const form = await request.formData();
+    const stores = await readStorePair(form);
+    if (!stores) return back("/admin/outlet", "aturan");
+    await repo.upsertOrderLink(db, { id: randomId(), brandId: outlet.brand_id, outletId: outlet.id, platform: "gofood", label: "GoFood", url: stores.gofood, sort: 1 });
+    await repo.upsertOrderLink(db, { id: randomId(), brandId: outlet.brand_id, outletId: outlet.id, platform: "grabfood", label: "GrabFood", url: stores.grabfood, sort: 2 });
+    return ok("/admin/outlet", "simpan");
+  }
+
+  if (path.startsWith("/admin/pesan/") && path.endsWith("/hapus") && request.method === "POST") {
+    const id = decodeURIComponent(path.slice("/admin/pesan/".length, -"/hapus".length));
+    await repo.deleteOrderLink(db, id);
+    return ok("/admin/aturan", "hapus");
   }
 
   if (path.startsWith("/admin/outlet/") && path.endsWith("/pin") && request.method === "POST") {
@@ -564,6 +607,16 @@ function activityFilter(url: URL) {
     from: dari || undefined,
     to: sampaiHari ? sampaiHari + 86_400_000 - 1 : undefined,
   };
+}
+
+function readStorePair(form: FormData): { gofood: string; grabfood: string } | null {
+  const goRaw = String(form.get("gofood") || "").trim();
+  const grabRaw = String(form.get("grabfood") || "").trim();
+  const gofood = goRaw ? httpsUrl(goRaw) : "";
+  const grabfood = grabRaw ? httpsUrl(grabRaw) : "";
+  if (goRaw && !gofood) return null;
+  if (grabRaw && !grabfood) return null;
+  return { gofood: gofood || "", grabfood: grabfood || "" };
 }
 
 function readBrand(form: FormData) {

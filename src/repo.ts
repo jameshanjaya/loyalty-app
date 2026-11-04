@@ -1,3 +1,4 @@
+import type { OrderLink } from "./orders";
 import type { ActivityRow, Banner, Brand, Card, FlagRow, Member, Outlet, SessionRow } from "./types";
 import type { StoredClaim } from "./tokens";
 
@@ -864,6 +865,77 @@ export async function countBirthdayRedeems(db: D1Database, since: number, brandI
   const stmt = brandId ? db.prepare(sql).bind(since, brandId) : db.prepare(sql).bind(since);
   const row = await stmt.first<{ n: number }>();
   return row?.n ?? 0;
+}
+
+export async function listOrderLinks(db: D1Database, brandId: string | null): Promise<OrderLink[]> {
+  const sql = brandId
+    ? `SELECT * FROM order_links WHERE brand_id = ? ORDER BY sort_order, label`
+    : `SELECT * FROM order_links ORDER BY brand_id, sort_order, label`;
+  const stmt = brandId ? db.prepare(sql).bind(brandId) : db.prepare(sql);
+  return rows<OrderLink>(stmt);
+}
+
+export async function getOrderLink(db: D1Database, id: string): Promise<OrderLink | null> {
+  return db.prepare(`SELECT * FROM order_links WHERE id = ?`).bind(id).first<OrderLink>();
+}
+
+export async function upsertOrderLink(
+  db: D1Database,
+  row: { id: string; brandId: string; outletId: string | null; platform: string; label: string; url: string; sort: number },
+): Promise<void> {
+  await db
+    .prepare(
+      `DELETE FROM order_links WHERE brand_id = ? AND platform = ? AND IFNULL(outlet_id, '') = IFNULL(?, '') AND platform IN ('gofood', 'grabfood')`,
+    )
+    .bind(row.brandId, row.platform, row.outletId)
+    .run();
+  if (!row.url) return;
+  await db
+    .prepare(
+      `INSERT INTO order_links (id, brand_id, outlet_id, platform, label, url, sort_order, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+    )
+    .bind(row.id, row.brandId, row.outletId, row.platform, row.label, row.url, row.sort)
+    .run();
+}
+
+export async function insertOrderLink(
+  db: D1Database,
+  row: { id: string; brandId: string; outletId: string | null; platform: string; label: string; url: string; sort: number },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO order_links (id, brand_id, outlet_id, platform, label, url, sort_order, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+    )
+    .bind(row.id, row.brandId, row.outletId, row.platform, row.label, row.url, row.sort)
+    .run();
+}
+
+export async function deleteOrderLink(db: D1Database, id: string): Promise<void> {
+  await db.prepare(`DELETE FROM order_links WHERE id = ?`).bind(id).run();
+}
+
+export async function logOrderClick(
+  db: D1Database,
+  row: { id: string; brandId: string; outletId: string | null; platform: string; linkId: string; memberId: string | null; now: number },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO order_clicks (id, brand_id, outlet_id, platform, link_id, member_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(row.id, row.brandId, row.outletId, row.platform, row.linkId, row.memberId, row.now)
+    .run();
+}
+
+export async function orderClickCounts(
+  db: D1Database,
+  since: number,
+  brandId: string | null,
+): Promise<Array<{ brand_id: string; platform: string; n: number }>> {
+  const sql = brandId
+    ? `SELECT brand_id, platform, COUNT(*) AS n FROM order_clicks WHERE created_at >= ? AND brand_id = ? GROUP BY brand_id, platform ORDER BY n DESC`
+    : `SELECT brand_id, platform, COUNT(*) AS n FROM order_clicks WHERE created_at >= ? GROUP BY brand_id, platform ORDER BY n DESC`;
+  const stmt = brandId ? db.prepare(sql).bind(since, brandId) : db.prepare(sql).bind(since);
+  return rows<{ brand_id: string; platform: string; n: number }>(stmt);
 }
 
 export async function memberCards(db: D1Database, memberId: string): Promise<Array<Card & { short_name: string }>> {

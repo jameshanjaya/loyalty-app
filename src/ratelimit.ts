@@ -11,6 +11,7 @@ export const LIMITS = {
   cashierIssue: { windowMs: 15 * 60_000, limit: 40 },
   lookup: { windowMs: 10 * 60_000, limit: 20 },
   join: { windowMs: 15 * 60_000, limit: 40 },
+  orderClick: { windowMs: 10 * 60_000, limit: 40 },
 } as const satisfies Record<string, LimitRule>;
 
 export type LimitState = Map<string, { windowStart: number; count: number }>;

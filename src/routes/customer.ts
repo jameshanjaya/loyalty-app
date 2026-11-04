@@ -1,5 +1,8 @@
+import { randomId } from "../crypto";
 import { birthdayStatus } from "../birthday";
+import { visibleOrderLinks } from "../orders";
 import { formatPoints, tierChoices } from "../points";
+import { LIMITS, enforceLimit } from "../ratelimit";
 import * as pdb from "../points-db";
 import { expireCodes } from "../points-flow";
 import { html, isPrefetch, readCookie, redirect, sameOrigin } from "../http";
@@ -48,6 +51,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     path === "/profil/hubungkan" ||
     path === "/keluar" ||
     path === "/kartu" ||
+    path.startsWith("/pesan/") ||
     path.startsWith("/k/") ||
     path.startsWith("/berhasil/");
   if (!mine) return null;
@@ -222,6 +226,14 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       days: brand.birthday_days,
     });
     const birthdayUsed = offer.open ? await repo.birthdayTaken(db, member.id, brand.id, offer.rewardYear) : true;
+    const links = await repo.listOrderLinks(db, brand.id);
+    const outletParam = url.searchParams.get("outlet") || "";
+    const outletOk = outletParam ? links.some((link) => link.outlet_id === outletParam) : false;
+    const orders = visibleOrderLinks(links, outletOk ? outletParam : null);
+    const named = await repo.listOutlets(db);
+    const orderOutlets = named
+      .filter((outlet) => outlet.brand_id === brand.id && links.some((link) => link.outlet_id === outlet.id))
+      .map((outlet) => ({ id: outlet.id, name: outlet.name, on: outlet.id === outletParam }));
     const tiers = await pdb.listTiers(db, brand.id);
     const choice = tierChoices(
       cards.get(brand.id)?.stamps ?? 0,
@@ -246,8 +258,30 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         birthday: offer.open && !birthdayUsed ? brand.birthday_reward : null,
         points: formatPoints(await pdb.pointsBalance(db, member.id)),
         tiers: tierView,
+        orders,
+        orderOutlets,
       }),
     );
+  }
+
+  if (path.startsWith("/pesan/") && request.method === "GET") {
+    if (isPrefetch(request)) return new Response(null, { status: 204 });
+    const id = decodeURIComponent(path.slice("/pesan/".length));
+    const link = await repo.getOrderLink(db, id);
+    if (!link || link.active !== 1 || !link.url.startsWith("https://")) return redirect("/kartu");
+    const gate = await enforceLimit(db, `order:${ip}`, now, LIMITS.orderClick);
+    if (gate.ok) {
+      await repo.logOrderClick(db, {
+        id: randomId(),
+        brandId: link.brand_id,
+        outletId: link.outlet_id,
+        platform: link.platform,
+        linkId: link.id,
+        memberId: member?.id || null,
+        now,
+      });
+    }
+    return redirect(link.url);
   }
 
   if (path.startsWith("/k/") && request.method === "GET") {

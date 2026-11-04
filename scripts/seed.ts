@@ -134,6 +134,8 @@ const emails: Record<string, string> = {
   m_kevin: "kevin.t@gmail.com",
 };
 const lines: string[] = [
+  "DELETE FROM order_clicks;",
+  "DELETE FROM order_links;",
   "DELETE FROM redeem_codes;",
   "DELETE FROM point_ledger;",
   "DELETE FROM mission_submissions;",
@@ -229,6 +231,16 @@ lines.push(
   ('ban_soto_2','soto-oseng','Oseng panas','Hangat, gurih, habis cepat','/banners/soto-2.jpg',NULL,NULL,${now - DAY},NULL,2,1,${now},''),
   ('ban_kris','krispyporkk','Crispy Bowl','Tambah nasi cuma Rp5.000','/banners/krispy-1.jpg',NULL,NULL,${now - DAY},NULL,1,1,${now - DAY},'Lihat menu'),
   ('ban_kris_2','krispyporkk','Kulit garing','Renyah dan pedas','/banners/krispy-2.jpg',NULL,NULL,${now - DAY},NULL,2,1,${now},'');
+  INSERT INTO order_links (id, brand_id, outlet_id, platform, label, url, sort_order, active) VALUES
+  ('ol_loft_go','loft25',NULL,'gofood','GoFood','https://gofood.co.id/jakarta/restaurant/loft25-matcha-studio',1,1),
+  ('ol_loft_grab','loft25',NULL,'grabfood','GrabFood','https://food.grab.com/id/id/restaurant/loft25-matcha-studio',2,1),
+  ('ol_loft_wa','loft25',NULL,'wa','WhatsApp','https://wa.me/6281234564567?text=Halo%20Loft25',3,1),
+  ('ol_loft_sen_grab','loft25','o_loft','grabfood','GrabFood','https://food.grab.com/id/id/restaurant/loft25-senopati',2,1),
+  ('ol_soto_go','soto-oseng',NULL,'gofood','GoFood','https://gofood.co.id/jakarta/restaurant/soto-oseng-bang-jem',1,1),
+  ('ol_soto_grab','soto-oseng',NULL,'grabfood','GrabFood','https://food.grab.com/id/id/restaurant/soto-oseng-bang-jem',2,1),
+  ('ol_kris_go','krispyporkk',NULL,'gofood','GoFood','https://gofood.co.id/jakarta/restaurant/krispyporkk',1,1),
+  ('ol_kris_grab','krispyporkk',NULL,'grabfood','GrabFood','https://food.grab.com/id/id/restaurant/krispyporkk',2,1),
+  ('ol_kris_sp','krispyporkk',NULL,'shopeefood','ShopeeFood','https://shopee.co.id/universal-link/now-food/store/krispyporkk',3,1);
   INSERT INTO missions (id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at, icon, tag, mystery, tease, unlock_points_tenths, sort_order) VALUES
   ('misi_review', NULL, 'Foto & review Google', 'Foto struk atau minuman, lalu kasih review Google. Lampirkan tangkapan layar.', 5, 1, 0, 'once', 1, ${now}, '📸', 'new', 0, '', 0, 1),
   ('misi_threads', NULL, 'Post Threads tag kami', 'Post di Threads dan tag akun kami. Tempel tautannya.', 5, 0, 1, 'week', 1, ${now}, '🧵', '', 0, '', 0, 2),

@@ -1,4 +1,5 @@
 import { esc, formatInt, maskName, maskWa, prettyWa } from "./format";
+import { orderLabel, type OrderLink } from "./orders";
 import { progressCopy } from "./loyalty";
 import { errText, okText } from "./messages";
 import { bannerLive } from "./repo";
@@ -138,6 +139,28 @@ export function customerSkin(brand: Pick<Brand, "id" | "accent" | "accent_soft">
   return { style, dark: base.dark, accent };
 }
 
+function orderBlock(links: OrderLink[], outlets: Array<{ id: string; name: string; on: boolean }>, brandId: string): string {
+  if (!links.length) return "";
+  const primary = links.filter((link) => link.platform === "gofood" || link.platform === "grabfood");
+  const extras = links.filter((link) => link.platform !== "gofood" && link.platform !== "grabfood");
+  const badge = (link: OrderLink) => {
+    const kind = link.platform === "gofood" || link.platform === "grabfood" ? link.platform : "extra";
+    return `<a class="obadge ${kind}" href="/pesan/${esc(link.id)}" target="_blank" rel="noopener noreferrer">${esc(orderLabel(link.platform, link.label))}</a>`;
+  };
+  const chips = outlets.length
+    ? `<div class="pills">${[`<a class="pill${!outlets.some((o) => o.on) ? " on" : ""}" href="/kartu?merek=${esc(brandId)}">Semua outlet</a>`]
+        .concat(outlets.map((o) => `<a class="pill${o.on ? " on" : ""}" href="/kartu?merek=${esc(brandId)}&outlet=${esc(o.id)}">${esc(o.name)}</a>`))
+        .join("")}</div>`
+    : "";
+  return `<section class="card order">
+    <div class="eyebrow">Pesan online</div>
+    <h2>Pesan sekarang</h2>
+    ${chips}
+    ${primary.length ? `<div class="order-row">${primary.map(badge).join("")}</div>` : ""}
+    ${extras.length ? `<div class="order-extra">${extras.map(badge).join("")}</div>` : ""}
+  </section>`;
+}
+
 function tabbar(on: "kartu" | "quest" | "hadiah" | "profil", brandId: string): string {
   const q = brandId ? `?merek=${esc(brandId)}` : "";
   const links: Array<["kartu" | "quest" | "hadiah" | "profil", string, string, string]> = [
@@ -266,6 +289,8 @@ export function cardPage(input: {
   birthday?: string | null;
   points?: string;
   tiers?: Array<{ id: string; stamps: number; reward: string; ready: boolean }>;
+  orders?: OrderLink[];
+  orderOutlets?: Array<{ id: string; name: string; on: boolean }>;
 }): string {
   const card = input.cards.get(input.brand.id);
   const stamps = card?.stamps ?? 0;
@@ -315,6 +340,7 @@ export function cardPage(input: {
           )
           .join("")}
       </section>
+      ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id)}
       ${input.birthday ? `<section class="bday"><div class="kicker">ULANG TAHUN</div><h3>Hadiah: ${esc(input.birthday)}</h3><p>Sekali setahun. Tukar di sini, kasir masukkan kodenya.</p><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(input.brand.id)}" /><button class="btn btn-solid">Tukar hadiah ultah</button></form></section>` : ""}
       <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
       ${tabbar("kartu", input.brand.id)}
@@ -595,6 +621,7 @@ export function dashboardPage(input: {
   pointsIssued: string;
   pointsRedeemed: string;
   pendingMissions: number;
+  orderClicks: Array<{ brand: string; platform: string; n: number }>;
 }): string {
   const chips = [`<a class="chip${input.brand ? "" : " on"}" href="/admin/dasbor">Semua</a>`]
     .concat(input.brands.map((b) => `<a class="chip${input.brand?.id === b.id ? " on" : ""}" href="/admin/dasbor?merek=${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`))
@@ -632,7 +659,14 @@ export function dashboardPage(input: {
       <article class="kpi"><span>Poin masuk bulan ini</span><b>${input.pointsIssued}</b><span>poin disetujui</span></article>
       <article class="kpi"><span>Poin ditukar bulan ini</span><b>${input.pointsRedeemed}</b><span>dari katalog</span></article>
       <article class="kpi"><span>Side Quest menunggu</span><b>${input.pendingMissions}</b><span><a href="/admin/misi">antrian review</a></span></article>
+      <article class="kpi"><span>Klik pesan bulan ini</span><b>${input.orderClicks.reduce((sum, row) => sum + row.n, 0)}</b><span>GoFood, GrabFood, dan lain</span></article>
     </section>
+    <article class="panel" style="margin-top:12px"><h2>Pesan online</h2>
+      <table><thead><tr><th>Merek</th><th>Platform</th><th>Klik</th></tr></thead><tbody>${
+        input.orderClicks.map((row) => `<tr><td>${esc(row.brand)}</td><td>${esc(row.platform)}</td><td>${row.n}</td></tr>`).join("") ||
+        `<tr><td colspan="3">Belum ada klik bulan ini.</td></tr>`
+      }</tbody></table>
+    </article>
     <section class="grid-2">
       <article class="panel"><h2>Stamp per hari (14 hari)</h2><div class="bars">${bars}</div></article>
       <article class="panel"><h2>Member paling loyal</h2>
@@ -921,7 +955,7 @@ export function bannersPage(banners: Banner[], brands: Brand[], params: URLSearc
   );
 }
 
-export function rulesPage(brands: Brand[], params: URLSearchParams): string {
+export function rulesPage(brands: Brand[], links: OrderLink[], params: URLSearchParams): string {
   const forms = brands
     .map(
       (b) => `<form class="panel" style="margin-top:12px;${paint(b.accent, b.accent_soft)}" method="post" action="/admin/aturan/${esc(b.id)}">
@@ -947,16 +981,43 @@ export function rulesPage(brands: Brand[], params: URLSearchParams): string {
         <label class="lbl">N hari (kalau pilih hari di sekitar)</label><input name="birthday_days" type="number" min="0" max="30" value="${b.birthday_days ?? 7}" />
         <label class="checkline"><input type="checkbox" name="birthday_active" value="on" ${b.birthday_active ? "checked" : ""} /> Hadiah ulang tahun aktif</label>
         <label class="checkline"><input type="checkbox" name="active" value="on" ${b.active ? "checked" : ""} /> Merek aktif</label>
+        <h3 style="margin-top:14px">Pesan online</h3>
+        <p class="fine">Kosongkan kalau tombolnya tidak dipakai. Tautan outlet di halaman Outlet menimpa tautan merek.</p>
+        <label class="lbl">GoFood (https)</label><input name="gofood" type="url" placeholder="https://gofood.co.id/..." value="${esc(storeUrl(links, b.id, "gofood"))}" />
+        <label class="lbl">GrabFood (https)</label><input name="grabfood" type="url" placeholder="https://food.grab.com/..." value="${esc(storeUrl(links, b.id, "grabfood"))}" />
+        <label class="lbl">Tautan tambahan</label>
+        <select name="extra_platform"><option value="">Tidak tambah</option><option value="wa">WhatsApp</option><option value="shopeefood">ShopeeFood</option><option value="other">Lainnya</option></select>
+        <label class="lbl">Nama tombol tambahan</label><input name="extra_label" maxlength="24" placeholder="WhatsApp" />
+        <label class="lbl">URL tambahan (https)</label><input name="extra_url" type="url" placeholder="https://wa.me/62..." />
         <button class="btn btn-solid">Simpan</button>
-      </form>`,
+      </form>
+      ${extraLinks(links, b.id)}`,
     )
     .join("");
   return adminShell("/admin/aturan", `<h1>Setting program</h1>${flashes(params)}<p class="fine">Teks centang inilah yang dilihat kasir sebelum kasih stamp.</p>${forms}`);
 }
 
+function storeUrl(links: OrderLink[], brandId: string, platform: string, outletId: string | null = null): string {
+  return links.find((link) => link.brand_id === brandId && link.platform === platform && (link.outlet_id || null) === outletId)?.url || "";
+}
+
+function extraLinks(links: OrderLink[], brandId: string): string {
+  const extras = links.filter((link) => link.brand_id === brandId && !link.outlet_id && link.platform !== "gofood" && link.platform !== "grabfood");
+  if (!extras.length) return "";
+  return extras
+    .map(
+      (link) => `<form method="post" action="/admin/pesan/${esc(link.id)}/hapus" style="margin-top:8px">
+        <span>${esc(orderLabel(link.platform, link.label))}</span>
+        <button class="textlink">Hapus</button>
+      </form>`,
+    )
+    .join("");
+}
+
 export function outletsPage(
   outlets: Array<Outlet & { brand_name: string }>,
   brands: Brand[],
+  links: OrderLink[],
   params: URLSearchParams,
 ): string {
   const options = brands.map((b) => `<option value="${esc(b.id)}">${esc(b.short_name)}</option>`).join("");
@@ -972,6 +1033,13 @@ export function outletsPage(
         <form method="post" action="/admin/outlet/${esc(o.id)}/aktif">
           <input type="hidden" name="active" value="${o.active ? "0" : "1"}" />
           <button class="btn btn-line">${o.active ? "Nonaktifkan" : "Aktifkan"}</button>
+        </form>
+        <form method="post" action="/admin/outlet/${esc(o.id)}/pesan">
+          <h3 style="margin-top:8px">Pesan online outlet ini</h3>
+          <p class="fine">Kalau diisi, tombol di kartu memakai tautan ini, bukan tautan merek.</p>
+          <label class="lbl">GoFood</label><input name="gofood" type="url" value="${esc(storeUrl(links, o.brand_id, "gofood", o.id))}" placeholder="https://" />
+          <label class="lbl">GrabFood</label><input name="grabfood" type="url" value="${esc(storeUrl(links, o.brand_id, "grabfood", o.id))}" placeholder="https://" />
+          <button class="btn btn-solid">Simpan tautan</button>
         </form>
       </article>`,
     )
