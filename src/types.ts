@@ -70,6 +70,7 @@ export type Banner = {
   image_url: string | null;
   r2_key: string | null;
   link_url: string | null;
+  cta: string;
   starts_at: number | null;
   ends_at: number | null;
   sort_order: number;

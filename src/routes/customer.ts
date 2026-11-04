@@ -124,7 +124,21 @@ export async function handleCustomer(app: App): Promise<Response | null> {
   if (path === "/profil" && request.method === "GET") {
     if (signup) return html(profilePage({ mode: "google", name: signup.pending.name, email: signup.pending.email, params: url.searchParams }));
     if (!member) return redirect("/masuk");
-    return html(profilePage({ mode: "member", name: member.name, email: member.email, birthday: member.birthday, google: Boolean(member.google_sub), params: url.searchParams }));
+    const brands = await repo.listBrands(db, true);
+    const brand = brands.find((b) => b.id === url.searchParams.get("merek")) || brands[0] || null;
+    return html(
+      profilePage({
+        mode: "member",
+        name: member.name,
+        email: member.email,
+        birthday: member.birthday,
+        google: Boolean(member.google_sub),
+        params: url.searchParams,
+        brand,
+        wa: member.wa,
+        since: member.created_at,
+      }),
+    );
   }
 
   if (path === "/profil" && request.method === "POST") {

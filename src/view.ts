@@ -56,6 +56,123 @@ function paint(accent: string, soft: string): string {
   return `--accent:${esc(accent)};--accent-soft:${esc(soft)}`;
 }
 
+const ICO_CARD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 10h8M8 14h5"/></svg>`;
+const ICO_QUEST = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3.5 14.4 8.4 19.6 9.1 15.8 12.8 16.7 18 12 15.5 7.3 18 8.2 12.8 4.4 9.1 9.6 8.4z"/></svg>`;
+const ICO_USER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="3.1"/><path d="M5.6 19.2c1.3-2.7 3.5-3.9 6.4-3.9s5.1 1.2 6.4 3.9"/></svg>`;
+
+type Skin = {
+  page: string;
+  ink: string;
+  muted: string;
+  accent: string;
+  soft: string;
+  deep: string;
+  glass: string;
+  line: string;
+  heroA: string;
+  heroB: string;
+  dark: boolean;
+};
+
+const SKINS: Record<string, Skin> = {
+  loft25: {
+    page: "#f3eee4",
+    ink: "#17241c",
+    muted: "#5c6b60",
+    accent: "#143d28",
+    soft: "#e4f0dc",
+    deep: "#0e2c1d",
+    glass: "rgba(255,252,247,.74)",
+    line: "rgba(255,255,255,.72)",
+    heroA: "#1c5a3c",
+    heroB: "#0c2418",
+    dark: false,
+  },
+  "soto-oseng": {
+    page: "#f6efe6",
+    ink: "#2a1612",
+    muted: "#7d5b52",
+    accent: "#9a3412",
+    soft: "#f8e3d4",
+    deep: "#6d2414",
+    glass: "rgba(255,248,242,.76)",
+    line: "rgba(255,255,255,.7)",
+    heroA: "#a33b28",
+    heroB: "#4a1c16",
+    dark: false,
+  },
+  krispyporkk: {
+    page: "#120f0c",
+    ink: "#f7f1ea",
+    muted: "#cbb8a4",
+    accent: "#ff7a2a",
+    soft: "#3a2418",
+    deep: "#e25e12",
+    glass: "rgba(255,244,232,.08)",
+    line: "rgba(255,255,255,.14)",
+    heroA: "#2a1a12",
+    heroB: "#0c0a09",
+    dark: true,
+  },
+};
+
+export function customerSkin(brand: Pick<Brand, "id" | "accent" | "accent_soft"> | null): { style: string; dark: boolean; accent: string } {
+  const base =
+    (brand && SKINS[brand.id]) ||
+    ({
+      page: "#f3eee4",
+      ink: "#17241c",
+      muted: "#6d675d",
+      accent: brand?.accent || "#143d28",
+      soft: brand?.accent_soft || "#e4f0dc",
+      deep: brand?.accent || "#143d28",
+      glass: "rgba(255,252,247,.74)",
+      line: "rgba(255,255,255,.7)",
+      heroA: brand?.accent || "#143d28",
+      heroB: "#102018",
+      dark: false,
+    } satisfies Skin);
+  const accent = brand?.accent || base.accent;
+  const divider = base.dark ? "rgba(255,255,255,.12)" : "#efe4d4";
+  const style = `--page:${base.page};--ink:${base.ink};--muted:${base.muted};--accent:${accent};--accent-soft:${base.soft};--deep:${base.deep};--glass:${base.glass};--glass-line:${base.line};--card:${base.glass};--line:${divider};--hero-a:${base.heroA};--hero-b:${base.heroB};background:var(--page);color:var(--ink)`;
+  return { style, dark: base.dark, accent };
+}
+
+function tabbar(on: "kartu" | "quest" | "hadiah" | "profil", brandId: string): string {
+  const q = brandId ? `?merek=${esc(brandId)}` : "";
+  const links: Array<["kartu" | "quest" | "hadiah" | "profil", string, string, string]> = [
+    ["kartu", `/kartu${q}`, "Kartu", ICO_CARD],
+    ["quest", `/misi${q}`, "Side Quest", ICO_QUEST],
+    ["hadiah", `/hadiah${q}`, "Hadiah", GIFT],
+    ["profil", `/profil${q}`, "Profil", ICO_USER],
+  ];
+  return `<nav class="tabbar" aria-label="Menu">${links
+    .map(([id, href, label, icon]) => `<a class="${on === id ? "on" : ""}" href="${href}">${icon}<span>${label}</span></a>`)
+    .join("")}</nav>`;
+}
+
+function carousel(banners: Banner[], now: number): string {
+  const live = banners.filter((banner) => bannerLive(banner, now));
+  const slides = (live.length ? live : []).map((banner, index) => {
+    const img = banner.r2_key ? `/media/${banner.r2_key}` : banner.image_url || "";
+    const cta = banner.cta || (banner.link_url ? "Lihat" : "");
+    const copy = `<div class="slide-copy">${banner.title ? `<h3>${esc(banner.title)}</h3>` : ""}${banner.subtitle ? `<p>${esc(banner.subtitle)}</p>` : ""}${cta ? `<span class="cta">${esc(cta)}</span>` : ""}</div>`;
+    const media = img
+      ? `<img src="${esc(img)}" alt="${esc(banner.title)}" ${index === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async" />`
+      : `<div class="slide-fallback"></div>`;
+    const inner = `${media}${copy}`;
+    return banner.link_url ? `<a class="slide" href="${esc(banner.link_url)}">${inner}</a>` : `<div class="slide">${inner}</div>`;
+  });
+  if (!slides.length) {
+    return "";
+  }
+  const dots =
+    slides.length > 1
+      ? `<div class="reel-dots">${slides.map((_, i) => `<button type="button" class="dot${i === 0 ? " on" : ""}" data-dot="${i}" aria-label="Foto ${i + 1}"></button>`).join("")}</div>`
+      : "";
+  return `<section class="reel" data-reel data-ms="4800" aria-roledescription="carousel">${dots}<div class="reel-track">${slides.join("")}</div></section>`;
+}
+
 export function stampGrid(filled: number, total: number): string {
   const n = Math.max(1, Math.min(total, 20));
   const on = Math.min(Math.max(filled, 0), n);
@@ -66,26 +183,6 @@ export function stampGrid(filled: number, total: number): string {
 
 export function ruleLine(brand: Brand): string {
   return `${brand.condition_label} = 1 stamp · ${brand.stamps_required} stamp = ${brand.reward_text}`;
-}
-
-function promoBlock(banner: Banner | null, extra = 0): string {
-  if (!banner) return "";
-  const img = banner.r2_key ? `/media/${banner.r2_key}` : banner.image_url || "";
-  const style = img
-    ? ` style="background-image:linear-gradient(105deg,rgba(90,40,55,.55),rgba(50,90,50,.4)),url('${esc(img)}')"`
-    : "";
-  const dots =
-    extra > 0
-      ? `<div class="dots"><i class="on"></i>${Array.from({ length: Math.min(extra, 3) }, () => "<i></i>").join("")}</div>`
-      : `<div class="dots"><i class="on"></i><i></i><i></i></div>`;
-  const inner = `<div class="kicker">PROMO BARU</div><h3>${esc(banner.title)} ${banner.title.toLowerCase().includes("strawberry") ? "🍓" : ""}</h3><p>${esc(banner.subtitle)}</p>${dots}`;
-  if (banner.link_url) return `<a class="promo" href="${esc(banner.link_url)}"${style}>${inner}</a>`;
-  return `<div class="promo"${style}>${inner}</div>`;
-}
-
-function liveBanner(banners: Banner[], now: number): { banner: Banner | null; extra: number } {
-  const live = banners.filter((b) => bannerLive(b, now));
-  return { banner: live[0] ?? null, extra: Math.max(0, live.length - 1) };
 }
 
 export function messagePage(title: string, text: string, href = "/", label = "Kembali"): string {
@@ -174,9 +271,9 @@ export function cardPage(input: {
   const stamps = card?.stamps ?? 0;
   const copy = progressCopy(stamps, input.brand.stamps_required, input.brand.reward_text);
   const pills = input.brands
-    .map((b) => `<a class="pill${b.id === input.brand.id ? " on" : ""}" href="/kartu?merek=${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`)
+    .map((b) => `<a class="${b.id === input.brand.id ? "on" : ""}" href="/kartu?merek=${esc(b.id)}">${esc(b.short_name)}</a>`)
     .join("");
-  const { banner, extra } = liveBanner(input.banners, input.now);
+  const skin = customerSkin(input.brand);
   const rows = input.history
     .map((row) => {
       const when = feedTime(row.created_at, input.now);
@@ -188,20 +285,25 @@ export function cardPage(input: {
       return `<div class="row"><div><b class="${row.voided ? "muted" : "plus"}">${label}</b><div class="small muted">${esc(row.outlet_name || "")}</div></div><div class="muted">${esc(when)}</div></div>`;
     })
     .join("");
+  const first = input.member.name.split(" ")[0] || input.member.name;
   return doc(
     input.brand.short_name,
-    `<main class="phone" style="${paint(input.brand.accent, input.brand.accent_soft)}">
-      <header class="hero">
-        <div class="hero-top"><div class="avatar">${esc(input.brand.emoji)}</div><div><div class="hero-title">${esc(input.brand.name)}</div><div class="hero-sub">${esc(input.brand.handle)}</div></div></div>
-        <div class="hero-big">Halo, ${esc(input.member.name.split(" ")[0] || input.member.name)}! 👋</div>
-        <div class="hero-fine">Member sejak ${esc(memberSince(input.member.created_at))} · ${esc(maskWa(input.member.wa))}</div>
-      </header>
-      <div class="pills">${pills}</div>
+    `<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
+      ${carousel(input.banners, input.now) || `<section class="reel"><div class="reel-track"><div class="slide"><div class="slide-fallback"></div><div class="slide-copy"><h3>${esc(input.brand.name)}</h3><p>${esc(input.brand.handle)}</p></div></div></div></section>`}
+      <section class="hello">
+        <div>
+          <div class="eyebrow">${esc(input.brand.emoji)} ${esc(input.brand.short_name)}</div>
+          <h1 class="display">Halo, ${esc(first)}</h1>
+          <p class="fine">Member sejak ${esc(memberSince(input.member.created_at))}</p>
+        </div>
+        ${coin(input.points || "0")}
+      </section>
+      <nav class="switch" aria-label="Merek">${pills}</nav>
       ${flashes(input.params)}
       <section class="card">
-        <div class="split"><h2>Kartu Stamp</h2><b class="count">${stamps}/${input.brand.stamps_required}</b></div>
+        <div class="split"><h2>Kartu stamp</h2><b class="count">${stamps}/${input.brand.stamps_required}</b></div>
         ${stampGrid(stamps, input.brand.stamps_required)}
-        <p class="lead">${esc(copy.headline)} ${copy.ready ? "" : "🎉"}</p>
+        <p class="lead">${esc(copy.headline)}</p>
         <p class="fine">${esc(ruleLine(input.brand))}</p>
         ${(input.tiers || [])
           .map(
@@ -212,20 +314,12 @@ export function cardPage(input: {
             }</div>`,
           )
           .join("")}
-        <div class="split poinrow"><span class="fine">Poin kamu</span>${coin(input.points || "0")}</div>
       </section>
       ${input.birthday ? `<section class="bday"><div class="kicker">ULANG TAHUN</div><h3>Hadiah: ${esc(input.birthday)}</h3><p>Sekali setahun. Tukar di sini, kasir masukkan kodenya.</p><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(input.brand.id)}" /><button class="btn btn-solid">Tukar hadiah ultah</button></form></section>` : ""}
-      ${promoBlock(banner, extra)}
       <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
-      <div class="actions" style="margin-top:12px">
-        <a class="btn btn-line" href="/misi">Side Quest</a>
-        <a class="btn btn-line" href="/hadiah?merek=${esc(input.brand.id)}">Hadiah</a>
-      </div>
-      ${input.member.google_sub ? "" : `<a class="btn btn-google" href="/masuk/google?niat=hubung">Hubungkan Google</a>`}
-      ${input.member.birthday ? "" : `<a class="btn btn-line" href="/profil">Isi tanggal lahir</a>`}
-      <form method="post" action="/keluar"><button class="linkbtn">Keluar</button></form>
+      ${tabbar("kartu", input.brand.id)}
     </main>`,
-    input.brand.accent,
+    skin.accent,
   );
 }
 
@@ -253,7 +347,7 @@ export function successPage(input: {
   now: number;
 }): string {
   const copy = progressCopy(input.stamps, input.brand.stamps_required, input.brand.reward_text);
-  const { banner, extra } = liveBanner(input.banners, input.now);
+  const skin = customerSkin(input.brand);
   const title =
     input.kind === "stamp"
       ? `+1 stamp di ${input.brand.short_name}!`
@@ -263,23 +357,26 @@ export function successPage(input: {
   const others = input.otherBrands.length ? `Cek juga kartu kamu di ${input.otherBrands.join(" & ")}` : "Kartu kamu tersimpan di HP ini";
   return doc(
     title,
-    `${confetti()}<main class="phone" style="${paint(input.brand.accent, input.brand.accent_soft)}">
-      <header class="hero center">
-        <div class="checkbubble burst">${CHECK}</div>
-        <div class="hero-big">${esc(title)}</div>
-        <div class="hero-fine">Makasih, ${esc(input.member.name.split(" ")[0] || "")}! · ${esc(input.outletName)} · ${esc(clock(input.when))}</div>
+    `${confetti()}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
+      ${carousel(input.banners, input.now)}
+      <header class="hello">
+        <div>
+          <div class="checkbubble burst">${CHECK}</div>
+          <h1 class="display">${esc(title)}</h1>
+          <p class="fine">Makasih, ${esc(input.member.name.split(" ")[0] || "")}! · ${esc(input.outletName)} · ${esc(clock(input.when))}</p>
+        </div>
       </header>
       <section class="card">
-        <div class="split"><h2>Kartu Stamp ${esc(input.brand.short_name)}</h2><b class="count">${input.stamps}/${input.brand.stamps_required}</b></div>
+        <div class="split"><h2>Kartu stamp ${esc(input.brand.short_name)}</h2><b class="count">${input.stamps}/${input.brand.stamps_required}</b></div>
         ${stampGrid(input.stamps, input.brand.stamps_required)}
-        <p class="lead">${esc(copy.headline)} ${copy.ready ? "" : "🎉"}</p>
+        <p class="lead">${esc(copy.headline)}</p>
         <p class="fine">${esc(ruleLine(input.brand))}</p>
       </section>
-      ${promoBlock(banner, extra)}
       <div class="hint">${esc(others)}</div>
-      <a class="btn btn-solid" href="/kartu?merek=${esc(input.brand.id)}">Lihat Kartu Saya</a>
+      <a class="btn btn-solid" href="/kartu?merek=${esc(input.brand.id)}">Lihat kartu saya</a>
+      ${tabbar("kartu", input.brand.id)}
     </main>`,
-    input.brand.accent,
+    skin.accent,
   );
 }
 
@@ -698,13 +795,15 @@ export function profilePage(input: {
   wa?: string;
   birthday?: string | null;
   google?: boolean;
+  brand?: Brand | null;
+  since?: number;
 }): string {
   const link = input.mode === "link";
+  const skin = input.mode === "member" && input.brand ? customerSkin(input.brand) : null;
   return doc(
-    "Lengkapi profil",
-    `<main class="phone">
-      <header class="hero"><div class="hero-title">${link ? "Nomor ini sudah punya kartu" : "Lengkapi profil"}</div>
-        <div class="hero-sub">${esc(input.email || input.name)}</div></header>
+    "Profil",
+    `<main class="phone${skin ? ` skin with-tabs${skin.dark ? " skin-dark" : ""}` : ""}"${skin ? ` style="${skin.style}"` : ""}>
+      ${skin ? "" : `<header class="hero"><div class="hero-title">${link ? "Nomor ini sudah punya kartu" : "Lengkapi profil"}</div><div class="hero-sub">${esc(input.email || input.name)}</div></header>`}
       ${flashes(input.params)}
       ${
         link
@@ -727,13 +826,23 @@ export function profilePage(input: {
                 <p class="fine">PIN ini buat masuk tanpa Google, di HP lain.</p>
                 <button class="btn btn-solid">Simpan dan lihat kartu</button>
               </form>`
-            : `<form class="card" method="post" action="/profil">
-                <p class="fine">Halo ${esc(input.name)}. Tanggal lahir cukup diisi sekali.</p>
-                ${input.birthday ? `<p><b>${esc(input.birthday)}</b> sudah tersimpan.</p>` : `<label class="lbl">Tanggal lahir</label><input name="lahir" type="date" required /><button class="btn btn-solid">Simpan</button>`}
+            : `<section class="hello">
+                <div>
+                  <div class="eyebrow">Profil</div>
+                  <h1 class="display">${esc(input.name.split(" ")[0] || input.name)}</h1>
+                  <p class="fine">${esc(input.name)}${input.since ? ` · member sejak ${esc(memberSince(input.since))}` : ""}</p>
+                </div>
+              </section>
+              <form class="card" method="post" action="/profil">
+                <p class="fine">${input.wa ? esc(maskWa(input.wa)) : ""}${input.email ? ` · ${esc(input.email)}` : ""}</p>
+                ${input.birthday ? `<p><b>Ulang tahun ${esc(input.birthday)}</b> sudah tersimpan.</p>` : `<label class="lbl">Tanggal lahir</label><input name="lahir" type="date" required /><button class="btn btn-solid">Simpan</button>`}
               </form>
-              ${input.google ? "" : `<a class="btn btn-google" href="/masuk/google?niat=hubung">Hubungkan Google</a>`}`
+              ${input.google ? "" : `<a class="btn btn-google" href="/masuk/google?niat=hubung">Hubungkan Google</a>`}
+              <form method="post" action="/keluar"><button class="linkbtn">Keluar</button></form>`
       }
+      ${skin && input.brand ? tabbar("profil", input.brand.id) : ""}
     </main>`,
+    skin?.accent,
   );
 }
 
@@ -776,21 +885,30 @@ export function bannersPage(banners: Banner[], brands: Brand[], params: URLSearc
   const options = brands.map((b) => `<option value="${esc(b.id)}">${esc(b.short_name)}</option>`).join("");
   const list = banners
     .map(
-      (b) => `<form method="post" action="/admin/banner/${esc(b.id)}/hapus" style="margin-top:8px">
-        <b>${esc(b.title)}</b> · ${esc(b.brand_id)} · urutan ${b.sort_order} · ${b.active ? "aktif" : "mati"}
-        <div class="small muted">${esc(b.subtitle)}</div>
+      (b) => {
+        const img = b.r2_key ? `/media/${b.r2_key}` : b.image_url || "";
+        const when = [b.starts_at ? `mulai ${esc(feedTime(b.starts_at, Date.now()))}` : "", b.ends_at ? `sampai ${esc(feedTime(b.ends_at, Date.now()))}` : ""]
+          .filter(Boolean)
+          .join(" · ");
+        return `<form class="banner-row" method="post" action="/admin/banner/${esc(b.id)}/hapus">
+        ${img ? `<img src="${esc(img)}" alt="" />` : ""}
+        <div><b>${esc(b.title)}</b> · ${esc(b.brand_id)} · urutan ${b.sort_order} · ${b.active ? "aktif" : "mati"}${b.cta ? ` · ${esc(b.cta)}` : ""}
+        <div class="small muted">${esc(b.subtitle)}${when ? ` · ${when}` : ""}</div></div>
         <button class="textlink">Hapus</button>
-      </form>`,
+      </form>`;
+      },
     )
     .join("");
   return adminShell(
     "/admin/banner",
     `<h1>Banner promo</h1>${flashes(params)}
+     <p class="fine">Satu merek boleh punya beberapa foto. Urutan kecil tampil lebih dulu. Tanggal mulai dan selesai mengatur kapan foto itu muncul di carousel.</p>
      <form class="panel" style="margin-top:12px" method="post" action="/admin/banner" enctype="multipart/form-data">
        <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
-       <label class="lbl">Judul</label><input name="title" required maxlength="80" />
+       <label class="lbl">Judul di atas foto</label><input name="title" required maxlength="80" />
        <label class="lbl">Subjudul</label><input name="subtitle" maxlength="140" />
-       <label class="lbl">Tautan (opsional, https)</label><input name="link_url" type="url" placeholder="https://" />
+       <label class="lbl">Teks tombol (opsional)</label><input name="cta" maxlength="24" placeholder="Lihat menu" />
+       <label class="lbl">Tautan tombol (opsional, https)</label><input name="link_url" type="url" placeholder="https://" />
        <label class="lbl">URL gambar (opsional, https)</label><input name="image_url" type="url" placeholder="https://" />
        <label class="lbl">atau upload gambar (maks 2 MB)</label><input name="gambar" type="file" accept="image/*" />
        <label class="lbl">Mulai (WIB, opsional)</label><input name="starts_at" type="datetime-local" />
@@ -946,6 +1064,7 @@ export function missionsPage(input: {
   levelPct: number;
   levelHint: string;
   celebrate: boolean;
+  brand: Brand | null;
   missions: Array<{
     id: string;
     title: string;
@@ -1006,9 +1125,10 @@ export function missionsPage(input: {
     })
     .join("");
   const streak = input.streak >= 2 ? `<span class="streak">🔥 ${input.streak} minggu</span>` : "";
+  const skin = customerSkin(input.brand);
   return doc(
     "Side Quest",
-    `${input.celebrate ? confetti() : ""}<main class="phone">
+    `${input.celebrate ? confetti() : ""}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
       <header class="hero">
         <div class="hero-kicker">SIDE QUEST</div>
         <div class="hero-title">Kumpulin Poin</div>
@@ -1024,19 +1144,16 @@ export function missionsPage(input: {
       </header>
       ${flashes(input.params)}
       ${cards || `<section class="card"><p>Belum ada side quest.</p></section>`}
-      <div class="actions" style="margin-top:14px">
-        <a class="btn btn-line" href="/hadiah">Hadiah</a>
-        <a class="btn btn-line" href="/kartu">Kartu</a>
-      </div>
+      ${tabbar("quest", input.brand?.id || "")}
     </main>`,
+    skin.accent,
   );
 }
 
 export function catalogPage(input: {
   points: string;
   brandName: string;
-  accent: string;
-  accentSoft: string;
+  brand: Brand;
   brands: Array<{ id: string; name: string; on: boolean }>;
   rewards: Array<{ id: string; title: string; cost: string; note: string; ready: boolean; icon: string; soldOut: boolean }>;
   params: URLSearchParams;
@@ -1056,9 +1173,10 @@ export function catalogPage(input: {
       </article>`;
     })
     .join("");
+  const skin = customerSkin(input.brand);
   return doc(
     "Hadiah",
-    `<main class="phone" style="${paint(input.accent, input.accentSoft)}">
+    `<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
       <header class="hero">
         <div class="hero-kicker">HADIAH</div>
         <div class="hero-title">Toko hadiah</div>
@@ -1068,12 +1186,9 @@ export function catalogPage(input: {
       <div class="pills">${chips}</div>
       ${flashes(input.params)}
       <div class="shop">${cards || `<section class="card"><p>Toko merek ini masih kosong.</p></section>`}</div>
-      <div class="actions" style="margin-top:14px">
-        <a class="btn btn-line" href="/misi">Side Quest</a>
-        <a class="btn btn-line" href="/kartu">Kartu</a>
-      </div>
+      ${tabbar("hadiah", input.brand.id)}
     </main>`,
-    input.accent,
+    skin.accent,
   );
 }
 

@@ -553,8 +553,8 @@ export async function insertBanner(db: D1Database, banner: Banner): Promise<void
   await db
     .prepare(
       `INSERT INTO banners
-        (id, brand_id, title, subtitle, image_url, r2_key, link_url, starts_at, ends_at, sort_order, active, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, brand_id, title, subtitle, image_url, r2_key, link_url, starts_at, ends_at, sort_order, active, created_at, cta)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       banner.id,
@@ -569,6 +569,7 @@ export async function insertBanner(db: D1Database, banner: Banner): Promise<void
       banner.sort_order,
       banner.active,
       banner.created_at,
+      banner.cta || "",
     )
     .run();
 }
@@ -577,7 +578,7 @@ export async function updateBanner(db: D1Database, banner: Banner): Promise<void
   await db
     .prepare(
       `UPDATE banners SET brand_id=?, title=?, subtitle=?, image_url=?, r2_key=?, link_url=?,
-        starts_at=?, ends_at=?, sort_order=?, active=? WHERE id=?`,
+        starts_at=?, ends_at=?, sort_order=?, active=?, cta=? WHERE id=?`,
     )
     .bind(
       banner.brand_id,
@@ -590,6 +591,7 @@ export async function updateBanner(db: D1Database, banner: Banner): Promise<void
       banner.ends_at,
       banner.sort_order,
       banner.active,
+      banner.cta || "",
       banner.id,
     )
     .run();

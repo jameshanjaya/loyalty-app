@@ -223,6 +223,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
       image_url: imageUrl,
       r2_key: r2Key,
       link_url: link,
+      cta: clip(String(form.get("cta") || ""), 24),
       starts_at: parseWibLocal(String(form.get("starts_at") || "")),
       ends_at: parseWibLocal(String(form.get("ends_at") || "")),
       sort_order: Number(form.get("sort_order") || 0) || 0,

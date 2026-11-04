@@ -158,9 +158,9 @@ const lines: string[] = [
 
 lines.push(
   `INSERT INTO brands (id, name, short_name, handle, emoji, accent, accent_soft, stamps_required, reward_text, condition_label, min_amount, max_stamps_per_day, reward_note, active, birthday_reward, birthday_active, birthday_window, birthday_days) VALUES
-  ('loft25','Loft25 Matcha Studio','Loft25','@loft25.matchastudio','🍵','#6ea564','#e7f3df',10,'free matcha','Transaksi min Rp50.000',50000,2,'1 transaksi yang memenuhi syarat = 1 stamp.',1,'free matcha ulang tahun',1,'month',7),
-  ('soto-oseng','Soto Oseng Bang Jem','Soto Oseng','@sotooseng.bangjem','🍜','#e08a3c','#fdecd9',10,'Soto Oseng paket','Transaksi ada oseng babi',NULL,2,'Kasir pastikan nota ada oseng babi.',1,'es teh ulang tahun',1,'around',7),
-  ('krispyporkk','Krispyporkk','Krispyporkk','@krispyporkk','🍗','#d4654f','#fde4de',10,'diskon 50%','Transaksi min Rp100.000',100000,2,'Diskon 50% dari tagihan, paling banyak Rp400.000. Kasir yang hitung di kasir.',1,'es krim ulang tahun',0,'around',3);`,
+  ('loft25','Loft25 Matcha Studio','Loft25','@loft25.matchastudio','🍵','#143d28','#e4f0dc',10,'free matcha','Transaksi min Rp50.000',50000,2,'1 transaksi yang memenuhi syarat = 1 stamp.',1,'free matcha ulang tahun',1,'month',7),
+  ('soto-oseng','Soto Oseng Bang Jem','Soto Oseng','@sotooseng.bangjem','🍜','#9a3412','#f8e3d4',10,'Soto Oseng paket','Transaksi ada oseng babi',NULL,2,'Kasir pastikan nota ada oseng babi.',1,'es teh ulang tahun',1,'around',7),
+  ('krispyporkk','Krispyporkk','Krispyporkk','@krispyporkk','🍗','#f26b1d','#ffe1c7',10,'diskon 50%','Transaksi min Rp100.000',100000,2,'Diskon 50% dari tagihan, paling banyak Rp400.000. Kasir yang hitung di kasir.',1,'es krim ulang tahun',0,'around',3);`,
 );
 
 async function pinPair(plain: string): Promise<{ hash: string; salt: string }> {
@@ -221,10 +221,14 @@ for (const event of allEvents) {
 
 const sampai = now + 26 * DAY;
 lines.push(
-  `INSERT INTO banners (id, brand_id, title, subtitle, image_url, r2_key, link_url, starts_at, ends_at, sort_order, active, created_at) VALUES
-  ('ban_loft','loft25','Matcha Strawberry Latte','Beli 2 lebih hemat! s/d 30 Nov',NULL,NULL,NULL,${now - DAY},${sampai},1,1,${now - DAY}),
-  ('ban_soto','soto-oseng','Paket Jumat','Oseng + es teh manis',NULL,NULL,NULL,${now - DAY},NULL,1,1,${now - DAY}),
-  ('ban_kris','krispyporkk','Crispy Bowl Baru','Tambah nasi cuma Rp5.000',NULL,NULL,NULL,${now - DAY},NULL,1,1,${now - DAY});
+  `INSERT INTO banners (id, brand_id, title, subtitle, image_url, r2_key, link_url, starts_at, ends_at, sort_order, active, created_at, cta) VALUES
+  ('ban_loft','loft25','Matcha Strawberry Latte','Beli 2 lebih hemat','/banners/loft-1.jpg',NULL,NULL,${now - DAY},${sampai},1,1,${now - DAY},'Lihat menu'),
+  ('ban_loft_2','loft25','Matcha pagi','Whisk segar tiap hari','/banners/loft-2.jpg',NULL,NULL,${now - DAY},${sampai},2,1,${now},''),
+  ('ban_loft_soon','loft25','Menu baru','Belum tayang','/banners/loft-2.jpg',NULL,NULL,${now + 10 * DAY},NULL,3,1,${now},''),
+  ('ban_soto','soto-oseng','Paket Jumat','Oseng + es teh manis','/banners/soto-1.jpg',NULL,NULL,${now - DAY},NULL,1,1,${now - DAY},'Lihat paket'),
+  ('ban_soto_2','soto-oseng','Oseng panas','Hangat, gurih, habis cepat','/banners/soto-2.jpg',NULL,NULL,${now - DAY},NULL,2,1,${now},''),
+  ('ban_kris','krispyporkk','Crispy Bowl','Tambah nasi cuma Rp5.000','/banners/krispy-1.jpg',NULL,NULL,${now - DAY},NULL,1,1,${now - DAY},'Lihat menu'),
+  ('ban_kris_2','krispyporkk','Kulit garing','Renyah dan pedas','/banners/krispy-2.jpg',NULL,NULL,${now - DAY},NULL,2,1,${now},'');
   INSERT INTO missions (id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at, icon, tag, mystery, tease, unlock_points_tenths, sort_order) VALUES
   ('misi_review', NULL, 'Foto & review Google', 'Foto struk atau minuman, lalu kasih review Google. Lampirkan tangkapan layar.', 5, 1, 0, 'once', 1, ${now}, '📸', 'new', 0, '', 0, 1),
   ('misi_threads', NULL, 'Post Threads tag kami', 'Post di Threads dan tag akun kami. Tempel tautannya.', 5, 0, 1, 'week', 1, ${now}, '🧵', '', 0, '', 0, 2),

@@ -171,7 +171,7 @@ Pelanggan baru dari Google mengisi nama, tanggal lahir, nomor WA, dan PIN dulu s
 - Pelanggan tap **Tukar** di aplikasi. Poin (atau stamp, atau hadiah ultah) ditahan, lalu muncul kode 5 angka dan QR sekitar 10 menit. Kasir mengetik kode itu, atau scan QR yang membuka halaman kasir. Kalau hangus, poin atau stamp kembali. Kode cuma sekali, cuma untuk merek outlet itu, dan tebakan dibatasi. Kasir tetap bisa menukar dari sisi kasir kalau pelanggan tidak buka aplikasinya.
 - Tingkat stamp diatur di **Tingkat stamp**. Contoh Loft25: 5 stamp = free upsize, 10 stamp = free matcha. Pelanggan boleh tukar tingkat yang lebih rendah sekarang, atau lanjut kumpulin.
 - Daftar pelanggan ada di **Member**: cari, filter merek, urutkan, buka detail, ganti nomor, hapus (dengan halaman konfirmasi, dan tercatat). Unduh CSV atau Excel.
-- Banner promo di kartu pelanggan diatur di **Banner Promo**. Bisa tempel tautan gambar https, atau unggah file (paling 2 MB, jpg/png/webp/gif).
+- Banner promo di kartu pelanggan diatur di **Banner Promo**. Satu merek boleh punya beberapa foto, dengan urutan dan tanggal mulai/selesai. Bisa tempel tautan gambar https, atau unggah file (paling 2 MB, jpg/png/webp/gif). Judul, subjudul, dan teks tombol tampil di atas fotonya. Pelanggan menggeser fotonya, dan foto berganti sendiri. Warna kartu ikut merek yang dipilih: Loft25 hijau matcha, Soto Oseng merah tanah, Krispyporkk oranye di latar gelap.
 - Log aktivitas ada di menu **Aktivitas**. Bisa diunduh sebagai CSV.
 - Kalau kasir memberi stamp sangat banyak dalam waktu singkat, atau ada yang mentok batas harian, dashboard menampilkan **Yang perlu dicek**.
 

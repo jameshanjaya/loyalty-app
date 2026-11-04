@@ -1,4 +1,4 @@
-function boot() {
+function bootPoll() {
   const box = document.querySelector("[data-poll]");
   if (!box) return;
   const url = box.getAttribute("data-poll");
@@ -42,6 +42,53 @@ function boot() {
     setTimeout(poll, 2000);
   };
   poll();
+}
+
+function bootReel() {
+  document.querySelectorAll("[data-reel]").forEach((root) => {
+    const track = root.querySelector(".reel-track");
+    const dots = [...root.querySelectorAll("[data-dot]")];
+    if (!track || dots.length < 2) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let timer = 0;
+    let paused = false;
+    const width = () => track.clientWidth || 1;
+    const current = () => Math.round(track.scrollLeft / width());
+    const mark = () => {
+      const index = current();
+      dots.forEach((dot, n) => dot.classList.toggle("on", n === index));
+    };
+    const go = (index) => {
+      track.scrollTo({ left: width() * index, behavior: reduced ? "auto" : "smooth" });
+    };
+    track.addEventListener("scroll", mark, { passive: true });
+    dots.forEach((dot) => {
+      dot.addEventListener("click", () => go(Number(dot.getAttribute("data-dot") || "0")));
+    });
+    const arm = () => {
+      window.clearInterval(timer);
+      if (reduced || paused || document.hidden) return;
+      const ms = Number(root.getAttribute("data-ms") || "4800");
+      timer = window.setInterval(() => go((current() + 1) % dots.length), ms);
+    };
+    track.addEventListener("pointerdown", () => {
+      paused = true;
+      window.clearInterval(timer);
+    });
+    const resume = () => {
+      paused = false;
+      arm();
+    };
+    track.addEventListener("pointerup", resume);
+    track.addEventListener("pointercancel", resume);
+    document.addEventListener("visibilitychange", arm);
+    arm();
+  });
+}
+
+function boot() {
+  bootPoll();
+  bootReel();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {

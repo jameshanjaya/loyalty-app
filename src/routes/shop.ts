@@ -85,6 +85,7 @@ export async function handleShop(app: App): Promise<Response | null> {
       });
     }
     const hint = level.next ? `${formatPoints(level.remaining)} Poin quest lagi menuju ${level.next.name}` : "Level tertinggi. Mantap!";
+    const picked = brands.find((b) => b.id === url.searchParams.get("merek")) || brands[0] || null;
     return html(
       missionsPage({
         points: formatPoints(balance),
@@ -94,6 +95,7 @@ export async function handleShop(app: App): Promise<Response | null> {
         levelPct: Math.round(level.progress * 100),
         levelHint: hint,
         celebrate,
+        brand: picked,
         missions: view,
         params: url.searchParams,
       }),
@@ -131,8 +133,7 @@ export async function handleShop(app: App): Promise<Response | null> {
       catalogPage({
         points: formatPoints(balance),
         brandName: brand.short_name,
-        accent: brand.accent,
-        accentSoft: brand.accent_soft,
+        brand,
         brands: brands.map((b) => ({ id: b.id, name: b.short_name, on: b.id === brand.id })),
         rewards: rewards.map((r) => ({
           id: r.id,
