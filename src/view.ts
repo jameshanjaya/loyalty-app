@@ -139,8 +139,14 @@ export function customerSkin(brand: Pick<Brand, "id" | "accent" | "accent_soft">
   return { style, dark: base.dark, accent };
 }
 
-function orderBlock(links: OrderLink[], outlets: Array<{ id: string; name: string; on: boolean }>, brandId: string): string {
-  if (!links.length) return "";
+function orderBlock(
+  links: OrderLink[],
+  outlets: Array<{ id: string; name: string; on: boolean }>,
+  brandId: string,
+  booking: { id: string; name: string } | null,
+  pickBooking: boolean,
+): string {
+  if (!links.length && !booking && !pickBooking) return "";
   const primary = links.filter((link) => link.platform === "gofood" || link.platform === "grabfood");
   const extras = links.filter((link) => link.platform !== "gofood" && link.platform !== "grabfood");
   const badge = (link: OrderLink) => {
@@ -152,10 +158,16 @@ function orderBlock(links: OrderLink[], outlets: Array<{ id: string; name: strin
         .concat(outlets.map((o) => `<a class="pill${o.on ? " on" : ""}" href="/kartu?merek=${esc(brandId)}&outlet=${esc(o.id)}">${esc(o.name)}</a>`))
         .join("")}</div>`
     : "";
+  const book = booking
+    ? `<a class="obadge booking" href="/pesan/outlet/${esc(booking.id)}" target="_blank" rel="noopener noreferrer">Order / Booking${booking.name && outlets.length > 1 ? ` · ${esc(booking.name)}` : ""}</a>`
+    : pickBooking
+      ? `<p class="fine">Pilih outlet dulu buat order / booking.</p>`
+      : "";
   return `<section class="card order">
     <div class="eyebrow">Pesan online</div>
     <h2>Pesan sekarang</h2>
     ${chips}
+    ${book}
     ${primary.length ? `<div class="order-row">${primary.map(badge).join("")}</div>` : ""}
     ${extras.length ? `<div class="order-extra">${extras.map(badge).join("")}</div>` : ""}
   </section>`;
@@ -291,6 +303,8 @@ export function cardPage(input: {
   tiers?: Array<{ id: string; stamps: number; reward: string; ready: boolean }>;
   orders?: OrderLink[];
   orderOutlets?: Array<{ id: string; name: string; on: boolean }>;
+  booking?: { id: string; name: string } | null;
+  pickBooking?: boolean;
 }): string {
   const card = input.cards.get(input.brand.id);
   const stamps = card?.stamps ?? 0;
@@ -340,7 +354,7 @@ export function cardPage(input: {
           )
           .join("")}
       </section>
-      ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id)}
+      ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id, input.booking || null, Boolean(input.pickBooking))}
       ${input.birthday ? `<section class="bday"><div class="kicker">ULANG TAHUN</div><h3>Hadiah: ${esc(input.birthday)}</h3><p>Sekali setahun. Tukar di sini, kasir masukkan kodenya.</p><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(input.brand.id)}" /><button class="btn btn-solid">Tukar hadiah ultah</button></form></section>` : ""}
       <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
       ${tabbar("kartu", input.brand.id)}
@@ -1039,6 +1053,8 @@ export function outletsPage(
           <p class="fine">Kalau diisi, tombol di kartu memakai tautan ini, bukan tautan merek.</p>
           <label class="lbl">GoFood</label><input name="gofood" type="url" value="${esc(storeUrl(links, o.brand_id, "gofood", o.id))}" placeholder="https://" />
           <label class="lbl">GrabFood</label><input name="grabfood" type="url" value="${esc(storeUrl(links, o.brand_id, "grabfood", o.id))}" placeholder="https://" />
+          <label class="lbl">WhatsApp order / booking</label><input name="wa" inputmode="tel" value="${esc(o.wa || "")}" placeholder="0812 3456 4567" />
+          <p class="fine">Tombol Order / Booking membuka chat dengan pesan “Halo, mau order/booking di ${esc(o.name)}”. Kosongkan untuk menyembunyikan.</p>
           <button class="btn btn-solid">Simpan tautan</button>
         </form>
       </article>`,

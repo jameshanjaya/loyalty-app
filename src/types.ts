@@ -25,6 +25,7 @@ export type Outlet = {
   name: string;
   pin_hash: string;
   pin_salt: string;
+  wa: string;
   active: number;
   created_at: number;
 };

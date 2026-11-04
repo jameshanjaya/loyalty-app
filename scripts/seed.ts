@@ -174,6 +174,7 @@ async function pinPair(plain: string): Promise<{ hash: string; salt: string }> {
 
 const outlets = [
   ["o_loft", "loft25", "Loft25 Senopati", "258025"],
+  ["o_loft_kemang", "loft25", "Loft25 Kemang", "258026"],
   ["o_soto", "soto-oseng", "Soto Oseng Tebet", "369136"],
   ["o_kris", "krispyporkk", "Krispyporkk Kemang", "470247"],
 ] as const;
@@ -184,6 +185,12 @@ for (const [id, brand, name, plain] of outlets) {
     `INSERT INTO outlets (id, brand_id, name, pin_hash, pin_salt, active, created_at) VALUES (${sql(id)},${sql(brand)},${sql(name)},${sql(made.hash)},${sql(made.salt)},1,${now - 90 * DAY});`,
   );
 }
+lines.push(
+  `UPDATE outlets SET wa = '6281211112580' WHERE id = 'o_loft';
+   UPDATE outlets SET wa = '6281233332586' WHERE id = 'o_loft_kemang';
+   UPDATE outlets SET wa = '6281322223691' WHERE id = 'o_soto';
+   UPDATE outlets SET wa = '6281344447024' WHERE id = 'o_kris';`,
+);
 
 const counter = { i: 1 };
 const allEvents: Ev[] = [];

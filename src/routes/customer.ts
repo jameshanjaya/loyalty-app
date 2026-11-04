@@ -1,6 +1,6 @@
 import { randomId } from "../crypto";
 import { birthdayStatus } from "../birthday";
-import { visibleOrderLinks } from "../orders";
+import { bookingTarget, bookingUrl, visibleOrderLinks } from "../orders";
 import { formatPoints, tierChoices } from "../points";
 import { LIMITS, enforceLimit } from "../ratelimit";
 import * as pdb from "../points-db";
@@ -227,13 +227,22 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     });
     const birthdayUsed = offer.open ? await repo.birthdayTaken(db, member.id, brand.id, offer.rewardYear) : true;
     const links = await repo.listOrderLinks(db, brand.id);
+    const named = (await repo.listOutlets(db)).filter((outlet) => outlet.brand_id === brand.id && outlet.active);
     const outletParam = url.searchParams.get("outlet") || "";
-    const outletOk = outletParam ? links.some((link) => link.outlet_id === outletParam) : false;
-    const orders = visibleOrderLinks(links, outletOk ? outletParam : null);
-    const named = await repo.listOutlets(db);
+    const selected = named.some((outlet) => outlet.id === outletParam) ? outletParam : "";
+    const orders = visibleOrderLinks(links, selected || null);
+    const bookable = named.filter((outlet) => bookingUrl(outlet.name, outlet.wa || ""));
+    const target = bookingTarget(
+      named.map((outlet) => ({ id: outlet.id, name: outlet.name, wa: outlet.wa || "" })),
+      selected || null,
+    );
+    const chipIds = new Set<string>([
+      ...links.flatMap((link) => (link.outlet_id ? [link.outlet_id] : [])),
+      ...(bookable.length > 1 ? bookable.map((outlet) => outlet.id) : []),
+    ]);
     const orderOutlets = named
-      .filter((outlet) => outlet.brand_id === brand.id && links.some((link) => link.outlet_id === outlet.id))
-      .map((outlet) => ({ id: outlet.id, name: outlet.name, on: outlet.id === outletParam }));
+      .filter((outlet) => chipIds.has(outlet.id))
+      .map((outlet) => ({ id: outlet.id, name: outlet.name, on: outlet.id === selected }));
     const tiers = await pdb.listTiers(db, brand.id);
     const choice = tierChoices(
       cards.get(brand.id)?.stamps ?? 0,
@@ -260,12 +269,33 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         tiers: tierView,
         orders,
         orderOutlets,
+        booking: target ? { id: target.id, name: target.name } : null,
+        pickBooking: bookable.length > 1 && !target,
       }),
     );
   }
 
   if (path.startsWith("/pesan/") && request.method === "GET") {
     if (isPrefetch(request)) return new Response(null, { status: 204 });
+    if (path.startsWith("/pesan/outlet/")) {
+      const outletId = decodeURIComponent(path.slice("/pesan/outlet/".length));
+      const outlet = await repo.getOutlet(db, outletId);
+      const dest = outlet && outlet.active ? bookingUrl(outlet.name, outlet.wa || "") : null;
+      if (!outlet || !dest) return redirect("/kartu");
+      const gate = await enforceLimit(db, `order:${ip}`, now, LIMITS.orderClick);
+      if (gate.ok) {
+        await repo.logOrderClick(db, {
+          id: randomId(),
+          brandId: outlet.brand_id,
+          outletId: outlet.id,
+          platform: "booking",
+          linkId: outlet.id,
+          memberId: member?.id || null,
+          now,
+        });
+      }
+      return redirect(dest);
+    }
     const id = decodeURIComponent(path.slice("/pesan/".length));
     const link = await repo.getOrderLink(db, id);
     if (!link || link.active !== 1 || !link.url.startsWith("https://")) return redirect("/kartu");

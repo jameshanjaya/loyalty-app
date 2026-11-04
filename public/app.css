@@ -375,6 +375,7 @@ td, th { padding: 8px 4px; border-bottom: 1px solid var(--line); vertical-align:
 }
 .obadge.gofood { background: #00aa13; }
 .obadge.grabfood { background: #00b14f; }
+.obadge.booking { background: #25d366; color: #073018; margin-top: 12px; }
 .obadge.extra { background: transparent; color: var(--ink); border: 1.5px solid var(--line); }
 .skin-dark .obadge.extra { color: var(--ink); border-color: rgba(255,255,255,.22); }
 .reel { position: relative; margin: -18px -16px 16px; }

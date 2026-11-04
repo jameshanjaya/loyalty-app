@@ -4,7 +4,7 @@ import { clip, httpsUrl, prettyWa } from "../format";
 import { orderLabel, orderPlatform } from "../orders";
 import { html, readCookie, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
-import { validOutletPin, weakPin } from "../phone";
+import { normalizeWa, validOutletPin, weakPin } from "../phone";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { OWNER_SESSION_MS } from "../loyalty";
@@ -310,6 +310,10 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     if (!stores) return back("/admin/outlet", "aturan");
     await repo.upsertOrderLink(db, { id: randomId(), brandId: outlet.brand_id, outletId: outlet.id, platform: "gofood", label: "GoFood", url: stores.gofood, sort: 1 });
     await repo.upsertOrderLink(db, { id: randomId(), brandId: outlet.brand_id, outletId: outlet.id, platform: "grabfood", label: "GrabFood", url: stores.grabfood, sort: 2 });
+    const waRaw = String(form.get("wa") || "").trim();
+    const wa = waRaw ? normalizeWa(waRaw) : "";
+    if (waRaw && !wa) return back("/admin/outlet", "wa");
+    await repo.setOutletWa(db, outlet.id, wa || "");
     return ok("/admin/outlet", "simpan");
   }
 

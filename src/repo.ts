@@ -92,6 +92,10 @@ export async function setOutletPin(db: D1Database, id: string, pinHash: string, 
   await db.prepare(`UPDATE outlets SET pin_hash=?, pin_salt=? WHERE id=?`).bind(pinHash, pinSalt, id).run();
 }
 
+export async function setOutletWa(db: D1Database, id: string, wa: string): Promise<void> {
+  await db.prepare(`UPDATE outlets SET wa = ? WHERE id = ?`).bind(wa, id).run();
+}
+
 export async function setOutletActive(db: D1Database, id: string, active: number): Promise<void> {
   await db.prepare(`UPDATE outlets SET active=? WHERE id=?`).bind(active, id).run();
 }

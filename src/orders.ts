@@ -1,3 +1,5 @@
+import { normalizeWa } from "./phone";
+
 export type OrderLink = {
   id: string;
   brand_id: string;
@@ -35,6 +37,28 @@ export function orderLabel(platform: string, custom: string): string {
   if (platform === "gofood") return "GoFood";
   if (platform === "grabfood") return "GrabFood";
   if (platform === "shopeefood") return "ShopeeFood";
+  if (platform === "booking") return "Order / Booking";
   if (platform === "wa") return custom.trim() || "WhatsApp";
   return custom.trim() || "Pesan";
+}
+
+/** wa.me dengan pesan siap kirim. Nomor kosong atau tidak valid mengembalikan null. */
+export function bookingUrl(outletName: string, wa: string): string | null {
+  const digits = normalizeWa(wa);
+  const name = outletName.trim();
+  if (!digits || !name) return null;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(`Halo, mau order/booking di ${name}`)}`;
+}
+
+export function bookingTarget(
+  outlets: Array<{ id: string; name: string; wa: string }>,
+  selectedId: string | null,
+): { id: string; name: string; url: string } | null {
+  const ready = outlets.flatMap((outlet) => {
+    const url = bookingUrl(outlet.name, outlet.wa || "");
+    return url ? [{ id: outlet.id, name: outlet.name, url }] : [];
+  });
+  if (ready.length === 0) return null;
+  if (ready.length === 1) return ready[0]!;
+  return ready.find((outlet) => outlet.id === selectedId) ?? null;
 }
