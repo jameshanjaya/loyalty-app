@@ -37,6 +37,6 @@
     }
   ],
   "secrets": {
-    "required": ["OWNER_PASSWORD", "TOKEN_SECRET", "PIN_PEPPER"]
+    "required": ["OWNER_PASSWORD", "TOKEN_SECRET", "PIN_PEPPER", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]
   }
 }

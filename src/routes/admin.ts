@@ -1,4 +1,5 @@
 import { bytesToHex, hashPin, randomBytes, randomId } from "../crypto";
+import { membersCsv, membersXlsx, type ExportRow } from "../export";
 import { clip, httpsUrl, prettyWa } from "../format";
 import { html, readCookie, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
@@ -6,15 +7,17 @@ import { validOutletPin, weakPin } from "../phone";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { OWNER_SESSION_MS } from "../loyalty";
-import { loginOwner, setOutletPinHash } from "../service";
+import { loginOwner, ownerDeleteMember, ownerSetBirthday, ownerSetPhone, setOutletPinHash } from "../service";
 import { clearCookie, COOKIE, loadOwner, setSessionCookie } from "../session";
-import { WIB_MS, feedTime, parseWibDate, parseWibLocal, startOfWibDay, startOfWibMonth, wibDayIndex } from "../time";
+import { WIB_MS, feedTime, memberSince, parseWibDate, parseWibLocal, startOfWibDay, startOfWibMonth, wibDayIndex } from "../time";
 import type { Banner } from "../types";
 import {
   activityPage,
   adminLoginPage,
   bannersPage,
   dashboardPage,
+  deleteMemberPage,
+  memberDetailPage,
   membersPage,
   messagePage,
   outletsPage,
@@ -81,19 +84,77 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const lapsed = await repo.lapsedMembers(db, brandId, now - 30 * 86_400_000);
     const banners = (await repo.listBanners(db, brandId)).filter((b) => repo.bannerLive(b, now));
     const flags = await repo.recentFlags(db, now - 7 * 86_400_000);
-    return html(dashboardPage({ brands, brand, numbers, days, top, lapsed, banners, flags, now }));
+    const month = new Date(now + WIB_MS).getUTCMonth() + 1;
+    const birthdays = (await repo.birthdaysThisMonth(db, month)).map((m) => ({ name: m.name, birthday: m.birthday || "" }));
+    const birthdayRedeems = await repo.countBirthdayRedeems(db, startOfWibMonth(now), brandId);
+    return html(dashboardPage({ brands, brand, numbers, days, top, lapsed, banners, flags, now, birthdays, birthdayRedeems }));
+  }
+
+  if ((path === "/admin/member.csv" || path === "/admin/member.xlsx") && request.method === "GET") {
+    const listed = await repo.listMemberRows(db, memberQuery(url));
+    const exported = listed.map((m) => toExport(m, now));
+    if (path.endsWith(".xlsx")) {
+      const bytes = membersXlsx(exported);
+      return new Response(Uint8Array.from(bytes), {
+        headers: {
+          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "content-disposition": "attachment; filename=member.xlsx",
+          "cache-control": "no-store",
+        },
+      });
+    }
+    return new Response(`\uFEFF${membersCsv(exported)}`, {
+      headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": "attachment; filename=member.csv", "cache-control": "no-store" },
+    });
   }
 
   if (path === "/admin/member" && request.method === "GET") {
-    const q = (url.searchParams.get("q") || "").trim();
-    const members = q ? await repo.searchMembers(db, q) : await repo.searchMembers(db, "");
-    const lines = await Promise.all(
-      members.map(async (m) => {
-        const cards = await repo.memberCards(db, m.id);
-        return { ...m, lines: cards.map((c) => `${c.short_name} ${c.stamps}`).join(" · ") || "-" };
-      }),
-    );
-    return html(membersPage(lines, q));
+    const members = await repo.listMemberRows(db, memberQuery(url));
+    return html(membersPage(members, await repo.listBrands(db, false), url.searchParams));
+  }
+
+  if (path.startsWith("/admin/member/") && request.method === "GET" && path.endsWith("/hapus")) {
+    const id = decodeURIComponent(path.slice("/admin/member/".length, -"/hapus".length));
+    const member = await repo.getMember(db, id);
+    if (!member) return back("/admin/member", "belum");
+    return html(deleteMemberPage(member));
+  }
+
+  if (path.startsWith("/admin/member/") && request.method === "POST" && path.endsWith("/hapus")) {
+    const id = decodeURIComponent(path.slice("/admin/member/".length, -"/hapus".length));
+    const member = await repo.getMember(db, id);
+    if (!member) return back("/admin/member", "belum");
+    await ownerDeleteMember(db, { member, now });
+    return ok("/admin/member", "member-hapus");
+  }
+
+  if (path.startsWith("/admin/member/") && request.method === "POST" && path.endsWith("/telepon")) {
+    const id = decodeURIComponent(path.slice("/admin/member/".length, -"/telepon".length));
+    const member = await repo.getMember(db, id);
+    if (!member) return back("/admin/member", "belum");
+    const form = await request.formData();
+    const result = await ownerSetPhone(db, { member, waRaw: String(form.get("wa") || ""), now });
+    if (!result.ok) return back(`/admin/member/${id}`, result.error);
+    return ok(`/admin/member/${id}`, "telepon");
+  }
+
+  if (path.startsWith("/admin/member/") && request.method === "POST" && path.endsWith("/lahir")) {
+    const id = decodeURIComponent(path.slice("/admin/member/".length, -"/lahir".length));
+    const member = await repo.getMember(db, id);
+    if (!member) return back("/admin/member", "belum");
+    const form = await request.formData();
+    const result = await ownerSetBirthday(db, { member, birthdayRaw: String(form.get("lahir") || ""), now });
+    if (!result.ok) return back(`/admin/member/${id}`, result.error);
+    return ok(`/admin/member/${id}`, "lahirsimpan");
+  }
+
+  if (path.startsWith("/admin/member/") && request.method === "GET") {
+    const id = decodeURIComponent(path.slice("/admin/member/".length));
+    if (!/^[A-Za-z0-9_-]+$/.test(id)) return back("/admin/member", "belum");
+    const member = await repo.getMember(db, id);
+    if (!member) return back("/admin/member", "belum");
+    const cards = await repo.memberCards(db, id);
+    return html(memberDetailPage({ member, cards, params: url.searchParams }));
   }
 
   if (path === "/admin/reward" && request.method === "GET") {
@@ -275,7 +336,7 @@ function csv(value: string): string {
 
 function activityFilter(url: URL) {
   const jenis = url.searchParams.get("jenis") || "";
-  const allowed = new Set(["stamp", "redeem", "cancel", "join"]);
+  const allowed = new Set(["stamp", "redeem", "birthday", "cancel", "join"]);
   const dari = parseWibDate(url.searchParams.get("dari") || "");
   const sampaiHari = parseWibDate(url.searchParams.get("sampai") || "");
   return {
@@ -307,6 +368,9 @@ function readBrand(form: FormData) {
   if (!Number.isInteger(stamps_required) || stamps_required < 1 || stamps_required > 30) return null;
   if (!Number.isInteger(max_stamps_per_day) || max_stamps_per_day < 1 || max_stamps_per_day > 10) return null;
   if (min_amount != null && (!Number.isFinite(min_amount) || min_amount < 0 || min_amount > 10_000_000)) return null;
+  const birthday_window = String(form.get("birthday_window") || "") === "around" ? "around" : "month";
+  const birthday_days = Number(form.get("birthday_days") || 7);
+  if (!Number.isInteger(birthday_days) || birthday_days < 0 || birthday_days > 30) return null;
   return {
     name,
     short_name,
@@ -321,5 +385,28 @@ function readBrand(form: FormData) {
     max_stamps_per_day,
     reward_note,
     active: form.get("active") === "on" ? 1 : 0,
+    birthday_reward: clip(String(form.get("birthday_reward") || ""), 80),
+    birthday_active: form.get("birthday_active") === "on" ? 1 : 0,
+    birthday_window,
+    birthday_days,
+  };
+}
+
+function memberQuery(url: URL) {
+  const sort = url.searchParams.get("urut") || "kunjungan";
+  return { q: (url.searchParams.get("q") || "").trim(), brandId: url.searchParams.get("merek") || "", sort };
+}
+
+function toExport(m: { name: string; wa: string; email: string | null; birthday: string | null; created_at: number; join_method: string; stamps_label: string; rewards: number; last_seen_at: number }, now: number): ExportRow {
+  return {
+    name: m.name,
+    wa: prettyWa(m.wa),
+    email: m.email || "",
+    birthday: m.birthday || "",
+    joined: memberSince(m.created_at),
+    method: m.join_method,
+    stamps: m.stamps_label,
+    rewards: String(m.rewards),
+    lastVisit: feedTime(m.last_seen_at, now),
   };
 }

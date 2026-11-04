@@ -7,11 +7,20 @@ export const COOKIE = { member: "lb_member", cashier: "lb_cashier", owner: "lb_o
 async function liveSession(db: D1Database, id: string | null, kind: string, now: number) {
   if (!id) return null;
   const session = await repo.getSession(db, id);
-  if (!session || session.kind !== kind || session.expires_at < now) {
+  if (!session || session.expires_at < now) {
     if (session) await repo.deleteSession(db, id);
     return null;
   }
+  if (session.kind !== kind) return null;
   return session;
+}
+
+export async function loadSignup(request: Request, db: D1Database, now: number) {
+  const session = await liveSession(db, readCookie(request.headers.get("cookie"), COOKIE.member), "signup", now);
+  if (!session?.subject_id) return null;
+  const pending = await repo.getPending(db, session.subject_id);
+  if (!pending) return null;
+  return { sessionId: session.id, pending };
 }
 
 export async function loadMember(request: Request, db: D1Database, now: number): Promise<Member | null> {

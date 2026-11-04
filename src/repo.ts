@@ -34,13 +34,17 @@ export async function saveBrand(
     max_stamps_per_day: number;
     reward_note: string;
     active: number;
+    birthday_reward: string;
+    birthday_active: number;
+    birthday_window: string;
+    birthday_days: number;
   },
 ): Promise<void> {
   await db
     .prepare(
       `UPDATE brands SET name=?, short_name=?, handle=?, emoji=?, accent=?, accent_soft=?,
         stamps_required=?, reward_text=?, condition_label=?, min_amount=?, max_stamps_per_day=?,
-        reward_note=?, active=? WHERE id=?`,
+        reward_note=?, active=?, birthday_reward=?, birthday_active=?, birthday_window=?, birthday_days=? WHERE id=?`,
     )
     .bind(
       patch.name,
@@ -56,6 +60,10 @@ export async function saveBrand(
       patch.max_stamps_per_day,
       patch.reward_note,
       patch.active,
+      patch.birthday_reward,
+      patch.birthday_active,
+      patch.birthday_window,
+      patch.birthday_days,
       id,
     )
     .run();
@@ -698,6 +706,162 @@ export async function lapsedMembers(db: D1Database, brandId: string | null, befo
     ORDER BY m.last_seen_at ASC
     LIMIT 6`;
   return rows<Lapsed>(db.prepare(sql).bind(before, brandId, brandId, brandId, brandId));
+}
+
+export type PendingGoogle = { id: string; sub: string; email: string | null; name: string; created_at: number };
+
+export async function upsertPending(db: D1Database, row: PendingGoogle): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO google_pending (id, sub, email, name, created_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(sub) DO UPDATE SET email=excluded.email, name=excluded.name`,
+    )
+    .bind(row.id, row.sub, row.email, row.name, row.created_at)
+    .run();
+}
+
+export async function getPending(db: D1Database, id: string): Promise<PendingGoogle | null> {
+  return db.prepare(`SELECT * FROM google_pending WHERE id = ?`).bind(id).first<PendingGoogle>();
+}
+
+export async function getPendingBySub(db: D1Database, sub: string): Promise<PendingGoogle | null> {
+  return db.prepare(`SELECT * FROM google_pending WHERE sub = ?`).bind(sub).first<PendingGoogle>();
+}
+
+export async function deletePending(db: D1Database, id: string): Promise<void> {
+  await db.prepare(`DELETE FROM google_pending WHERE id = ?`).bind(id).run();
+}
+
+export async function getMemberByGoogle(db: D1Database, sub: string): Promise<Member | null> {
+  return db.prepare(`SELECT * FROM members WHERE google_sub = ?`).bind(sub).first<Member>();
+}
+
+export async function setMemberGoogle(
+  db: D1Database,
+  id: string,
+  sub: string,
+  email: string | null,
+  method: "google" | "link",
+): Promise<void> {
+  const join = method === "google" ? "google" : "wa+google";
+  await db
+    .prepare(`UPDATE members SET google_sub = ?, email = COALESCE(email, ?), join_method = ? WHERE id = ?`)
+    .bind(sub, email, join, id)
+    .run();
+}
+
+export async function setMemberPhone(db: D1Database, id: string, wa: string): Promise<void> {
+  await db.prepare(`UPDATE members SET wa = ? WHERE id = ?`).bind(wa, id).run();
+}
+
+export async function setMemberBirthday(db: D1Database, id: string, birthday: string): Promise<void> {
+  await db.prepare(`UPDATE members SET birthday = ? WHERE id = ?`).bind(birthday, id).run();
+}
+
+export async function insertAdminLog(db: D1Database, row: { id: string; action: string; detail: string; now: number }): Promise<void> {
+  await db.prepare(`INSERT INTO admin_log (id, action, detail, created_at) VALUES (?, ?, ?, ?)`).bind(row.id, row.action, row.detail, row.now).run();
+}
+
+export async function deleteMemberCascade(db: D1Database, id: string): Promise<void> {
+  await db.batch([
+    db.prepare(`DELETE FROM activities WHERE member_id = ?`).bind(id),
+    db.prepare(`DELETE FROM birthday_redemptions WHERE member_id = ?`).bind(id),
+    db.prepare(`DELETE FROM cards WHERE member_id = ?`).bind(id),
+    db.prepare(`DELETE FROM sessions WHERE subject_id = ?`).bind(id),
+    db.prepare(`UPDATE claim_tokens SET member_id = NULL WHERE member_id = ?`).bind(id),
+    db.prepare(`DELETE FROM members WHERE id = ?`).bind(id),
+  ]);
+}
+
+export async function birthdayTaken(db: D1Database, memberId: string, brandId: string, year: number): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT 1 AS n FROM birthday_redemptions WHERE member_id = ? AND brand_id = ? AND reward_year = ?`)
+    .bind(memberId, brandId, year)
+    .first<{ n: number }>();
+  return Boolean(row);
+}
+
+export async function insertBirthdayRedemption(
+  db: D1Database,
+  row: { memberId: string; brandId: string; year: number; activityId: string; now: number },
+): Promise<boolean> {
+  try {
+    await db
+      .prepare(
+        `INSERT INTO birthday_redemptions (member_id, brand_id, reward_year, activity_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(row.memberId, row.brandId, row.year, row.activityId, row.now)
+      .run();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteBirthdayRedemption(db: D1Database, memberId: string, brandId: string, year: number): Promise<void> {
+  await db
+    .prepare(`DELETE FROM birthday_redemptions WHERE member_id = ? AND brand_id = ? AND reward_year = ?`)
+    .bind(memberId, brandId, year)
+    .run();
+}
+
+export type MemberListRow = Member & { stamps_label: string; rewards: number };
+
+export async function listMemberRows(
+  db: D1Database,
+  filter: { q: string; brandId: string; sort: string },
+): Promise<MemberListRow[]> {
+  const sortSql: Record<string, string> = {
+    nama: "m.name COLLATE NOCASE ASC",
+    gabung: "m.created_at DESC",
+    kunjungan: "m.last_seen_at DESC",
+    ulang: "CASE WHEN m.birthday IS NULL THEN 1 ELSE 0 END, substr(m.birthday, 6, 5) ASC",
+  };
+  const order = sortSql[filter.sort] || sortSql.kunjungan;
+  const where: string[] = [];
+  const binds: string[] = [];
+  if (filter.q) {
+    const like = `%${filter.q.replace(/[%_]/g, "")}%`;
+    where.push("(m.name LIKE ? OR m.wa LIKE ? OR IFNULL(m.email,'') LIKE ?)");
+    binds.push(like, like, like);
+  }
+  if (filter.brandId) {
+    where.push(`EXISTS (SELECT 1 FROM cards c WHERE c.member_id = m.id AND c.brand_id = ? AND (c.stamps > 0 OR c.lifetime_stamps > 0))`);
+    binds.push(filter.brandId);
+  }
+  const sql = `
+    SELECT m.*,
+      IFNULL((
+        SELECT group_concat(b.short_name || ' ' || c.stamps || '/' || b.stamps_required, ' · ')
+        FROM cards c JOIN brands b ON b.id = c.brand_id
+        WHERE c.member_id = m.id
+      ), '') AS stamps_label,
+      IFNULL((SELECT SUM(c.lifetime_redeems) FROM cards c WHERE c.member_id = m.id), 0) AS rewards
+    FROM members m
+    ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+    ORDER BY ${order}
+    LIMIT 1000`;
+  return rows<MemberListRow>(db.prepare(sql).bind(...binds));
+}
+
+export async function birthdaysThisMonth(db: D1Database, month: number): Promise<Member[]> {
+  return rows<Member>(
+    db
+      .prepare(
+        `SELECT * FROM members WHERE birthday IS NOT NULL AND CAST(substr(birthday, 6, 2) AS INTEGER) = ?
+         ORDER BY substr(birthday, 9, 2), name LIMIT 30`,
+      )
+      .bind(month),
+  );
+}
+
+export async function countBirthdayRedeems(db: D1Database, since: number, brandId: string | null): Promise<number> {
+  const sql = brandId
+    ? `SELECT COUNT(*) AS n FROM activities WHERE type = 'birthday' AND voided = 0 AND created_at >= ? AND brand_id = ?`
+    : `SELECT COUNT(*) AS n FROM activities WHERE type = 'birthday' AND voided = 0 AND created_at >= ?`;
+  const stmt = brandId ? db.prepare(sql).bind(since, brandId) : db.prepare(sql).bind(since);
+  const row = await stmt.first<{ n: number }>();
+  return row?.n ?? 0;
 }
 
 export async function memberCards(db: D1Database, memberId: string): Promise<Array<Card & { short_name: string }>> {

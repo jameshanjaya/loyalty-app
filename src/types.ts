@@ -13,6 +13,10 @@ export type Brand = {
   max_stamps_per_day: number;
   reward_note: string;
   active: number;
+  birthday_reward: string;
+  birthday_active: number;
+  birthday_window: string;
+  birthday_days: number;
 };
 
 export type Outlet = {
@@ -33,6 +37,10 @@ export type Member = {
   pin_salt: string;
   created_at: number;
   last_seen_at: number;
+  email: string | null;
+  birthday: string | null;
+  google_sub: string | null;
+  join_method: string;
 };
 
 export type Card = {

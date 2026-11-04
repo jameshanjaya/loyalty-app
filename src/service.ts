@@ -1,3 +1,4 @@
+import { birthdayRedeemAllowed, birthdayStatus, parseBirthday } from "./birthday";
 import { bytesToHex, hashPin, passwordMatches, randomBytes, randomId, verifyPin } from "./crypto";
 import { maskName } from "./format";
 import {
@@ -12,6 +13,7 @@ import {
 } from "./loyalty";
 import { logEvent } from "./log";
 import { normalizeWa, validName, validOutletPin, validPin, weakPin } from "./phone";
+import { birthdayEditAllowed, decidePhone } from "./profile";
 import * as repo from "./repo";
 import { LIMITS, enforceLimit, failureBlocked } from "./ratelimit";
 import { startOfWibDay } from "./time";
@@ -211,6 +213,10 @@ export async function joinMember(
     pin_salt: salt,
     created_at: input.now,
     last_seen_at: input.now,
+    email: null,
+    birthday: null,
+    google_sub: null,
+    join_method: "wa",
   };
   await repo.insertMember(db, { id: member.id, name: member.name, wa, pinHash, pinSalt: salt, now: input.now });
   const brands = await repo.listBrands(db, false);
@@ -348,7 +354,7 @@ export async function loginOwner(
 export async function openClaim(
   db: D1Database,
   env: Env,
-  input: { outlet: Outlet; sessionId: string; kind: "stamp" | "redeem"; confirmed: boolean; now: number },
+  input: { outlet: Outlet; sessionId: string; kind: "stamp" | "redeem" | "birthday"; confirmed: boolean; now: number },
 ): Promise<{ ok: true; id: string } | Fail> {
   if (!secretsReady(env)) return { ok: false, error: "secret" };
   if (input.kind === "stamp" && !input.confirmed) return { ok: false, error: "syarat" };
@@ -390,6 +396,16 @@ export async function finishClaim(
       await capFlag(db, input.member.id, outlet.id, seen.record.sessionId, input.now);
       return { ok: false, error: "cap" };
     }
+  } else if (seen.payload.kind === "birthday") {
+    const offer = birthdayStatus(input.member.birthday, input.now, {
+      active: brand.birthday_active === 1,
+      window: brand.birthday_window === "around" ? "around" : "month",
+      days: brand.birthday_days,
+    });
+    if (birthdayRedeemAllowed(offer.open, false) !== "ok") return { ok: false, error: "ultah" };
+    if (offer.open && (await repo.birthdayTaken(db, input.member.id, brand.id, offer.rewardYear))) {
+      return { ok: false, error: "ultah-sudah" };
+    }
   } else {
     const card = await repo.ensureCard(db, input.member.id, brand.id, input.now);
     if (card.stamps < brand.stamps_required) return { ok: false, error: "kurang" };
@@ -409,15 +425,25 @@ export async function finishClaim(
             confirmed: true,
             note: "qr",
           })
-        : await giveRedeem(db, {
-            member: input.member,
-            brand,
-            outletId: outlet.id,
-            sessionId: seen.record.sessionId,
-            claimId: seen.record.id,
-            now: input.now,
-            note: "qr",
-          });
+        : seen.payload.kind === "birthday"
+          ? await giveBirthday(db, {
+              member: input.member,
+              brand,
+              outletId: outlet.id,
+              sessionId: seen.record.sessionId,
+              claimId: seen.record.id,
+              now: input.now,
+              note: "qr",
+            })
+          : await giveRedeem(db, {
+              member: input.member,
+              brand,
+              outletId: outlet.id,
+              sessionId: seen.record.sessionId,
+              claimId: seen.record.id,
+              now: input.now,
+              note: "qr",
+            });
     if (!done.ok) {
       await repo.reopenClaim(db, seen.record.id);
       return done;
@@ -558,6 +584,213 @@ export async function cancelOwn(
     throw error;
   }
   logEvent("cancel", { activity: last.id, outlet: last.outlet_id });
+  return { ok: true };
+}
+
+export async function giveBirthday(
+  db: D1Database,
+  input: {
+    member: Member;
+    brand: Brand;
+    outletId: string | null;
+    sessionId: string | null;
+    claimId: string | null;
+    now: number;
+    note: string;
+  },
+): Promise<{ ok: true; activityId: string; balance: number; masked: string } | Fail> {
+  const offer = birthdayStatus(input.member.birthday, input.now, {
+    active: input.brand.birthday_active === 1,
+    window: input.brand.birthday_window === "around" ? "around" : "month",
+    days: input.brand.birthday_days,
+  });
+  if (!offer.open) return { ok: false, error: "ultah" };
+  const card = await repo.ensureCard(db, input.member.id, input.brand.id, input.now);
+  const activityId = randomId();
+  const saved = await repo.insertBirthdayRedemption(db, {
+    memberId: input.member.id,
+    brandId: input.brand.id,
+    year: offer.rewardYear,
+    activityId,
+    now: input.now,
+  });
+  if (!saved) return { ok: false, error: "ultah-sudah" };
+  try {
+    await repo.insertActivity(db, {
+      id: activityId,
+      type: "birthday",
+      memberId: input.member.id,
+      brandId: input.brand.id,
+      outletId: input.outletId,
+      sessionId: input.sessionId,
+      claimId: input.claimId,
+      stampsDelta: 0,
+      stampsAfter: card.stamps,
+      note: input.brand.birthday_reward || "ulang tahun",
+      reversesId: null,
+      now: input.now,
+    });
+  } catch (error) {
+    await repo.deleteBirthdayRedemption(db, input.member.id, input.brand.id, offer.rewardYear);
+    throw error;
+  }
+  const masked = maskName(input.member.name, input.member.wa);
+  logEvent("birthday", { brand: input.brand.id, member: input.member.id, year: offer.rewardYear });
+  return { ok: true, activityId, balance: card.stamps, masked };
+}
+
+export async function completeGoogleProfile(
+  db: D1Database,
+  env: Env,
+  input: { pendingId: string; sub: string; email: string | null; name: string; waRaw: string; birthdayRaw: string; pin: string; pin2: string; now: number },
+): Promise<{ ok: true; sessionId: string; member: Member } | Fail> {
+  if (!secretsReady(env)) return { ok: false, error: "secret" };
+  if (!validName(input.name)) return { ok: false, error: "nama" };
+  const wa = normalizeWa(input.waRaw);
+  if (!wa) return { ok: false, error: "wa" };
+  const birthday = parseBirthday(input.birthdayRaw, input.now);
+  if (!birthday) return { ok: false, error: "lahir" };
+  if (!validPin(input.pin)) return { ok: false, error: "pinrule" };
+  if (weakPin(input.pin)) return { ok: false, error: "pinweak" };
+  if (input.pin !== input.pin2) return { ok: false, error: "pinmatch" };
+  const existing = await repo.getMemberByWa(db, wa);
+  const choice = decidePhone(existing ? { googleSub: existing.google_sub } : null);
+  if (choice === "taken") return { ok: false, error: "google-lain" };
+  if (choice === "link") return { ok: false, error: "punya" };
+  const salt = saltHex();
+  const pinHash = await hashPin(input.pin, hexToBytesSafe(salt), env.PIN_PEPPER);
+  const member: Member = {
+    id: randomId(),
+    name: input.name.trim(),
+    wa,
+    pin_hash: pinHash,
+    pin_salt: salt,
+    created_at: input.now,
+    last_seen_at: input.now,
+    email: input.email,
+    birthday,
+    google_sub: input.sub,
+    join_method: "google",
+  };
+  await repo.insertMember(db, { id: member.id, name: member.name, wa, pinHash, pinSalt: salt, now: input.now });
+  await repo.setMemberGoogle(db, member.id, input.sub, input.email, "google");
+  await repo.setMemberBirthday(db, member.id, birthday);
+  const brands = await repo.listBrands(db, false);
+  for (const brand of brands) await repo.ensureCard(db, member.id, brand.id, input.now);
+  if (brands[0]) {
+    await repo.insertActivity(db, {
+      id: randomId(),
+      type: "join",
+      memberId: member.id,
+      brandId: brands[0].id,
+      outletId: null,
+      sessionId: null,
+      claimId: null,
+      stampsDelta: 0,
+      stampsAfter: 0,
+      note: "gabung google",
+      reversesId: null,
+      now: input.now,
+    });
+  }
+  await repo.deletePending(db, input.pendingId);
+  const sessionId = randomId();
+  await repo.createSession(db, { id: sessionId, kind: "member", subjectId: member.id, now: input.now, expiresAt: input.now + MEMBER_SESSION_MS });
+  logEvent("join_google", { member: member.id });
+  return { ok: true, sessionId, member };
+}
+
+export async function linkGoogleWithPin(
+  db: D1Database,
+  env: Env,
+  input: { pendingId: string; sub: string; email: string | null; waRaw: string; pin: string; birthdayRaw: string; ip: string; now: number },
+): Promise<{ ok: true; sessionId: string; member: Member } | Fail> {
+  if (!secretsReady(env)) return { ok: false, error: "secret" };
+  const wa = normalizeWa(input.waRaw);
+  if (!wa) return { ok: false, error: "wa" };
+  const blocked = await failureBlocked(db, `pin:wa:${wa}`, input.now, LIMITS.memberPin);
+  if (!blocked.ok) return { ok: false, error: "pinwait" };
+  const member = await repo.getMemberByWa(db, wa);
+  if (!member) return { ok: false, error: "belum" };
+  const choice = decidePhone({ googleSub: member.google_sub });
+  if (choice === "taken") return { ok: false, error: "google-lain" };
+  const ok = await verifyPin(input.pin, member.pin_salt, member.pin_hash, env.PIN_PEPPER);
+  if (!ok) {
+    await enforceLimit(db, `pin:wa:${wa}`, input.now, LIMITS.memberPin);
+    return { ok: false, error: "pin" };
+  }
+  await repo.setMemberGoogle(db, member.id, input.sub, input.email, "link");
+  if (!member.birthday) {
+    const birthday = parseBirthday(input.birthdayRaw, input.now);
+    if (birthday && birthdayEditAllowed(member.birthday, false)) await repo.setMemberBirthday(db, member.id, birthday);
+  }
+  await repo.deletePending(db, input.pendingId);
+  await repo.insertAdminLog(db, {
+    id: randomId(),
+    action: "link_google",
+    detail: `${member.name} menghubungkan Google`,
+    now: input.now,
+  });
+  const sessionId = randomId();
+  await repo.createSession(db, { id: sessionId, kind: "member", subjectId: member.id, now: input.now, expiresAt: input.now + MEMBER_SESSION_MS });
+  logEvent("link_google", { member: member.id });
+  return { ok: true, sessionId, member: { ...member, google_sub: input.sub, email: member.email || input.email } };
+}
+
+export async function setOwnBirthday(
+  db: D1Database,
+  input: { member: Member; birthdayRaw: string; now: number },
+): Promise<Fail | { ok: true }> {
+  if (!birthdayEditAllowed(input.member.birthday, false)) return { ok: false, error: "lahir" };
+  const birthday = parseBirthday(input.birthdayRaw, input.now);
+  if (!birthday) return { ok: false, error: "lahir" };
+  await repo.setMemberBirthday(db, input.member.id, birthday);
+  return { ok: true };
+}
+
+export async function ownerSetPhone(
+  db: D1Database,
+  input: { member: Member; waRaw: string; now: number },
+): Promise<Fail | { ok: true; wa: string }> {
+  const wa = normalizeWa(input.waRaw);
+  if (!wa) return { ok: false, error: "wa" };
+  const other = await repo.getMemberByWa(db, wa);
+  if (other && other.id !== input.member.id) return { ok: false, error: "ada" };
+  await repo.setMemberPhone(db, input.member.id, wa);
+  await repo.insertAdminLog(db, {
+    id: randomId(),
+    action: "edit_phone",
+    detail: `${input.member.name}: ${input.member.wa} -> ${wa}`,
+    now: input.now,
+  });
+  return { ok: true, wa };
+}
+
+export async function ownerSetBirthday(
+  db: D1Database,
+  input: { member: Member; birthdayRaw: string; now: number },
+): Promise<Fail | { ok: true }> {
+  const birthday = parseBirthday(input.birthdayRaw, input.now);
+  if (!birthday) return { ok: false, error: "lahir" };
+  await repo.setMemberBirthday(db, input.member.id, birthday);
+  await repo.insertAdminLog(db, {
+    id: randomId(),
+    action: "edit_birthday",
+    detail: `${input.member.name}: ${input.member.birthday || "-"} -> ${birthday}`,
+    now: input.now,
+  });
+  return { ok: true };
+}
+
+export async function ownerDeleteMember(db: D1Database, input: { member: Member; now: number }): Promise<{ ok: true }> {
+  await repo.insertAdminLog(db, {
+    id: randomId(),
+    action: "delete_member",
+    detail: `${input.member.name} ${input.member.wa} ${input.member.email || ""}`.trim(),
+    now: input.now,
+  });
+  await repo.deleteMemberCascade(db, input.member.id);
+  logEvent("delete_member", { member: input.member.id });
   return { ok: true };
 }
 

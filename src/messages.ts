@@ -23,6 +23,14 @@ export const ERR: Record<string, string> = {
   gambar: "Gambar harus berupa file di bawah 2 MB, atau tautan https.",
   csrf: "Form-nya ditolak. Muat ulang halaman, lalu coba lagi.",
   umum: "Ada yang kurang pas. Coba lagi.",
+  ultah: "Hadiah ulang tahunnya belum aktif untuk member ini.",
+  "ultah-sudah": "Hadiah ulang tahun tahun ini sudah ditukar.",
+  punya: "Nomor ini sudah punya kartu. Masukkan PIN-nya untuk menghubungkan Google.",
+  "google-lain": "Nomor ini sudah terhubung ke akun Google lain.",
+  lahir: "Tanggal lahirnya belum beres.",
+  profil: "Lengkapi nama, tanggal lahir, dan nomor WA dulu.",
+  "google-off": "Login Google belum disetel. Owner perlu mengisi rahasia Google.",
+  google: "Login Google gagal. Coba lagi.",
   aturan: "Isian aturannya belum beres.",
   cari: "Terlalu sering cari nomor. Tunggu sebentar.",
   besar: "Filenya kebesaran. Maksimal 2 MB.",
@@ -37,6 +45,9 @@ export const OK: Record<string, string> = {
   banner: "Banner disimpan.",
   outlet: "Outlet ditambah.",
   hapus: "Banner dihapus.",
+  telepon: "Nomor WA diganti.",
+  lahirsimpan: "Tanggal lahir disimpan.",
+  "member-hapus": "Member dihapus. Catatannya tersimpan.",
 };
 
 export function errText(code: string | null): string | null {

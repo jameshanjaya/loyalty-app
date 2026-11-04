@@ -128,13 +128,45 @@ Selesai kalau muncul alamat `*.workers.dev`. Buka alamat itu.
 
 Setelah deploy, masuk ke `/admin`, buka **Outlet & PIN**, lalu tambah satu outlet untuk tiap merek beserta PIN-nya. Merek (Loft25, Soto Oseng, Krispyporkk) dan aturan stamp-nya sudah ada.
 
+## Login Google
+
+Pelanggan bisa masuk dengan Google, atau tetap pakai nomor WA + PIN. Google-nya gratis.
+
+1. Buka [Google Cloud Console](https://console.cloud.google.com/).
+2. Buat proyek baru, misalnya "Loyalty Bos".
+3. Menu **APIs & Services** > **OAuth consent screen**.
+   - User type: **External**.
+   - Nama aplikasi: Loyalty Bos.
+   - Email dukungan: email kamu.
+   - Simpan. Kalau statusnya masih **Testing**, tambahkan email pelanggan percobaan di **Test users**.
+4. Menu **APIs & Services** > **Credentials** > **Create credentials** > **OAuth client ID**.
+5. Application type: **Web application**.
+6. Di **Authorized redirect URIs**, tambahkan semua alamat yang dipakai:
+   - `http://localhost:8787/auth/google/callback` untuk komputer kamu
+   - `https://loyalty-bos.NAMA-AKUN.workers.dev/auth/google/callback` setelah deploy (ganti dengan alamat yang muncul dari `wrangler deploy`)
+   - kalau pakai domain sendiri, tambah juga `https://stamp.kafe.com/auth/google/callback`
+7. Salin **Client ID** dan **Client secret**. Tempel di `.dev.vars`:
+
+```bash
+GOOGLE_CLIENT_ID=tempel-client-id
+GOOGLE_CLIENT_SECRET=tempel-client-secret
+```
+
+8. Restart `npm run dev`. Untuk yang sudah online, jalankan lagi `npx wrangler secret bulk .dev.vars`.
+
+Jangan taruh Client secret di chat atau di git. Kalau Google belum diisi, tombol Google menampilkan pesan bahwa owner belum menyetelnya. Nomor WA + PIN tetap jalan.
+
+Pelanggan baru dari Google mengisi nama, tanggal lahir, nomor WA, dan PIN dulu sebelum kartu terbuka. Tanggal lahir tidak bisa diubah sendiri setelah tersimpan. Owner bisa mengubahnya di halaman member. Kalau nomor WA itu sudah punya kartu, pelanggan memasukkan PIN kartu itu supaya akun Google-nya tersambung. Kalau nomor itu sudah tersambung ke Google lain, aplikasi menolak.
+
 ## Cara pakai sehari-hari
 
 - Pelanggan scan QR stan, isi nama, nomor WA, dan PIN. HP itu tetap masuk. Di HP lain, mereka masuk dengan nomor WA + PIN.
 - Kasir masuk dengan PIN outlet. Satu outlet hanya memberi stamp untuk mereknya.
 - Satu transaksi paling satu stamp. Kasir harus mencentang syarat. Teks centangnya diatur di **Setting Program**.
 - Satu pelanggan paling 2 stamp per merek per hari. Angka ini bisa diubah di Setting Program.
-- Stamp penuh: kasir tap **Tukar Reward**, pelanggan scan QR untuk setuju. Atau kasir cari nomor WA lalu tukar.
+- Stamp penuh: kasir tap **Tukar Reward**, pelanggan scan QR untuk setuju. Atau kasir cari nomor WA lalu tukar. Stamp yang lebih dari 10 tetap nyangkut.
+- Hadiah ulang tahun diatur di **Setting Program** (teks hadiah, sepanjang bulan, atau N hari di sekitar ulang tahun, nyala/mati). Pelanggan melihatnya di kartu kalau sedang berlaku. Kasir menukarnya sekali per tahun per merek, lewat QR atau nomor WA. Stamp tidak berkurang.
+- Daftar pelanggan ada di **Member**: cari, filter merek, urutkan, buka detail, ganti nomor, hapus (dengan halaman konfirmasi, dan tercatat). Unduh CSV atau Excel.
 - Banner promo di kartu pelanggan diatur di **Banner Promo**. Bisa tempel tautan gambar https, atau unggah file (paling 2 MB, jpg/png/webp/gif).
 - Log aktivitas ada di menu **Aktivitas**. Bisa diunduh sebagai CSV.
 - Kalau kasir memberi stamp sangat banyak dalam waktu singkat, atau ada yang mentok batas harian, dashboard menampilkan **Yang perlu dicek**.
@@ -153,7 +185,7 @@ npm test
 npm run typecheck
 ```
 
-Tes ini memeriksa QR yang hanya bisa dipakai sekali dan yang kedaluwarsa, aturan stamp, sisa stamp saat tukar, dan batas percobaan PIN.
+Tes ini memeriksa QR yang hanya bisa dipakai sekali dan yang kedaluwarsa, aturan stamp, sisa stamp saat tukar, batas percobaan PIN, kelengkapan profil Google, jendela hadiah ulang tahun, dan unduhan CSV/Excel.
 
 ## Kalau macet
 

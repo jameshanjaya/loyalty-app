@@ -1,10 +1,11 @@
+import { birthdayStatus } from "../birthday";
 import { html, isPrefetch, readCookie, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
 import { safeNext } from "../format";
 import * as repo from "../repo";
 import { MEMBER_SESSION_MS } from "../loyalty";
-import { finishClaim, joinMember, loginMember } from "../service";
-import { clearCookie, COOKIE, loadMember, setSessionCookie } from "../session";
+import { finishClaim, joinMember, linkGoogleWithPin, loginMember, completeGoogleProfile, setOwnBirthday } from "../service";
+import { clearCookie, COOKIE, loadMember, loadSignup, setSessionCookie } from "../session";
 import { readClaim } from "../tokens";
 import {
   cardPage,
@@ -14,6 +15,7 @@ import {
   joinPage,
   loginPage,
   messagePage,
+  profilePage,
   successPage,
 } from "../view";
 
@@ -39,14 +41,18 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     path === "/gabung" ||
     path.startsWith("/gabung/") ||
     path === "/masuk" ||
+    path === "/profil" ||
+    path === "/profil/hubungkan" ||
     path === "/keluar" ||
     path === "/kartu" ||
     path.startsWith("/k/") ||
     path.startsWith("/berhasil/");
   if (!mine) return null;
   const member = await loadMember(request, db, now);
+  const signup = member ? null : await loadSignup(request, db, now);
 
   if (path === "/" && request.method === "GET") {
+    if (signup) return redirect("/profil");
     if (member) return redirect("/kartu");
     const brands = await repo.listBrands(db, true);
     if (!brands.length) return html(emptyDbPage());
@@ -112,7 +118,76 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     return redirect("/", [clearCookie(request, COOKIE.member)]);
   }
 
+  if (path === "/profil" && request.method === "GET") {
+    if (signup) return html(profilePage({ mode: "google", name: signup.pending.name, email: signup.pending.email, params: url.searchParams }));
+    if (!member) return redirect("/masuk");
+    return html(profilePage({ mode: "member", name: member.name, email: member.email, birthday: member.birthday, google: Boolean(member.google_sub), params: url.searchParams }));
+  }
+
+  if (path === "/profil" && request.method === "POST") {
+    if (!sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
+    const form = await request.formData();
+    if (signup) {
+      const result = await completeGoogleProfile(db, env, {
+        pendingId: signup.pending.id,
+        sub: signup.pending.sub,
+        email: signup.pending.email,
+        name: String(form.get("nama") || signup.pending.name),
+        waRaw: String(form.get("wa") || ""),
+        birthdayRaw: String(form.get("lahir") || ""),
+        pin: String(form.get("pin") || ""),
+        pin2: String(form.get("pin2") || ""),
+        now,
+      });
+      if (!result.ok) {
+        const params = errQuery(result.error);
+        if (result.error === "punya") params.set("wa", String(form.get("wa") || ""));
+        return html(
+          profilePage({
+            mode: result.error === "punya" ? "link" : "google",
+            name: signup.pending.name,
+            email: signup.pending.email,
+            params,
+            wa: String(form.get("wa") || ""),
+            birthday: String(form.get("lahir") || ""),
+          }),
+          400,
+        );
+      }
+      await repo.deleteSession(db, signup.sessionId);
+      return redirect("/kartu", [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)]);
+    }
+    if (!member) return redirect("/masuk");
+    const saved = await setOwnBirthday(db, { member, birthdayRaw: String(form.get("lahir") || ""), now });
+    if (!saved.ok) return redirect(`/profil?err=${saved.error}`);
+    return redirect("/kartu?ok=lahirsimpan");
+  }
+
+  if (path === "/profil/hubungkan" && request.method === "POST") {
+    if (!sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
+    if (!signup) return redirect("/masuk");
+    const form = await request.formData();
+    const result = await linkGoogleWithPin(db, env, {
+      pendingId: signup.pending.id,
+      sub: signup.pending.sub,
+      email: signup.pending.email,
+      waRaw: String(form.get("wa") || ""),
+      pin: String(form.get("pin") || ""),
+      birthdayRaw: String(form.get("lahir") || ""),
+      ip,
+      now,
+    });
+    if (!result.ok) {
+      const params = errQuery(result.error);
+      params.set("wa", String(form.get("wa") || ""));
+      return html(profilePage({ mode: "link", name: signup.pending.name, email: signup.pending.email, params, wa: String(form.get("wa") || ""), birthday: String(form.get("lahir") || "") }), 400);
+    }
+    await repo.deleteSession(db, signup.sessionId);
+    return redirect("/kartu", [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)]);
+  }
+
   if (path === "/kartu" && request.method === "GET") {
+    if (signup) return redirect("/profil");
     if (!member) return redirect("/masuk");
     const brands = await repo.listBrands(db, true);
     if (!brands.length) return html(emptyDbPage());
@@ -123,7 +198,25 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const cards = new Map((await repo.listCards(db, member.id)).map((c) => [c.brand_id, c]));
     const banners = await repo.listBanners(db, brand.id);
     const history = await repo.memberHistory(db, member.id, brand.id);
-    return html(cardPage({ member, brands, cards, brand, banners, history, now, params: url.searchParams }));
+    const offer = birthdayStatus(member.birthday, now, {
+      active: brand.birthday_active === 1,
+      window: brand.birthday_window === "around" ? "around" : "month",
+      days: brand.birthday_days,
+    });
+    const birthdayUsed = offer.open ? await repo.birthdayTaken(db, member.id, brand.id, offer.rewardYear) : true;
+    return html(
+      cardPage({
+        member,
+        brands,
+        cards,
+        brand,
+        banners,
+        history,
+        now,
+        params: url.searchParams,
+        birthday: offer.open && !birthdayUsed ? brand.birthday_reward : null,
+      }),
+    );
   }
 
   if (path.startsWith("/k/") && request.method === "GET") {
@@ -132,6 +225,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     if (isPrefetch(request)) return html(claimHoldPage({ brand: null, next, error: "Buka halaman ini langsung di HP." }));
     const read = env.TOKEN_SECRET ? await readClaim(token, env.TOKEN_SECRET, now) : { ok: false as const, reason: "malformed" as const };
     const brand = read.ok ? await repo.getBrand(db, read.payload.brandId) : null;
+    if (signup) return redirect(`/profil`);
     if (!member) {
       if (!read.ok) return html(claimHoldPage({ brand, next, error: errText(read.reason === "expired" ? "expired" : "claim") || "" }), 400);
       return html(claimHoldPage({ brand, next }));
@@ -144,7 +238,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
   if (path.startsWith("/berhasil/") && request.method === "GET") {
     if (!member) return redirect("/masuk");
     const activity = await repo.getActivity(db, decodeURIComponent(path.slice("/berhasil/".length)));
-    if (!activity || activity.member_id !== member.id || (activity.type !== "stamp" && activity.type !== "redeem")) {
+    if (!activity || activity.member_id !== member.id || (activity.type !== "stamp" && activity.type !== "redeem" && activity.type !== "birthday")) {
       return redirect("/kartu");
     }
     const brand = await repo.getBrand(db, activity.brand_id);

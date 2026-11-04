@@ -3,6 +3,7 @@ import { logEvent } from "./log";
 import { handleAdmin } from "./routes/admin";
 import { handleCashier } from "./routes/cashier";
 import { handleCustomer, type App } from "./routes/customer";
+import { handleGoogle } from "./routes/google";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -13,6 +14,7 @@ export default {
       if (media) return media;
       const app: App = { request, env, url, now: Date.now(), ip: clientIp(request), ctx };
       return (
+        (await handleGoogle(app)) ||
         (await handleCustomer(app)) ||
         (await handleCashier(app)) ||
         (await handleAdmin(app)) ||

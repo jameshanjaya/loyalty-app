@@ -5,3 +5,7 @@
 OWNER_PASSWORD=ganti-dengan-kalimat-panjang
 TOKEN_SECRET=ganti-dengan-acak-panjang-sekali
 PIN_PEPPER=ganti-dengan-acak-lain-jangan-diganti-sembarangan
+
+# Login Google. Kosongkan kalau belum dibuat. Jangan commit isinya.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

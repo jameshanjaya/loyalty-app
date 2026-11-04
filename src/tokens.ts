@@ -1,7 +1,7 @@
 import { bytesToB64Url, hmacRaw, randomId, timingSafeEqual, b64UrlToBytes } from "./crypto";
 import { CLAIM_TTL_MS } from "./loyalty";
 
-export type ClaimKind = "stamp" | "redeem";
+export type ClaimKind = "stamp" | "redeem" | "birthday";
 
 export type ClaimPayload = {
   id: string;
@@ -47,7 +47,7 @@ export async function readClaim(
   const parts = token.split(".");
   if (parts.length !== 6) return { ok: false, reason: "malformed" };
   const [id, expStr, kind, brandId, outletId, sig] = parts as [string, string, string, string, string, string];
-  if (kind !== "stamp" && kind !== "redeem") return { ok: false, reason: "malformed" };
+  if (kind !== "stamp" && kind !== "redeem" && kind !== "birthday") return { ok: false, reason: "malformed" };
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(id)) return { ok: false, reason: "malformed" };
   if (!/^[a-z0-9-]{2,40}$/.test(brandId) || !/^[A-Za-z0-9_-]{2,40}$/.test(outletId)) {
     return { ok: false, reason: "malformed" };

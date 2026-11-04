@@ -120,13 +120,40 @@ if (!pepper || pepper.length < 16) {
 }
 
 const pin = "2468";
-const lines: string[] = ["DELETE FROM flags;", "DELETE FROM rate_limits;", "DELETE FROM activities;", "DELETE FROM claim_tokens;", "DELETE FROM sessions;", "DELETE FROM banners;", "DELETE FROM cards;", "DELETE FROM members;", "DELETE FROM outlets;", "DELETE FROM brands;"];
+const birthdays: Record<string, string> = {
+  m_rina: "1998-11-04",
+  m_sari: "1992-11-22",
+  m_budi: "1988-11-28",
+  m_dewi: "1994-03-02",
+  m_kevin: "1991-07-19",
+  m_maya: "1996-11-18",
+};
+const emails: Record<string, string> = {
+  m_rina: "rina.pratiwi@gmail.com",
+  m_sari: "sari.wulandari@gmail.com",
+  m_kevin: "kevin.t@gmail.com",
+};
+const lines: string[] = [
+  "DELETE FROM flags;",
+  "DELETE FROM rate_limits;",
+  "DELETE FROM activities;",
+  "DELETE FROM birthday_redemptions;",
+  "DELETE FROM claim_tokens;",
+  "DELETE FROM sessions;",
+  "DELETE FROM google_pending;",
+  "DELETE FROM admin_log;",
+  "DELETE FROM banners;",
+  "DELETE FROM cards;",
+  "DELETE FROM members;",
+  "DELETE FROM outlets;",
+  "DELETE FROM brands;",
+];
 
 lines.push(
-  `INSERT INTO brands (id, name, short_name, handle, emoji, accent, accent_soft, stamps_required, reward_text, condition_label, min_amount, max_stamps_per_day, reward_note, active) VALUES
-  ('loft25','Loft25 Matcha Studio','Loft25','@loft25.matchastudio','🍵','#6ea564','#e7f3df',10,'free matcha','Transaksi min Rp50.000',50000,2,'1 transaksi yang memenuhi syarat = 1 stamp.',1),
-  ('soto-oseng','Soto Oseng Bang Jem','Soto Oseng','@sotooseng.bangjem','🍜','#e08a3c','#fdecd9',10,'Soto Oseng paket','Transaksi ada oseng babi',NULL,2,'Kasir pastikan nota ada oseng babi.',1),
-  ('krispyporkk','Krispyporkk','Krispyporkk','@krispyporkk','🍗','#d4654f','#fde4de',10,'diskon 50%','Transaksi min Rp100.000',100000,2,'Diskon 50% dari tagihan, paling banyak Rp400.000. Kasir yang hitung di kasir.',1);`,
+  `INSERT INTO brands (id, name, short_name, handle, emoji, accent, accent_soft, stamps_required, reward_text, condition_label, min_amount, max_stamps_per_day, reward_note, active, birthday_reward, birthday_active, birthday_window, birthday_days) VALUES
+  ('loft25','Loft25 Matcha Studio','Loft25','@loft25.matchastudio','🍵','#6ea564','#e7f3df',10,'free matcha','Transaksi min Rp50.000',50000,2,'1 transaksi yang memenuhi syarat = 1 stamp.',1,'free matcha ulang tahun',1,'month',7),
+  ('soto-oseng','Soto Oseng Bang Jem','Soto Oseng','@sotooseng.bangjem','🍜','#e08a3c','#fdecd9',10,'Soto Oseng paket','Transaksi ada oseng babi',NULL,2,'Kasir pastikan nota ada oseng babi.',1,'es teh ulang tahun',1,'around',7),
+  ('krispyporkk','Krispyporkk','Krispyporkk','@krispyporkk','🍗','#d4654f','#fde4de',10,'diskon 50%','Transaksi min Rp100.000',100000,2,'Diskon 50% dari tagihan, paling banyak Rp400.000. Kasir yang hitung di kasir.',1,'es krim ulang tahun',0,'around',3);`,
 );
 
 async function pinPair(plain: string): Promise<{ hash: string; salt: string }> {
@@ -159,8 +186,10 @@ for (const person of people) {
   allEvents.push(...events);
   const first = events.reduce((min, e) => Math.min(min, e.at), now);
   const last = events.reduce((max, e) => Math.max(max, e.at), 0);
+  const birthday = birthdays[person.id] ? sql(birthdays[person.id]) : "NULL";
+  const email = emails[person.id] ? sql(emails[person.id]) : "NULL";
   lines.push(
-    `INSERT INTO members (id, name, wa, pin_hash, pin_salt, created_at, last_seen_at) VALUES (${sql(person.id)},${sql(person.name)},${sql(wa)},${sql(made.hash)},${sql(made.salt)},${first - DAY},${last});`,
+    `INSERT INTO members (id, name, wa, pin_hash, pin_salt, created_at, last_seen_at, email, birthday, join_method) VALUES (${sql(person.id)},${sql(person.name)},${sql(wa)},${sql(made.hash)},${sql(made.salt)},${first - DAY},${last},${email},${birthday},'wa');`,
   );
   for (const [brand, plan] of Object.entries(person.brands)) {
     const brandEvents = events.filter((e) => e.brand === brand);

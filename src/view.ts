@@ -143,6 +143,7 @@ export function loginPage(input: { next: string; params: URLSearchParams }): str
         <input id="pin" name="pin" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="current-password" />
         <button class="btn btn-solid">Masuk</button>
       </form>
+      <a class="btn btn-google" href="/masuk/google">Masuk dengan Google</a>
       <p class="fine center" style="margin-top:12px"><a href="/gabung">Belum punya kartu</a></p>
     </main>`,
   );
@@ -157,6 +158,7 @@ export function cardPage(input: {
   history: ActivityRow[];
   now: number;
   params: URLSearchParams;
+  birthday?: string | null;
 }): string {
   const card = input.cards.get(input.brand.id);
   const stamps = card?.stamps ?? 0;
@@ -171,6 +173,7 @@ export function cardPage(input: {
       if (row.type === "redeem") return `<div class="row"><div><b class="reward">Tukar ${esc(row.reward_text)}</b><div class="small muted">${esc(row.outlet_name || row.short_name)}</div></div><div class="muted">${esc(when)}</div></div>`;
       if (row.type === "cancel") return `<div class="row"><div><b class="muted">Dibatalkan</b></div><div class="muted">${esc(when)}</div></div>`;
       if (row.type === "join") return `<div class="row"><div><b>Gabung kartu</b></div><div class="muted">${esc(when)}</div></div>`;
+      if (row.type === "birthday") return `<div class="row"><div><b class="reward">Hadiah ultah</b><div class="small muted">${esc(row.note)}</div></div><div class="muted">${esc(when)}</div></div>`;
       const label = row.voided ? "Stamp dibatalkan" : "+1 stamp";
       return `<div class="row"><div><b class="${row.voided ? "muted" : "plus"}">${label}</b><div class="small muted">${esc(row.outlet_name || "")}</div></div><div class="muted">${esc(when)}</div></div>`;
     })
@@ -191,8 +194,11 @@ export function cardPage(input: {
         <p class="lead">${esc(copy.headline)} ${copy.ready ? "" : "🎉"}</p>
         <p class="fine">${esc(ruleLine(input.brand))}</p>
       </section>
+      ${input.birthday ? `<section class="bday"><div class="kicker">ULANG TAHUN</div><h3>Hadiah: ${esc(input.birthday)}</h3><p>Minta kasir tukarkan. Sekali setahun, khusus bulan atau hari di sekitar ulang tahunmu.</p></section>` : ""}
       ${promoBlock(banner, extra)}
       <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
+      ${input.member.google_sub ? "" : `<a class="btn btn-google" href="/masuk/google?niat=hubung">Hubungkan Google</a>`}
+      ${input.member.birthday ? "" : `<a class="btn btn-line" href="/profil">Isi tanggal lahir</a>`}
       <form method="post" action="/keluar"><button class="linkbtn">Keluar</button></form>
     </main>`,
     input.brand.accent,
@@ -219,12 +225,17 @@ export function successPage(input: {
   when: number;
   banners: Banner[];
   otherBrands: string[];
-  kind: "stamp" | "redeem";
+  kind: "stamp" | "redeem" | "birthday";
   now: number;
 }): string {
   const copy = progressCopy(input.stamps, input.brand.stamps_required, input.brand.reward_text);
   const { banner, extra } = liveBanner(input.banners, input.now);
-  const title = input.kind === "stamp" ? `+1 stamp di ${input.brand.short_name}!` : `Reward ${input.brand.short_name} ditukar!`;
+  const title =
+    input.kind === "stamp"
+      ? `+1 stamp di ${input.brand.short_name}!`
+      : input.kind === "birthday"
+        ? `Hadiah ultah ${input.brand.short_name}!`
+        : `Reward ${input.brand.short_name} ditukar!`;
   const others = input.otherBrands.length ? `Cek juga kartu kamu di ${input.otherBrands.join(" & ")}` : "Kartu kamu tersimpan di HP ini";
   return doc(
     title,
@@ -273,7 +284,7 @@ export function cashierDeskPage(input: {
   brand: Brand;
   feed: ActivityRow[];
   cancelId: string | null;
-  found: { member: Member; stamps: number } | null;
+  found: { member: Member; stamps: number; birthday: string | null } | null;
   now: number;
   params: URLSearchParams;
 }): string {
@@ -283,7 +294,9 @@ export function cashierDeskPage(input: {
         ? `<span class="muted">dibatalkan</span>`
         : row.type === "redeem"
           ? `<span class="reward">${esc(row.reward_text)}</span>`
-          : `<span class="plus">+1 stamp</span>`;
+          : row.type === "birthday"
+            ? `<span class="reward">Ultah</span>`
+            : `<span class="plus">+1 stamp</span>`;
       const batal =
         row.id === input.cancelId && !row.voided
           ? `<form method="post" action="/kasir/batal/${esc(row.id)}"><button class="textlink">Batalkan</button></form>`
@@ -300,6 +313,7 @@ export function cashierDeskPage(input: {
       ${stampGrid(input.found.stamps, input.brand.stamps_required)}
       <p class="lead">${esc(copy.headline)}</p>
       ${copy.ready ? `<a class="btn btn-amber" href="/kasir/tukar?member=${esc(input.found.member.id)}">${GIFT} Tukar Reward: ${esc(input.brand.reward_text)}</a>` : ""}
+      ${input.found.birthday ? `<a class="btn btn-line" href="/kasir/ulangtahun?member=${esc(input.found.member.id)}">Tukar ultah: ${esc(input.found.birthday)}</a>` : ""}
     </section>`;
   }
   return doc(
@@ -318,6 +332,7 @@ export function cashierDeskPage(input: {
           <button class="btn btn-solid">${CUP} Kasih Stamp</button>
         </form>
         <form method="post" action="/kasir/redeem"><button class="btn btn-gold">${GIFT} Tukar Reward</button></form>
+        <form method="post" action="/kasir/ulangtahun"><button class="btn btn-line">Hadiah ulang tahun</button></form>
       </section>
       <section class="card">
         <h2>QR susah kebaca?</h2>
@@ -344,7 +359,7 @@ export function cashierDeskPage(input: {
 export function cashierQrPage(input: {
   brand: Brand;
   claimId: string;
-  kind: "stamp" | "redeem";
+  kind: "stamp" | "redeem" | "birthday";
   svg: string;
   claimUrl: string;
   remainingMs: number;
@@ -352,7 +367,7 @@ export function cashierQrPage(input: {
   masked: string | null;
   when: string | null;
 }): string {
-  const noun = input.kind === "stamp" ? "1 stamp" : "tukar reward";
+  const noun = input.kind === "stamp" ? "1 stamp" : input.kind === "birthday" ? "hadiah ulang tahun" : "tukar reward";
   const waiting =
     input.status === "pending"
       ? `<div data-poll="/kasir/qr/${esc(input.claimId)}/status" data-remaining="${Math.max(0, input.remainingMs)}" data-ttl="60000">
@@ -450,6 +465,8 @@ export function dashboardPage(input: {
   banners: Banner[];
   flags: FlagRow[];
   now: number;
+  birthdays: Array<{ name: string; birthday: string }>;
+  birthdayRedeems: number;
 }): string {
   const chips = [`<a class="chip${input.brand ? "" : " on"}" href="/admin/dasbor">Semua</a>`]
     .concat(input.brands.map((b) => `<a class="chip${input.brand?.id === b.id ? " on" : ""}" href="/admin/dasbor?merek=${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`))
@@ -483,6 +500,7 @@ export function dashboardPage(input: {
       <article class="kpi"><span>Stamp hari ini</span><b>${input.numbers.stampsToday}</b><span>${input.numbers.outletsToday} outlet</span></article>
       <article class="kpi"><span>Reward ditukar (bulan ini)</span><b>${input.numbers.redeemsMonth}</b><span>${esc(program?.reward_text || "semua merek")}</span></article>
       <article class="kpi"><span>Member aktif 30 hari</span><b>${input.numbers.active30}</b><span>${activePct}% dari total</span></article>
+      <article class="kpi"><span>Hadiah ultah bulan ini</span><b>${input.birthdayRedeems}</b><span>yang sudah ditukar</span></article>
     </section>
     <section class="grid-2">
       <article class="panel"><h2>Stamp per hari (14 hari)</h2><div class="bars">${bars}</div></article>
@@ -510,26 +528,196 @@ export function dashboardPage(input: {
         <a class="btn btn-line" href="/admin/aturan">Ubah aturan</a>
       </article>
     </section>
+    <section class="panel" style="margin-top:12px"><h2>Ulang tahun bulan ini</h2>
+      ${
+        input.birthdays.length
+          ? input.birthdays
+              .map((m) => `<div class="row"><span>${esc(m.name)}</span><b>${esc(m.birthday.slice(8))}/${esc(m.birthday.slice(5, 7))}</b></div>`)
+              .join("")
+          : `<p class="fine">Tidak ada.</p>`
+      }
+    </section>
     ${flags ? `<section class="panel" style="margin-top:12px"><h2>Yang perlu dicek</h2>${flags}</section>` : ""}
     <p class="fine" style="margin-top:14px">Angka dihitung dari data tersimpan. Waktu dalam WIB.</p>`;
   return adminShell("/admin/dasbor", body, input.brand?.accent || "#5c8f4b");
 }
 
-export function membersPage(members: Array<Member & { lines: string }>, q: string): string {
+export function membersPage(
+  members: Array<Member & { stamps_label: string; rewards: number }>,
+  brands: Brand[],
+  params: URLSearchParams,
+): string {
+  const sort = params.get("urut") || "kunjungan";
+  const merek = params.get("merek") || "";
+  const q = params.get("q") || "";
+  const chips = [`<a class="chip${merek ? "" : " on"}" href="/admin/member?urut=${esc(sort)}">Semua</a>`]
+    .concat(
+      brands.map(
+        (b) =>
+          `<a class="chip${merek === b.id ? " on" : ""}" href="/admin/member?merek=${esc(b.id)}&urut=${esc(sort)}">${esc(b.short_name)}</a>`,
+      ),
+    )
+    .join("");
+  const sorts: Array<[string, string]> = [
+    ["kunjungan", "Terakhir datang"],
+    ["nama", "Nama"],
+    ["gabung", "Tanggal gabung"],
+    ["ulang", "Ulang tahun"],
+  ];
+  const sortLinks = sorts
+    .map(([key, label]) => `<a class="chip${sort === key ? " on" : ""}" href="/admin/member?urut=${key}&merek=${esc(merek)}&q=${encodeURIComponent(q)}">${label}</a>`)
+    .join("");
   const rows = members
     .map(
-      (m) =>
-        `<tr><td><b>${esc(m.name)}</b><div class="small muted">${esc(prettyWa(m.wa))}</div></td><td>${esc(m.lines)}</td><td>${esc(memberSince(m.created_at))}</td></tr>`,
+      (m) => `<tr>
+        <td><a href="/admin/member/${esc(m.id)}"><b>${esc(m.name)}</b></a><div class="small muted">${esc(m.email || "")}</div></td>
+        <td>${esc(prettyWa(m.wa))}</td>
+        <td>${esc(m.birthday || "-")}</td>
+        <td>${esc(memberSince(m.created_at))}<div class="small muted">${esc(m.join_method)}</div></td>
+        <td>${esc(m.stamps_label || "-")}</td>
+        <td>${m.rewards}</td>
+        <td>${esc(feedTime(m.last_seen_at, Date.now()))}</td>
+      </tr>`,
     )
+    .join("");
+  const query = params.toString();
+  return adminShell(
+    "/admin/member",
+    `<div class="toprow"><h1>Member</h1>
+      <div class="actions">
+        <a class="btn btn-line" style="width:auto;padding:0 14px" href="/admin/member.csv?${esc(query)}">CSV</a>
+        <a class="btn btn-line" style="width:auto;padding:0 14px" href="/admin/member.xlsx?${esc(query)}">Excel</a>
+      </div>
+    </div>
+    ${flashes(params)}
+    <div class="chips" style="margin-top:12px">${chips}</div>
+    <div class="chips" style="margin-top:8px">${sortLinks}</div>
+    <form class="panel" style="margin-top:12px" method="get" action="/admin/member">
+      <input type="hidden" name="urut" value="${esc(sort)}" />
+      <input type="hidden" name="merek" value="${esc(merek)}" />
+      <label class="lbl" for="q">Cari nama, WA, atau email</label>
+      <div class="actions"><input id="q" name="q" value="${esc(q)}" /><button class="btn btn-solid">Cari</button></div>
+    </form>
+    <article class="panel" style="margin-top:12px;overflow:auto"><table>
+      <thead><tr><th>Nama</th><th>WA</th><th>Ulang tahun</th><th>Gabung</th><th>Stamp</th><th>Reward</th><th>Terakhir</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="7">Tidak ketemu.</td></tr>`}</tbody>
+    </table></article>`,
+  );
+}
+
+export function memberDetailPage(input: {
+  member: Member;
+  cards: Array<{ short_name: string; stamps: number; lifetime_redeems: number }>;
+  params: URLSearchParams;
+}): string {
+  const cards = input.cards
+    .map((c) => `<div class="row"><span>${esc(c.short_name)}</span><b>${c.stamps} stamp · ${c.lifetime_redeems} reward</b></div>`)
     .join("");
   return adminShell(
     "/admin/member",
-    `<h1>Member</h1>
-     <form class="panel" style="margin-top:12px" method="get" action="/admin/member">
-       <label class="lbl" for="q">Cari nama atau nomor</label>
-       <div class="actions"><input id="q" name="q" value="${esc(q)}" /><button class="btn btn-solid">Cari</button></div>
+    `<p><a href="/admin/member">← Semua member</a></p>
+     <h1>${esc(input.member.name)}</h1>
+     ${flashes(input.params)}
+     <article class="panel" style="margin-top:12px">
+       <div class="row"><span>WA</span><b>${esc(prettyWa(input.member.wa))}</b></div>
+       <div class="row"><span>Email</span><b>${esc(input.member.email || "-")}</b></div>
+       <div class="row"><span>Ulang tahun</span><b>${esc(input.member.birthday || "-")}</b></div>
+       <div class="row"><span>Gabung</span><b>${esc(memberSince(input.member.created_at))} · ${esc(input.member.join_method)}</b></div>
+       <div class="row"><span>Terakhir datang</span><b>${esc(feedTime(input.member.last_seen_at, Date.now()))}</b></div>
+       ${cards}
+     </article>
+     <form class="panel" style="margin-top:12px" method="post" action="/admin/member/${esc(input.member.id)}/telepon">
+       <h2>Ganti nomor WA</h2>
+       <label class="lbl">Nomor baru</label>
+       <input name="wa" required value="${esc(prettyWa(input.member.wa))}" />
+       <button class="btn btn-solid">Simpan nomor</button>
      </form>
-     <article class="panel" style="margin-top:12px"><table><thead><tr><th>Member</th><th>Kartu</th><th>Gabung</th></tr></thead><tbody>${rows || `<tr><td colspan="3">Tidak ketemu.</td></tr>`}</tbody></table></article>`,
+     <form class="panel" style="margin-top:12px" method="post" action="/admin/member/${esc(input.member.id)}/lahir">
+       <h2>Tanggal lahir</h2>
+       <p class="fine">Pelanggan tidak bisa mengubah ini sendiri setelah terisi. Owner boleh.</p>
+       <input name="lahir" type="date" required value="${esc(input.member.birthday || "")}" />
+       <button class="btn btn-solid">Simpan tanggal lahir</button>
+     </form>
+     <a class="btn btn-gold" href="/admin/member/${esc(input.member.id)}/hapus">Hapus member</a>`,
+  );
+}
+
+export function deleteMemberPage(member: Member): string {
+  return adminShell(
+    "/admin/member",
+    `<h1>Hapus ${esc(member.name)}?</h1>
+     <article class="panel" style="margin-top:12px">
+       <p>Stamp, riwayat, dan login ${esc(member.name)} (${esc(prettyWa(member.wa))}) akan hilang. Penghapusan ini dicatat.</p>
+       <form method="post" action="/admin/member/${esc(member.id)}/hapus">
+         <button class="btn btn-solid" style="background:#a33b36">Ya, hapus</button>
+       </form>
+       <a class="btn btn-line" href="/admin/member/${esc(member.id)}">Batal</a>
+     </article>`,
+  );
+}
+
+export function profilePage(input: {
+  mode: "google" | "link" | "member";
+  name: string;
+  email: string | null;
+  params: URLSearchParams;
+  wa?: string;
+  birthday?: string | null;
+  google?: boolean;
+}): string {
+  const link = input.mode === "link";
+  return doc(
+    "Lengkapi profil",
+    `<main class="phone">
+      <header class="hero"><div class="hero-title">${link ? "Nomor ini sudah punya kartu" : "Lengkapi profil"}</div>
+        <div class="hero-sub">${esc(input.email || input.name)}</div></header>
+      ${flashes(input.params)}
+      ${
+        link
+          ? `<form class="card" method="post" action="/profil/hubungkan">
+              <p class="fine">Masukkan PIN kartu nomor ini supaya akun Google-nya nyambung. Kalau tidak ingat PIN, masuk lewat nomor WA.</p>
+              <input type="hidden" name="wa" value="${esc(input.wa || "")}" />
+              <input type="hidden" name="lahir" value="${esc(input.birthday || "")}" />
+              <label class="lbl">PIN</label>
+              <input name="pin" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="current-password" />
+              <button class="btn btn-solid">Hubungkan</button>
+            </form>`
+          : input.mode === "google"
+            ? `<form class="card" method="post" action="/profil">
+                <label class="lbl">Nama</label><input name="nama" required value="${esc(input.name)}" />
+                <label class="lbl">Tanggal lahir</label><input name="lahir" type="date" required value="${esc(input.birthday || "")}" />
+                <p class="fine">Tanggal lahir tidak bisa diubah sendiri setelah disimpan.</p>
+                <label class="lbl">Nomor WhatsApp</label><input name="wa" required inputmode="tel" value="${esc(input.wa || "")}" placeholder="0812 3456 4567" />
+                <label class="lbl">PIN 4–6 angka</label><input name="pin" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" />
+                <label class="lbl">Ulangi PIN</label><input name="pin2" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" />
+                <p class="fine">PIN ini buat masuk tanpa Google, di HP lain.</p>
+                <button class="btn btn-solid">Simpan dan lihat kartu</button>
+              </form>`
+            : `<form class="card" method="post" action="/profil">
+                <p class="fine">Halo ${esc(input.name)}. Tanggal lahir cukup diisi sekali.</p>
+                ${input.birthday ? `<p><b>${esc(input.birthday)}</b> sudah tersimpan.</p>` : `<label class="lbl">Tanggal lahir</label><input name="lahir" type="date" required /><button class="btn btn-solid">Simpan</button>`}
+              </form>
+              ${input.google ? "" : `<a class="btn btn-google" href="/masuk/google?niat=hubung">Hubungkan Google</a>`}`
+      }
+    </main>`,
+  );
+}
+
+export function confirmBirthdayPage(input: { brand: Brand; member: Member; reward: string }): string {
+  return doc(
+    "Hadiah ulang tahun",
+    `<main class="phone" style="${paint(input.brand.accent, input.brand.accent_soft)}">
+      <header class="hero"><div class="hero-title">Hadiah ultah untuk ${esc(input.member.name)}?</div><div class="hero-sub">${esc(input.reward)}</div></header>
+      <section class="card">
+        <p class="fine">Sekali setahun. Stamp tidak berkurang.</p>
+        <form method="post" action="/kasir/ulangtahun/manual">
+          <input type="hidden" name="member_id" value="${esc(input.member.id)}" />
+          <button class="btn btn-amber">Ya, tukar hadiah ultah</button>
+        </form>
+        <a class="btn btn-line" href="/kasir/meja">Batal</a>
+      </section>
+    </main>`,
+    input.brand.accent,
   );
 }
 
@@ -598,6 +786,14 @@ export function rulesPage(brands: Brand[], params: URLSearchParams): string {
         <label class="lbl">Minimal transaksi (Rp, opsional)</label><input name="min_amount" type="number" min="0" value="${b.min_amount ?? ""}" />
         <label class="lbl">Maks stamp per member per hari</label><input name="max_stamps_per_day" type="number" min="1" max="10" value="${b.max_stamps_per_day}" required />
         <label class="lbl">Catatan reward</label><textarea name="reward_note">${esc(b.reward_note)}</textarea>
+        <label class="lbl">Hadiah ulang tahun</label><input name="birthday_reward" value="${esc(b.birthday_reward || "")}" maxlength="80" />
+        <label class="lbl">Kapan hadiah ultah berlaku</label>
+        <select name="birthday_window">
+          <option value="month" ${b.birthday_window === "around" ? "" : "selected"}>Sepanjang bulan ulang tahun</option>
+          <option value="around" ${b.birthday_window === "around" ? "selected" : ""}>N hari sebelum dan sesudah</option>
+        </select>
+        <label class="lbl">N hari (kalau pilih hari di sekitar)</label><input name="birthday_days" type="number" min="0" max="30" value="${b.birthday_days ?? 7}" />
+        <label class="checkline"><input type="checkbox" name="birthday_active" value="on" ${b.birthday_active ? "checked" : ""} /> Hadiah ulang tahun aktif</label>
         <label class="checkline"><input type="checkbox" name="active" value="on" ${b.active ? "checked" : ""} /> Merek aktif</label>
         <button class="btn btn-solid">Simpan</button>
       </form>`,
@@ -656,7 +852,7 @@ export function activityPage(input: {
   const outletOpts = [`<option value="">Semua outlet</option>`]
     .concat(input.outlets.map((o) => `<option value="${esc(o.id)}"${p.get("outlet") === o.id ? " selected" : ""}>${esc(o.name)}</option>`))
     .join("");
-  const types = ["", "stamp", "redeem", "cancel", "join"]
+  const types = ["", "stamp", "redeem", "birthday", "cancel", "join"]
     .map((t) => `<option value="${t}"${p.get("jenis") === t ? " selected" : ""}>${t || "Semua jenis"}</option>`)
     .join("");
   const body = input.rows

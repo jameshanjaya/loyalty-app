@@ -1,3 +1,4 @@
+import { birthdayRedeemAllowed, birthdayStatus } from "../birthday";
 import { maskName } from "../format";
 import type { Member } from "../types";
 import { html, json, readCookie, redirect, sameOrigin } from "../http";
@@ -7,7 +8,7 @@ import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { CASHIER_SESSION_MS, canCancel } from "../loyalty";
 import { LIMITS, enforceLimit } from "../ratelimit";
-import { cancelOwn, loginCashier, manualRedeem, manualStamp, openClaim } from "../service";
+import { cancelOwn, giveBirthday, loginCashier, manualRedeem, manualStamp, openClaim } from "../service";
 import { clearCookie, COOKIE, loadCashier, setSessionCookie } from "../session";
 import { signClaim } from "../tokens";
 import { clock } from "../time";
@@ -15,6 +16,7 @@ import {
   cashierDeskPage,
   cashierLoginPage,
   cashierQrPage,
+  confirmBirthdayPage,
   confirmRedeemPage,
   emptyDbPage,
   messagePage,
@@ -79,7 +81,7 @@ export async function handleCashier(app: App): Promise<Response | null> {
     const last = await repo.latestOpenActivity(db, cashier.sessionId);
     const cancelId =
       last && canCancel({ createdAt: last.created_at, now, sameSession: true, voided: false, isLast: true }) ? last.id : null;
-    let found: { member: Member; stamps: number } | null = null;
+    let found: { member: Member; stamps: number; birthday: string | null } | null = null;
     const waRaw = url.searchParams.get("wa") || "";
     const wa = waRaw ? normalizeWa(waRaw) : null;
     if (wa) {
@@ -88,7 +90,13 @@ export async function handleCashier(app: App): Promise<Response | null> {
       const member = await repo.getMemberByWa(db, wa);
       if (!member) return redirect("/kasir/meja?err=belum");
       const card = await repo.ensureCard(db, member.id, cashier.brand.id, now);
-      found = { member, stamps: card.stamps };
+      const offer = birthdayStatus(member.birthday, now, {
+        active: cashier.brand.birthday_active === 1,
+        window: cashier.brand.birthday_window === "around" ? "around" : "month",
+        days: cashier.brand.birthday_days,
+      });
+      const used = offer.open ? await repo.birthdayTaken(db, member.id, cashier.brand.id, offer.rewardYear) : true;
+      found = { member, stamps: card.stamps, birthday: offer.open && !used ? cashier.brand.birthday_reward : null };
     }
     return html(
       cashierDeskPage({
@@ -116,6 +124,50 @@ export async function handleCashier(app: App): Promise<Response | null> {
     });
     if (!opened.ok) return go("/kasir/meja", opened.error);
     return redirect(`/kasir/qr/${opened.id}`);
+  }
+
+  if (path === "/kasir/ulangtahun" && request.method === "POST") {
+    const opened = await openClaim(db, env, {
+      outlet: cashier.outlet,
+      sessionId: cashier.sessionId,
+      kind: "birthday",
+      confirmed: true,
+      now,
+    });
+    if (!opened.ok) return go("/kasir/meja", opened.error);
+    return redirect(`/kasir/qr/${opened.id}`);
+  }
+
+  if (path === "/kasir/ulangtahun" && request.method === "GET") {
+    const member = await repo.getMember(db, url.searchParams.get("member") || "");
+    if (!member) return go("/kasir/meja", "belum");
+    const offer = birthdayStatus(member.birthday, now, {
+      active: cashier.brand.birthday_active === 1,
+      window: cashier.brand.birthday_window === "around" ? "around" : "month",
+      days: cashier.brand.birthday_days,
+    });
+    const used = offer.open ? await repo.birthdayTaken(db, member.id, cashier.brand.id, offer.rewardYear) : true;
+    if (birthdayRedeemAllowed(offer.open, used) !== "ok") return go("/kasir/meja", used ? "ultah-sudah" : "ultah");
+    return html(confirmBirthdayPage({ brand: cashier.brand, member, reward: cashier.brand.birthday_reward }));
+  }
+
+  if (path === "/kasir/ulangtahun/manual" && request.method === "POST") {
+    const form = await request.formData();
+    const member = await repo.getMember(db, String(form.get("member_id") || ""));
+    if (!member) return go("/kasir/meja", "belum");
+    const paced = await enforceLimit(db, `issue:${cashier.sessionId}`, now, LIMITS.cashierIssue);
+    if (!paced.ok) return go("/kasir/meja", "cepat");
+    const limited = await giveBirthday(db, {
+      member,
+      brand: cashier.brand,
+      outletId: cashier.outlet.id,
+      sessionId: cashier.sessionId,
+      claimId: null,
+      now,
+      note: "nomor WA",
+    });
+    if (!limited.ok) return go("/kasir/meja", limited.error);
+    return redirect(`/kasir/meja?ok=redeem&siapa=${encodeURIComponent(limited.masked)}`);
   }
 
   if (path === "/kasir/redeem" && request.method === "POST") {
