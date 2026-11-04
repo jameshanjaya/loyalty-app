@@ -11,6 +11,12 @@ export type Mission = {
   limit_kind: string;
   active: number;
   created_at: number;
+  icon: string;
+  tag: string;
+  mystery: number;
+  tease: string;
+  unlock_points_tenths: number;
+  sort_order: number;
 };
 
 export type Submission = {
@@ -39,6 +45,7 @@ export type PointReward = {
   r2_key: string | null;
   active: number;
   created_at: number;
+  icon: string;
 };
 
 export type StampTier = {
@@ -76,8 +83,8 @@ async function all<T>(stmt: D1PreparedStatement): Promise<T[]> {
 
 export async function listMissions(db: D1Database, activeOnly = false): Promise<Mission[]> {
   const sql = activeOnly
-    ? `SELECT * FROM missions WHERE active = 1 ORDER BY points_tenths, title`
-    : `SELECT * FROM missions ORDER BY active DESC, title`;
+    ? `SELECT * FROM missions WHERE active = 1 ORDER BY sort_order, points_tenths, title`
+    : `SELECT * FROM missions ORDER BY sort_order, active DESC, title`;
   return all<Mission>(db.prepare(sql));
 }
 
@@ -88,10 +95,29 @@ export async function getMission(db: D1Database, id: string): Promise<Mission | 
 export async function insertMission(db: D1Database, row: Mission): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO missions (id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO missions (
+         id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at,
+         icon, tag, mystery, tease, unlock_points_tenths, sort_order
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(row.id, row.brand_id, row.title, row.description, row.points_tenths, row.proof_screenshot, row.proof_link, row.limit_kind, row.active, row.created_at)
+    .bind(
+      row.id,
+      row.brand_id,
+      row.title,
+      row.description,
+      row.points_tenths,
+      row.proof_screenshot,
+      row.proof_link,
+      row.limit_kind,
+      row.active,
+      row.created_at,
+      row.icon || "🍃",
+      row.tag || "",
+      row.mystery ? 1 : 0,
+      row.tease || "",
+      row.unlock_points_tenths || 0,
+      row.sort_order || 0,
+    )
     .run();
 }
 
@@ -199,9 +225,9 @@ export async function getReward(db: D1Database, id: string): Promise<PointReward
 export async function insertReward(db: D1Database, row: PointReward): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO point_rewards (id, brand_id, title, points_tenths, stock, image_url, r2_key, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO point_rewards (id, brand_id, title, points_tenths, stock, image_url, r2_key, active, created_at, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(row.id, row.brand_id, row.title, row.points_tenths, row.stock, row.image_url, row.r2_key, row.active, row.created_at)
+    .bind(row.id, row.brand_id, row.title, row.points_tenths, row.stock, row.image_url, row.r2_key, row.active, row.created_at, row.icon || "🍵")
     .run();
 }
 
@@ -304,6 +330,54 @@ export async function refundStamps(db: D1Database, memberId: string, brandId: st
   await db
     .prepare(`UPDATE cards SET stamps = stamps + ?, updated_at = ? WHERE member_id = ? AND brand_id = ?`)
     .bind(cost, now, memberId, brandId)
+    .run();
+}
+
+export async function lifetimeEarned(db: D1Database, memberId: string): Promise<number> {
+  const row = await db
+    .prepare(`SELECT COALESCE(SUM(delta_tenths), 0) AS n FROM point_ledger WHERE member_id = ? AND reason = 'mission' AND delta_tenths > 0`)
+    .bind(memberId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+export async function recentApproval(db: D1Database, memberId: string, since: number): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT id FROM mission_submissions WHERE member_id = ? AND status = 'approved' AND reviewed_at >= ? LIMIT 1`)
+    .bind(memberId, since)
+    .first<{ id: string }>();
+  return Boolean(row);
+}
+
+export async function visitMarks(db: D1Database, memberId: string): Promise<number[]> {
+  const stamps = await all<{ created_at: number }>(
+    db.prepare(`SELECT created_at FROM activities WHERE member_id = ? AND type = 'stamp' AND voided = 0 ORDER BY created_at DESC LIMIT 400`).bind(memberId),
+  );
+  const approved = await all<{ reviewed_at: number }>(
+    db.prepare(
+      `SELECT reviewed_at AS reviewed_at FROM mission_submissions WHERE member_id = ? AND status = 'approved' AND reviewed_at IS NOT NULL ORDER BY reviewed_at DESC LIMIT 80`,
+    ).bind(memberId),
+  );
+  return [...stamps.map((row) => row.created_at), ...approved.map((row) => row.reviewed_at)];
+}
+
+export type Level = {
+  id: string;
+  brand_id: string | null;
+  name: string;
+  min_points_tenths: number;
+  icon: string;
+  sort_order: number;
+};
+
+export async function listLevels(db: D1Database): Promise<Level[]> {
+  return all<Level>(db.prepare(`SELECT * FROM levels ORDER BY min_points_tenths, sort_order, name`));
+}
+
+export async function insertLevel(db: D1Database, row: Level): Promise<void> {
+  await db
+    .prepare(`INSERT INTO levels (id, brand_id, name, min_points_tenths, icon, sort_order) VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(row.id, row.brand_id, row.name, row.min_points_tenths, row.icon || "🌱", row.sort_order)
     .run();
 }
 

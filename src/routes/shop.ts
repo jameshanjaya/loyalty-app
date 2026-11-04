@@ -2,7 +2,7 @@ import { randomId } from "../crypto";
 import { httpsUrl } from "../format";
 import { html, json, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
-import { formatPoints } from "../points";
+import { formatPoints, missionOpen, pickLevel, questLocked, questProgress, weekStreak } from "../points";
 import * as pdb from "../points-db";
 import { expireCodes, redeemBirthdayCode, redeemPointsReward, redeemTier, submitMission } from "../points-flow";
 import { qrSvg } from "../qr";
@@ -39,30 +39,65 @@ export async function handleShop(app: App): Promise<Response | null> {
   if (path === "/misi" && request.method === "GET") {
     const missions = await pdb.listMissions(db, true);
     const brands = await repo.listBrands(db, false);
-    const points = formatPoints(await pdb.pointsBalance(db, member.id));
+    const balance = await pdb.pointsBalance(db, member.id);
+    const earned = await pdb.lifetimeEarned(db, member.id);
+    const allLevels = await pdb.listLevels(db);
+    const globals = allLevels.filter((level) => !level.brand_id);
+    const ladder = globals.length ? globals : allLevels;
+    const level = pickLevel(
+      earned,
+      ladder.map((row) => ({ name: row.name, minTenths: row.min_points_tenths, icon: row.icon })),
+    );
+    const streak = weekStreak(await pdb.visitMarks(db, member.id), now);
+    const celebrate = await pdb.recentApproval(db, member.id, now - 3 * 60 * 1000);
     const view = [];
     for (const mission of missions) {
       const state = await pdb.memberMissionState(db, member.id, mission.id);
-      const { missionOpen } = await import("../points");
-      const open = missionOpen({
-        limit: mission.limit_kind === "week" ? "week" : "once",
-        hasPending: state.pending,
-        lastApprovedAt: state.lastApprovedAt,
-        now,
-      });
+      const limit = mission.limit_kind === "week" ? "week" : "once";
+      const locked = questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned });
+      const open =
+        !locked &&
+        missionOpen({
+          limit,
+          hasPending: state.pending,
+          lastApprovedAt: state.lastApprovedAt,
+          now,
+        });
+      const progress = questProgress({ limit, pending: state.pending, lastApprovedAt: state.lastApprovedAt, now });
       view.push({
         id: mission.id,
         title: mission.title,
         description: mission.description,
         points: formatPoints(mission.points_tenths),
-        limit: mission.limit_kind === "week" ? "Sekali seminggu" : "Sekali saja",
+        limit: limit === "week" ? "Sekali seminggu" : "Sekali saja",
         needShot: mission.proof_screenshot === 1,
         needLink: mission.proof_link === 1,
         open,
         brand: brands.find((b) => b.id === mission.brand_id)?.short_name || "Semua merek",
+        icon: mission.icon || "🍃",
+        tag: mission.tag === "new" || mission.tag === "limited" ? mission.tag : "",
+        locked,
+        tease: mission.tease || "",
+        unlock: formatPoints(mission.unlock_points_tenths),
+        pct: progress.pct,
+        done: progress.done,
+        statusLabel: progress.label,
       });
     }
-    return html(missionsPage({ points, missions: view, params: url.searchParams }));
+    const hint = level.next ? `${formatPoints(level.remaining)} Poin quest lagi menuju ${level.next.name}` : "Level tertinggi. Mantap!";
+    return html(
+      missionsPage({
+        points: formatPoints(balance),
+        streak,
+        levelName: level.current.name,
+        levelIcon: level.current.icon,
+        levelPct: Math.round(level.progress * 100),
+        levelHint: hint,
+        celebrate,
+        missions: view,
+        params: url.searchParams,
+      }),
+    );
   }
 
   if (path.startsWith("/misi/") && request.method === "POST") {
@@ -96,13 +131,17 @@ export async function handleShop(app: App): Promise<Response | null> {
       catalogPage({
         points: formatPoints(balance),
         brandName: brand.short_name,
+        accent: brand.accent,
+        accentSoft: brand.accent_soft,
         brands: brands.map((b) => ({ id: b.id, name: b.short_name, on: b.id === brand.id })),
         rewards: rewards.map((r) => ({
           id: r.id,
           title: r.title,
           cost: formatPoints(r.points_tenths),
-          stock: r.stock == null ? "Stok tidak terbatas" : `Sisa ${r.stock}`,
+          note: r.stock == null ? "" : r.stock === 0 ? "Habis" : `Sisa ${r.stock}`,
           ready: balance >= r.points_tenths && (r.stock == null || r.stock > 0),
+          icon: r.icon || "🍵",
+          soldOut: r.stock === 0,
         })),
         params: url.searchParams,
       }),

@@ -1,6 +1,6 @@
 import { randomId } from "./crypto";
 import { birthdayRedeemAllowed, birthdayStatus } from "./birthday";
-import { CODE_TTL_MS, missionOpen, randomRedeemCode, releaseExpired, spendPoints, tierRedeem } from "./points";
+import { CODE_TTL_MS, missionOpen, questLocked, randomRedeemCode, releaseExpired, spendPoints, tierRedeem } from "./points";
 import * as pdb from "./points-db";
 import type { RedeemCode } from "./points-db";
 import * as repo from "./repo";
@@ -241,6 +241,10 @@ export async function submitMission(
 ): Promise<Fail | { ok: true }> {
   const mission = await pdb.getMission(db, input.missionId);
   if (!mission || !mission.active) return { ok: false, error: "umum" };
+  const earned = await pdb.lifetimeEarned(db, input.member.id);
+  if (questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned })) {
+    return { ok: false, error: "misi" };
+  }
   if (mission.proof_link && !input.link) return { ok: false, error: "bukti" };
   if (mission.proof_screenshot && !input.r2Key) return { ok: false, error: "bukti" };
   const state = await pdb.memberMissionState(db, input.member.id, mission.id);

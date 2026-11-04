@@ -7,7 +7,7 @@ import { validOutletPin, weakPin } from "../phone";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { OWNER_SESSION_MS } from "../loyalty";
-import { formatPoints, parsePoints } from "../points";
+import { formatPoints, parsePoints, parsePointsOrZero } from "../points";
 import * as pdb from "../points-db";
 import { expireCodes, reviewMission } from "../points-flow";
 import { loginOwner, ownerDeleteMember, ownerSetBirthday, ownerSetPhone, setOutletPinHash } from "../service";
@@ -364,6 +364,11 @@ export async function handleAdmin(app: App): Promise<Response | null> {
           limit: m.limit_kind === "week" ? "seminggu" : "sekali",
           active: m.active === 1,
           brand: brands.find((b) => b.id === m.brand_id)?.short_name || "Semua",
+          icon: m.icon || "🍃",
+          tag: m.tag || "",
+          mystery: m.mystery === 1,
+          unlock: formatPoints(m.unlock_points_tenths || 0),
+          sort: m.sort_order || 0,
         })),
         queue: queue.map((q) => ({
           id: q.id,
@@ -374,6 +379,12 @@ export async function handleAdmin(app: App): Promise<Response | null> {
           image: q.r2_key ? `/admin/bukti/${q.id}` : "",
         })),
         brands: brands.map((b) => ({ id: b.id, name: b.short_name })),
+        levels: (await pdb.listLevels(db)).map((level) => ({
+          name: level.name,
+          min: formatPoints(level.min_points_tenths),
+          icon: level.icon || "🌱",
+          brand: brands.find((b) => b.id === level.brand_id)?.short_name || "Semua merek",
+        })),
         params: url.searchParams,
       }),
     );
@@ -388,6 +399,11 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     if (!title || points == null || (!shot && !link)) return back("/admin/misi", "aturan");
     const brandId = String(form.get("brand_id") || "") || null;
     if (brandId && !(await repo.getBrand(db, brandId))) return back("/admin/misi", "aturan");
+    const tagRaw = String(form.get("tag") || "");
+    const tag = tagRaw === "new" || tagRaw === "limited" ? tagRaw : "";
+    const unlock = parsePointsOrZero(String(form.get("unlock") || "0"));
+    const sort = Number(form.get("sort") || 0);
+    if (unlock == null || !Number.isInteger(sort) || sort < 0 || sort > 999) return back("/admin/misi", "aturan");
     await pdb.insertMission(db, {
       id: randomId(),
       brand_id: brandId,
@@ -399,6 +415,30 @@ export async function handleAdmin(app: App): Promise<Response | null> {
       limit_kind: String(form.get("limit_kind") || "") === "week" ? "week" : "once",
       active: 1,
       created_at: now,
+      icon: markIcon(String(form.get("icon") || ""), "🍃"),
+      tag,
+      mystery: form.get("mystery") === "on" ? 1 : 0,
+      tease: clip(String(form.get("tease") || ""), 140),
+      unlock_points_tenths: unlock,
+      sort_order: sort,
+    });
+    return ok("/admin/misi", "simpan");
+  }
+
+  if (path === "/admin/misi/level" && request.method === "POST") {
+    const form = await request.formData();
+    const name = clip(String(form.get("name") || ""), 40);
+    const min = parsePointsOrZero(String(form.get("points") || ""));
+    const brandId = String(form.get("brand_id") || "") || null;
+    if (!name || min == null) return back("/admin/misi", "aturan");
+    if (brandId && !(await repo.getBrand(db, brandId))) return back("/admin/misi", "aturan");
+    await pdb.insertLevel(db, {
+      id: randomId(),
+      brand_id: brandId,
+      name,
+      min_points_tenths: min,
+      icon: markIcon(String(form.get("icon") || ""), "🌱"),
+      sort_order: min,
     });
     return ok("/admin/misi", "simpan");
   }
@@ -426,6 +466,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
           cost: formatPoints(r.points_tenths),
           stock: r.stock == null ? "bebas" : String(r.stock),
           active: r.active === 1,
+          icon: r.icon || "🍵",
         })),
         brands: brands.map((b) => ({ id: b.id, name: b.short_name })),
         params: url.searchParams,
@@ -452,6 +493,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
       r2_key: null,
       active: form.get("active") === "on" ? 1 : 0,
       created_at: now,
+      icon: markIcon(String(form.get("icon") || ""), "🍵"),
     });
     return ok("/admin/katalog", "simpan");
   }
@@ -495,6 +537,12 @@ async function hashNewPin(env: Env, pin: string): Promise<{ ok: true; hash: stri
   const salt = bytesToHex(saltBytes);
   const hash = await hashPin(pin, saltBytes, env.PIN_PEPPER);
   return { ok: true, hash, salt };
+}
+
+function markIcon(raw: string, fallback: string): string {
+  const text = clip(raw, 8);
+  if (!text || /[<>&]/.test(text)) return fallback;
+  return text;
 }
 
 function csv(value: string): string {
