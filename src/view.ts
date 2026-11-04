@@ -1,0 +1,709 @@
+import { esc, formatInt, maskName, maskWa, prettyWa } from "./format";
+import { progressCopy } from "./loyalty";
+import { errText, okText } from "./messages";
+import { bannerLive } from "./repo";
+import { clock, feedTime, memberSince } from "./time";
+import type { DashNumbers, Lapsed, TopMember } from "./repo";
+import type { ActivityRow, Banner, Brand, Card, FlagRow, Member, Outlet } from "./types";
+
+const CUP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8h8v5a4 4 0 0 1-8 0V8z"/><path d="M15 9.5h1.8a2.2 2.2 0 0 1 0 4.4H15"/><path d="M8 20h6"/></svg>`;
+const CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 9.2 17 19 7"/></svg>`;
+const GIFT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="11" width="16" height="8" rx="1.4"/><path d="M12 11v8M4.5 14.5h15"/><path d="M12 11c-1.8-3.4-5-3.2-5-.8 0 1.6 2.2.8 5 .8 2.8 0 5 .8 5-.8 0-2.4-3.2-2.6-5 .8z"/></svg>`;
+const LEAF = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 19C14 19 19 12 19 5 12 5 5 8 5 19z"/><path d="M8 16c2-2 4-5 6-8"/></svg>`;
+
+function doc(title: string, inner: string, theme = "#6ea564"): string {
+  return `<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="${esc(theme)}" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>${esc(title)}</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+${inner}
+<script src="/app.js" defer></script>
+</body>
+</html>`;
+}
+
+export function flashes(params: URLSearchParams): string {
+  const err = errText(params.get("err"));
+  const ok = okText(params.get("ok"));
+  const siapa = params.get("siapa") || "";
+  const who = /^[\p{L}\d .*']{1,48}$/u.test(siapa) ? ` ${esc(siapa)}` : "";
+  let html = "";
+  if (err) html += `<div class="flash bad">${esc(err)}</div>`;
+  if (ok) html += `<div class="flash good">${esc(ok)}${who}</div>`;
+  return html;
+}
+
+function paint(accent: string, soft: string): string {
+  return `--accent:${esc(accent)};--accent-soft:${esc(soft)}`;
+}
+
+export function stampGrid(filled: number, total: number): string {
+  const n = Math.max(1, Math.min(total, 20));
+  const on = Math.min(Math.max(filled, 0), n);
+  let html = `<div class="stamps" aria-label="${on} dari ${n} stamp">`;
+  for (let i = 1; i <= n; i++) html += i <= on ? `<div class="stamp on">${CUP}</div>` : `<div class="stamp">${i}</div>`;
+  return `${html}</div>`;
+}
+
+export function ruleLine(brand: Brand): string {
+  return `${brand.condition_label} = 1 stamp · ${brand.stamps_required} stamp = ${brand.reward_text}`;
+}
+
+function promoBlock(banner: Banner | null, extra = 0): string {
+  if (!banner) return "";
+  const img = banner.r2_key ? `/media/${banner.r2_key}` : banner.image_url || "";
+  const style = img
+    ? ` style="background-image:linear-gradient(105deg,rgba(90,40,55,.55),rgba(50,90,50,.4)),url('${esc(img)}')"`
+    : "";
+  const dots =
+    extra > 0
+      ? `<div class="dots"><i class="on"></i>${Array.from({ length: Math.min(extra, 3) }, () => "<i></i>").join("")}</div>`
+      : `<div class="dots"><i class="on"></i><i></i><i></i></div>`;
+  const inner = `<div class="kicker">PROMO BARU</div><h3>${esc(banner.title)} ${banner.title.toLowerCase().includes("strawberry") ? "🍓" : ""}</h3><p>${esc(banner.subtitle)}</p>${dots}`;
+  if (banner.link_url) return `<a class="promo" href="${esc(banner.link_url)}"${style}>${inner}</a>`;
+  return `<div class="promo"${style}>${inner}</div>`;
+}
+
+function liveBanner(banners: Banner[], now: number): { banner: Banner | null; extra: number } {
+  const live = banners.filter((b) => bannerLive(b, now));
+  return { banner: live[0] ?? null, extra: Math.max(0, live.length - 1) };
+}
+
+export function messagePage(title: string, text: string, href = "/", label = "Kembali"): string {
+  return doc(
+    title,
+    `<main class="phone"><section class="card"><h2>${esc(title)}</h2><p class="fine" style="margin-top:8px">${esc(text)}</p><a class="btn btn-solid" href="${esc(href)}">${esc(label)}</a></section></main>`,
+  );
+}
+
+export function homePage(brands: Brand[]): string {
+  const pills = brands
+    .map((b) => `<a class="pill" href="/gabung/${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`)
+    .join("");
+  return doc(
+    "Loyalty Bos",
+    `<main class="phone" style="${paint("#6ea564", "#e7f3df")}">
+      <header class="hero center"><div class="checkbubble">${CUP}</div><div class="hero-big">Kartu stamp kamu</div><p class="hero-fine">Satu akun untuk semua merek. Simpan di HP, tanpa download aplikasi.</p></header>
+      <section class="card"><h2>Pilih merek</h2><div class="pills">${pills}</div><a class="btn btn-solid" href="/gabung">Gabung</a><a class="btn btn-line" href="/masuk">Sudah punya kartu</a></section>
+      <p class="fine center" style="margin-top:16px"><a href="/kasir">Masuk kasir</a></p>
+    </main>`,
+  );
+}
+
+export function joinPage(input: { brands: Brand[]; brand: Brand | null; next: string; params: URLSearchParams; values?: { nama?: string; wa?: string } }): string {
+  const accent = input.brand?.accent || "#6ea564";
+  const title = input.brand ? `Gabung ${input.brand.short_name}` : "Gabung kartu";
+  return doc(
+    title,
+    `<main class="phone" style="${paint(accent, input.brand?.accent_soft || "#e7f3df")}">
+      <header class="hero"><div class="hero-top"><div class="avatar">${esc(input.brand?.emoji || "🍵")}</div><div><div class="hero-title">${esc(title)}</div><div class="hero-sub">Satu akun buat semua merek</div></div></div></header>
+      ${flashes(input.params)}
+      <form class="card" method="post" action="/gabung">
+        <input type="hidden" name="next" value="${esc(input.next)}" />
+        <input type="hidden" name="merek" value="${esc(input.brand?.id || "")}" />
+        <label class="lbl" for="nama">Nama</label>
+        <input id="nama" name="nama" required maxlength="40" autocomplete="name" value="${esc(input.values?.nama || "")}" />
+        <label class="lbl" for="wa">Nomor WhatsApp</label>
+        <input id="wa" name="wa" required inputmode="tel" autocomplete="tel" placeholder="0812 3456 4567" value="${esc(input.values?.wa || "")}" />
+        <label class="lbl" for="pin">PIN pilihan kamu (4–6 angka)</label>
+        <input id="pin" name="pin" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" pattern="\\d{4,6}" />
+        <label class="lbl" for="pin2">Ulangi PIN</label>
+        <input id="pin2" name="pin2" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" pattern="\\d{4,6}" />
+        <p class="fine">Tidak ada SMS. PIN ini yang dipakai kalau kamu masuk di HP lain. Jangan kasih ke orang.</p>
+        <button class="btn btn-solid">Simpan &amp; lihat kartu</button>
+      </form>
+      <p class="fine center" style="margin-top:12px">Sudah terdaftar? <a href="/masuk?next=${encodeURIComponent(input.next)}">Masuk</a></p>
+    </main>`,
+    accent,
+  );
+}
+
+export function loginPage(input: { next: string; params: URLSearchParams }): string {
+  return doc(
+    "Masuk",
+    `<main class="phone">
+      <header class="hero"><div class="hero-title">Masuk ke kartu</div><div class="hero-sub">Pakai nomor WA dan PIN</div></header>
+      ${flashes(input.params)}
+      <form class="card" method="post" action="/masuk">
+        <input type="hidden" name="next" value="${esc(input.next)}" />
+        <label class="lbl" for="wa">Nomor WhatsApp</label>
+        <input id="wa" name="wa" required inputmode="tel" autocomplete="tel" placeholder="0812 3456 4567" />
+        <label class="lbl" for="pin">PIN</label>
+        <input id="pin" name="pin" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="current-password" />
+        <button class="btn btn-solid">Masuk</button>
+      </form>
+      <p class="fine center" style="margin-top:12px"><a href="/gabung">Belum punya kartu</a></p>
+    </main>`,
+  );
+}
+
+export function cardPage(input: {
+  member: Member;
+  brands: Brand[];
+  cards: Map<string, Card>;
+  brand: Brand;
+  banners: Banner[];
+  history: ActivityRow[];
+  now: number;
+  params: URLSearchParams;
+}): string {
+  const card = input.cards.get(input.brand.id);
+  const stamps = card?.stamps ?? 0;
+  const copy = progressCopy(stamps, input.brand.stamps_required, input.brand.reward_text);
+  const pills = input.brands
+    .map((b) => `<a class="pill${b.id === input.brand.id ? " on" : ""}" href="/kartu?merek=${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`)
+    .join("");
+  const { banner, extra } = liveBanner(input.banners, input.now);
+  const rows = input.history
+    .map((row) => {
+      const when = feedTime(row.created_at, input.now);
+      if (row.type === "redeem") return `<div class="row"><div><b class="reward">Tukar ${esc(row.reward_text)}</b><div class="small muted">${esc(row.outlet_name || row.short_name)}</div></div><div class="muted">${esc(when)}</div></div>`;
+      if (row.type === "cancel") return `<div class="row"><div><b class="muted">Dibatalkan</b></div><div class="muted">${esc(when)}</div></div>`;
+      if (row.type === "join") return `<div class="row"><div><b>Gabung kartu</b></div><div class="muted">${esc(when)}</div></div>`;
+      const label = row.voided ? "Stamp dibatalkan" : "+1 stamp";
+      return `<div class="row"><div><b class="${row.voided ? "muted" : "plus"}">${label}</b><div class="small muted">${esc(row.outlet_name || "")}</div></div><div class="muted">${esc(when)}</div></div>`;
+    })
+    .join("");
+  return doc(
+    input.brand.short_name,
+    `<main class="phone" style="${paint(input.brand.accent, input.brand.accent_soft)}">
+      <header class="hero">
+        <div class="hero-top"><div class="avatar">${esc(input.brand.emoji)}</div><div><div class="hero-title">${esc(input.brand.name)}</div><div class="hero-sub">${esc(input.brand.handle)}</div></div></div>
+        <div class="hero-big">Halo, ${esc(input.member.name.split(" ")[0] || input.member.name)}! 👋</div>
+        <div class="hero-fine">Member sejak ${esc(memberSince(input.member.created_at))} · ${esc(maskWa(input.member.wa))}</div>
+      </header>
+      <div class="pills">${pills}</div>
+      ${flashes(input.params)}
+      <section class="card">
+        <div class="split"><h2>Kartu Stamp</h2><b class="count">${stamps}/${input.brand.stamps_required}</b></div>
+        ${stampGrid(stamps, input.brand.stamps_required)}
+        <p class="lead">${esc(copy.headline)} ${copy.ready ? "" : "🎉"}</p>
+        <p class="fine">${esc(ruleLine(input.brand))}</p>
+      </section>
+      ${promoBlock(banner, extra)}
+      <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
+      <form method="post" action="/keluar"><button class="linkbtn">Keluar</button></form>
+    </main>`,
+    input.brand.accent,
+  );
+}
+
+export function claimHoldPage(input: { brand: Brand | null; next: string; error?: string }): string {
+  const accent = input.brand?.accent || "#6ea564";
+  return doc(
+    "Terima stamp",
+    `<main class="phone" style="${paint(accent, input.brand?.accent_soft || "#e7f3df")}">
+      <header class="hero center"><div class="checkbubble">${CUP}</div><div class="hero-big">${input.brand ? esc(input.brand.short_name) : "QR"}</div><p class="hero-fine">${input.error ? esc(input.error) : "Masuk dulu, stamp-nya langsung masuk ke kartu kamu."}</p></header>
+      ${input.error ? `<a class="btn btn-solid" href="/kartu">Ke kartu</a>` : `<a class="btn btn-solid" href="/masuk?next=${encodeURIComponent(input.next)}">Masuk</a><a class="btn btn-line" href="/gabung?next=${encodeURIComponent(input.next)}${input.brand ? `&merek=${esc(input.brand.id)}` : ""}">Gabung baru</a>`}
+    </main>`,
+    accent,
+  );
+}
+
+export function successPage(input: {
+  member: Member;
+  brand: Brand;
+  outletName: string;
+  stamps: number;
+  when: number;
+  banners: Banner[];
+  otherBrands: string[];
+  kind: "stamp" | "redeem";
+  now: number;
+}): string {
+  const copy = progressCopy(input.stamps, input.brand.stamps_required, input.brand.reward_text);
+  const { banner, extra } = liveBanner(input.banners, input.now);
+  const title = input.kind === "stamp" ? `+1 stamp di ${input.brand.short_name}!` : `Reward ${input.brand.short_name} ditukar!`;
+  const others = input.otherBrands.length ? `Cek juga kartu kamu di ${input.otherBrands.join(" & ")}` : "Kartu kamu tersimpan di HP ini";
+  return doc(
+    title,
+    `<main class="phone" style="${paint(input.brand.accent, input.brand.accent_soft)}">
+      <header class="hero center">
+        <div class="checkbubble">${CHECK}</div>
+        <div class="hero-big">${esc(title)}</div>
+        <div class="hero-fine">Makasih, ${esc(input.member.name.split(" ")[0] || "")}! · ${esc(input.outletName)} · ${esc(clock(input.when))}</div>
+      </header>
+      <section class="card">
+        <div class="split"><h2>Kartu Stamp ${esc(input.brand.short_name)}</h2><b class="count">${input.stamps}/${input.brand.stamps_required}</b></div>
+        ${stampGrid(input.stamps, input.brand.stamps_required)}
+        <p class="lead">${esc(copy.headline)} ${copy.ready ? "" : "🎉"}</p>
+        <p class="fine">${esc(ruleLine(input.brand))}</p>
+      </section>
+      ${promoBlock(banner, extra)}
+      <div class="hint">${esc(others)}</div>
+      <a class="btn btn-solid" href="/kartu?merek=${esc(input.brand.id)}">Lihat Kartu Saya</a>
+    </main>`,
+    input.brand.accent,
+  );
+}
+
+export function cashierLoginPage(outlets: Array<Outlet & { brand_name: string; emoji: string; accent: string }>, params: URLSearchParams): string {
+  const options = outlets
+    .map((o) => `<option value="${esc(o.id)}">${esc(o.emoji)} ${esc(o.name)}</option>`)
+    .join("");
+  return doc(
+    "Kasir",
+    `<main class="phone">
+      <header class="hero"><div class="hero-title">Masuk kasir</div><div class="hero-sub">Pilih outlet, lalu PIN outlet</div></header>
+      ${flashes(params)}
+      <form class="card" method="post" action="/kasir/masuk">
+        <label class="lbl" for="outlet">Outlet</label>
+        <select id="outlet" name="outlet_id" required>${options}</select>
+        <label class="lbl" for="pin">PIN outlet</label>
+        <input id="pin" name="pin" required inputmode="numeric" minlength="4" maxlength="8" autocomplete="current-password" />
+        <button class="btn btn-solid">Masuk</button>
+      </form>
+    </main>`,
+  );
+}
+
+export function cashierDeskPage(input: {
+  outlet: Outlet;
+  brand: Brand;
+  feed: ActivityRow[];
+  cancelId: string | null;
+  found: { member: Member; stamps: number } | null;
+  now: number;
+  params: URLSearchParams;
+}): string {
+  const rows = input.feed
+    .map((row) => {
+      const right = row.voided
+        ? `<span class="muted">dibatalkan</span>`
+        : row.type === "redeem"
+          ? `<span class="reward">${esc(row.reward_text)}</span>`
+          : `<span class="plus">+1 stamp</span>`;
+      const batal =
+        row.id === input.cancelId && !row.voided
+          ? `<form method="post" action="/kasir/batal/${esc(row.id)}"><button class="textlink">Batalkan</button></form>`
+          : "";
+      return `<div class="row"><div class="time">${esc(feedTime(row.created_at, input.now))}</div><div class="grow ${row.voided ? "void" : ""}">${esc(maskName(row.member_name, row.wa))}${batal}</div><div>${right}</div></div>`;
+    })
+    .join("");
+  let found = "";
+  if (input.found) {
+    const copy = progressCopy(input.found.stamps, input.brand.stamps_required, input.brand.reward_text);
+    found = `<section class="card">
+      <div class="split"><h2>${esc(input.found.member.name)}</h2><b class="count">${input.found.stamps}/${input.brand.stamps_required}</b></div>
+      <p class="fine">${esc(prettyWa(input.found.member.wa))}</p>
+      ${stampGrid(input.found.stamps, input.brand.stamps_required)}
+      <p class="lead">${esc(copy.headline)}</p>
+      ${copy.ready ? `<a class="btn btn-amber" href="/kasir/tukar?member=${esc(input.found.member.id)}">${GIFT} Tukar Reward: ${esc(input.brand.reward_text)}</a>` : ""}
+    </section>`;
+  }
+  return doc(
+    `Kasir ${input.outlet.name}`,
+    `<main class="phone" style="${paint(input.brand.accent, input.brand.accent_soft)}">
+      <header class="hero">
+        <div class="hero-top"><div class="avatar">${esc(input.brand.emoji)}</div><div><div class="hero-title">Kasir · ${esc(input.outlet.name)}</div><div class="hero-sub">Tablet outlet</div></div></div>
+        <div class="badge">${CHECK} Login PIN outlet</div>
+      </header>
+      ${flashes(input.params)}
+      <section class="card">
+        <h2>Kasih stamp ke customer</h2>
+        <p class="fine">Customer scan QR pakai kamera HP, stamp langsung masuk</p>
+        <form method="post" action="/kasir/stamp">
+          <label class="checkline"><input type="checkbox" name="syarat" value="on" required /> ${esc(input.brand.condition_label)}</label>
+          <button class="btn btn-solid">${CUP} Kasih Stamp</button>
+        </form>
+        <form method="post" action="/kasir/redeem"><button class="btn btn-gold">${GIFT} Tukar Reward</button></form>
+      </section>
+      <section class="card">
+        <h2>QR susah kebaca?</h2>
+        <p class="fine">Ketik nomor WA sebagai cadangan. Tetap 1 stamp, tetap kena batas harian.</p>
+        <form method="post" action="/kasir/stamp/manual">
+          <label class="lbl" for="wa">Nomor WA customer</label>
+          <input id="wa" name="wa" inputmode="tel" placeholder="0812 3456 4567" required value="${esc(input.params.get("wa") || "")}" />
+          <label class="checkline"><input type="checkbox" name="syarat" value="on" /> ${esc(input.brand.condition_label)}</label>
+          <button class="btn btn-solid">+1 Stamp ke nomor ini</button>
+          <button class="btn btn-line" formaction="/kasir/cari">Cari member</button>
+        </form>
+      </section>
+      ${found}
+      <section class="card">
+        <h2>Aktivitas terakhir (otomatis)</h2>
+        ${rows || `<p class="fine">Belum ada aktivitas di outlet ini.</p>`}
+      </section>
+      <form method="post" action="/kasir/keluar"><button class="linkbtn">Keluar kasir</button></form>
+    </main>`,
+    input.brand.accent,
+  );
+}
+
+export function cashierQrPage(input: {
+  brand: Brand;
+  claimId: string;
+  kind: "stamp" | "redeem";
+  svg: string;
+  claimUrl: string;
+  remainingMs: number;
+  status: string;
+  masked: string | null;
+  when: string | null;
+}): string {
+  const noun = input.kind === "stamp" ? "1 stamp" : "tukar reward";
+  const waiting =
+    input.status === "pending"
+      ? `<div data-poll="/kasir/qr/${esc(input.claimId)}/status" data-remaining="${Math.max(0, input.remainingMs)}" data-ttl="60000">
+          <div class="qrbox" data-url="${esc(input.claimUrl)}">${input.svg}</div>
+          <div class="countpill">Berlaku <span data-count>1:00</span></div>
+          <div class="track"><span data-bar></span></div>
+          <p class="fine center" data-wait>Menunggu customer scan...</p>
+        </div>
+        <div class="note">Setelah discan, layar berubah jadi nama yang nerima. Kalau waktu habis, QR hangus dan tap lagi.</div>
+        <form method="post" action="/kasir/qr/${esc(input.claimId)}/batal"><button class="linkbtn">× Batal</button></form>`
+      : `<section class="card center"><h2>${input.status === "claimed" ? `Terkirim ke ${esc(input.masked || "member")}` : esc(input.status === "cancelled" ? "QR dibatalkan" : "QR sudah hangus")}</h2>
+          <p class="fine">${input.when ? esc(input.when) : ""}</p>
+          <a class="btn btn-solid" href="/kasir/meja">Kembali</a></section>`;
+  const refresh = input.status === "claimed" ? `<meta http-equiv="refresh" content="5;url=/kasir/meja" />` : "";
+  return doc(
+    "QR kasir",
+    `${refresh}<main class="phone" style="${paint(input.brand.accent, input.brand.accent_soft)}">
+      <header class="hero"><div class="hero-top"><div class="avatar">${esc(input.brand.emoji)}</div><div><div class="hero-title">Kasir · ${esc(input.brand.short_name)}</div><div class="hero-sub">Login PIN outlet</div></div></div></header>
+      <section class="card center">
+        <h2>${input.status === "pending" ? "Minta customer scan QR ini" : "Status QR"}</h2>
+        <p class="fine">${noun} · ${esc(input.brand.short_name)} · sekali pakai</p>
+        ${waiting}
+      </section>
+    </main>`,
+    input.brand.accent,
+  );
+}
+
+export function confirmRedeemPage(input: { brand: Brand; member: Member; stamps: number }): string {
+  return doc(
+    "Tukar reward",
+    `<main class="phone" style="${paint(input.brand.accent, input.brand.accent_soft)}">
+      <header class="hero"><div class="hero-title">Tukar untuk ${esc(input.member.name)}?</div><div class="hero-sub">${input.stamps}/${input.brand.stamps_required} · ${esc(input.brand.reward_text)}</div></header>
+      <section class="card">
+        <p class="fine">Stamp berkurang ${input.brand.stamps_required}. Sisa stamp tetap ikut.</p>
+        <p class="fine">${esc(input.brand.reward_note)}</p>
+        <form method="post" action="/kasir/redeem/manual">
+          <input type="hidden" name="member_id" value="${esc(input.member.id)}" />
+          <button class="btn btn-amber">${GIFT} Ya, tukar sekarang</button>
+        </form>
+        <a class="btn btn-line" href="/kasir/meja">Batal</a>
+      </section>
+    </main>`,
+    input.brand.accent,
+  );
+}
+
+const NAV: Array<[string, string]> = [
+  ["/admin/dasbor", "Dasbor"],
+  ["/admin/member", "Member"],
+  ["/admin/reward", "Reward"],
+  ["/admin/banner", "Banner Promo"],
+  ["/admin/aturan", "Setting Program"],
+  ["/admin/outlet", "Outlet & PIN"],
+  ["/admin/aktivitas", "Aktivitas"],
+  ["/admin/stan", "QR Stan"],
+];
+
+function adminShell(active: string, body: string, accent = "#5c8f4b"): string {
+  const nav = NAV.map(([href, label]) => `<a class="${active === href ? "on" : ""}" href="${href}">${esc(label)}</a>`).join("");
+  return doc(
+    "Loyalty Bos",
+    `<div class="shell" style="${paint(accent, "#e7f3df")}">
+      <aside class="side"><div class="brandlock">${LEAF} Loyalty Bos</div><nav>${nav}</nav>
+        <form method="post" action="/admin/keluar"><button class="linkbtn" style="color:white">Keluar</button></form>
+      </aside>
+      <div class="main">${body}</div>
+    </div>`,
+    accent,
+  );
+}
+
+export function adminLoginPage(params: URLSearchParams): string {
+  return doc(
+    "Owner",
+    `<main class="phone">
+      <header class="hero"><div class="hero-title">Loyalty Bos</div><div class="hero-sub">Masuk owner</div></header>
+      ${flashes(params)}
+      <form class="card" method="post" action="/admin/masuk">
+        <label class="lbl" for="password">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password" />
+        <button class="btn btn-solid">Masuk</button>
+      </form>
+    </main>`,
+  );
+}
+
+export function dashboardPage(input: {
+  brands: Brand[];
+  brand: Brand | null;
+  numbers: DashNumbers;
+  days: Array<{ label: string; n: number }>;
+  top: TopMember[];
+  lapsed: Lapsed[];
+  banners: Banner[];
+  flags: FlagRow[];
+  now: number;
+}): string {
+  const chips = [`<a class="chip${input.brand ? "" : " on"}" href="/admin/dasbor">Semua</a>`]
+    .concat(input.brands.map((b) => `<a class="chip${input.brand?.id === b.id ? " on" : ""}" href="/admin/dasbor?merek=${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`))
+    .join("");
+  const max = Math.max(1, ...input.days.map((d) => d.n));
+  const bars = input.days
+    .map((d) => {
+      const h = d.n === 0 ? 3 : Math.max(10, Math.round((d.n / max) * 100));
+      return `<div class="barcol" title="${d.n} stamp"><div class="bar" style="height:${h}%"></div><span>${esc(d.label)}</span></div>`;
+    })
+    .join("");
+  const top = input.top
+    .map((m) => `<tr><td>${esc(m.name)}</td><td>${m.stamps}</td><td>${m.rewards}</td></tr>`)
+    .join("");
+  const lapsed = input.lapsed
+    .map((m) => {
+      const days = Math.max(1, Math.round((input.now - m.last_seen_at) / 86_400_000));
+      return `<tr><td>${esc(m.name)}</td><td>${days} hari</td><td>${m.stamps}/${m.stamps_required}</td></tr>`;
+    })
+    .join("");
+  const banner = input.banners[0];
+  const program = input.brand;
+  const activePct = input.numbers.members ? Math.round((input.numbers.active30 / input.numbers.members) * 100) : 0;
+  const flags = input.flags
+    .map((f) => `<div class="flag"><b>${esc(f.reason === "ramai" ? "Kasir terlalu ramai" : "Batas harian")}</b> · ${esc(f.outlet_name || "")} ${esc(f.member_name || "")}<div class="small">${esc(f.detail)} · ${esc(feedTime(f.created_at, input.now))}</div></div>`)
+    .join("");
+  const body = `
+    <div class="toprow"><h1>Dashboard</h1><div class="chips">${chips}</div></div>
+    <section class="kpis">
+      <article class="kpi"><span>Total member</span><b>${formatInt(input.numbers.members)}</b><span>${input.brand ? esc(input.brand.short_name) : "semua merek"}</span></article>
+      <article class="kpi"><span>Stamp hari ini</span><b>${input.numbers.stampsToday}</b><span>${input.numbers.outletsToday} outlet</span></article>
+      <article class="kpi"><span>Reward ditukar (bulan ini)</span><b>${input.numbers.redeemsMonth}</b><span>${esc(program?.reward_text || "semua merek")}</span></article>
+      <article class="kpi"><span>Member aktif 30 hari</span><b>${input.numbers.active30}</b><span>${activePct}% dari total</span></article>
+    </section>
+    <section class="grid-2">
+      <article class="panel"><h2>Stamp per hari (14 hari)</h2><div class="bars">${bars}</div></article>
+      <article class="panel"><h2>Member paling loyal</h2>
+        <table><thead><tr><th>Nama</th><th>Stamp</th><th>Reward</th></tr></thead><tbody>${top || `<tr><td colspan="3">Belum ada data.</td></tr>`}</tbody></table>
+      </article>
+    </section>
+    <section class="grid-3">
+      <article class="panel"><h2>Lama tidak datang (&gt;30 hari)</h2>
+        <table><tbody>${lapsed || `<tr><td>Tidak ada.</td></tr>`}</tbody></table>
+      </article>
+      <article class="panel"><h2>Kelola Banner Promo</h2>
+        ${banner ? `<div class="promo"><div class="kicker">PROMO</div><h3>${esc(banner.title)}</h3><p>${esc(banner.subtitle)}</p></div>` : `<p class="fine">Belum ada banner.</p>`}
+        <a class="btn btn-line" href="/admin/banner">+ Tambah banner</a>
+      </article>
+      <article class="panel"><h2>Setting Program${program ? ` · ${esc(program.short_name)}` : ""}</h2>
+        ${
+          program
+            ? `<div class="row"><span>Stamp dibutuhkan</span><b>${program.stamps_required}</b></div>
+               <div class="row"><span>Reward</span><b>${esc(program.reward_text)}</b></div>
+               <div class="row"><span>Syarat</span><b>${esc(program.condition_label)}</b></div>
+               <div class="row"><span>Maks stamp / hari</span><b>${program.max_stamps_per_day}</b></div>`
+            : `<p class="fine">Pilih satu merek untuk lihat aturannya.</p>`
+        }
+        <a class="btn btn-line" href="/admin/aturan">Ubah aturan</a>
+      </article>
+    </section>
+    ${flags ? `<section class="panel" style="margin-top:12px"><h2>Yang perlu dicek</h2>${flags}</section>` : ""}
+    <p class="fine" style="margin-top:14px">Angka dihitung dari data tersimpan. Waktu dalam WIB.</p>`;
+  return adminShell("/admin/dasbor", body, input.brand?.accent || "#5c8f4b");
+}
+
+export function membersPage(members: Array<Member & { lines: string }>, q: string): string {
+  const rows = members
+    .map(
+      (m) =>
+        `<tr><td><b>${esc(m.name)}</b><div class="small muted">${esc(prettyWa(m.wa))}</div></td><td>${esc(m.lines)}</td><td>${esc(memberSince(m.created_at))}</td></tr>`,
+    )
+    .join("");
+  return adminShell(
+    "/admin/member",
+    `<h1>Member</h1>
+     <form class="panel" style="margin-top:12px" method="get" action="/admin/member">
+       <label class="lbl" for="q">Cari nama atau nomor</label>
+       <div class="actions"><input id="q" name="q" value="${esc(q)}" /><button class="btn btn-solid">Cari</button></div>
+     </form>
+     <article class="panel" style="margin-top:12px"><table><thead><tr><th>Member</th><th>Kartu</th><th>Gabung</th></tr></thead><tbody>${rows || `<tr><td colspan="3">Tidak ketemu.</td></tr>`}</tbody></table></article>`,
+  );
+}
+
+export function rewardsPage(rows: ActivityRow[], brands: Brand[], brandId: string): string {
+  const chips = [`<a class="chip${brandId ? "" : " on"}" href="/admin/reward">Semua</a>`]
+    .concat(brands.map((b) => `<a class="chip${brandId === b.id ? " on" : ""}" href="/admin/reward?merek=${esc(b.id)}">${esc(b.short_name)}</a>`))
+    .join("");
+  const body = rows
+    .map(
+      (r) =>
+        `<tr><td>${esc(feedTime(r.created_at, Date.now()))}</td><td>${esc(r.member_name)}</td><td>${esc(r.short_name)}</td><td>${esc(r.outlet_name || "-")}</td><td>${r.voided ? "dibatalkan" : esc(r.reward_text)}</td><td>${r.stamps_after}</td></tr>`,
+    )
+    .join("");
+  return adminShell(
+    "/admin/reward",
+    `<div class="toprow"><h1>Reward ditukar</h1><div class="chips">${chips}</div></div>
+     <article class="panel" style="margin-top:12px"><table><thead><tr><th>Waktu</th><th>Member</th><th>Merek</th><th>Outlet</th><th>Reward</th><th>Sisa</th></tr></thead><tbody>${body || `<tr><td colspan="6">Belum ada.</td></tr>`}</tbody></table></article>`,
+  );
+}
+
+export function bannersPage(banners: Banner[], brands: Brand[], params: URLSearchParams): string {
+  const options = brands.map((b) => `<option value="${esc(b.id)}">${esc(b.short_name)}</option>`).join("");
+  const list = banners
+    .map(
+      (b) => `<form method="post" action="/admin/banner/${esc(b.id)}/hapus" style="margin-top:8px">
+        <b>${esc(b.title)}</b> · ${esc(b.brand_id)} · urutan ${b.sort_order} · ${b.active ? "aktif" : "mati"}
+        <div class="small muted">${esc(b.subtitle)}</div>
+        <button class="textlink">Hapus</button>
+      </form>`,
+    )
+    .join("");
+  return adminShell(
+    "/admin/banner",
+    `<h1>Banner promo</h1>${flashes(params)}
+     <form class="panel" style="margin-top:12px" method="post" action="/admin/banner" enctype="multipart/form-data">
+       <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
+       <label class="lbl">Judul</label><input name="title" required maxlength="80" />
+       <label class="lbl">Subjudul</label><input name="subtitle" maxlength="140" />
+       <label class="lbl">Tautan (opsional, https)</label><input name="link_url" type="url" placeholder="https://" />
+       <label class="lbl">URL gambar (opsional, https)</label><input name="image_url" type="url" placeholder="https://" />
+       <label class="lbl">atau upload gambar (maks 2 MB)</label><input name="gambar" type="file" accept="image/*" />
+       <label class="lbl">Mulai (WIB, opsional)</label><input name="starts_at" type="datetime-local" />
+       <label class="lbl">Selesai (WIB, opsional)</label><input name="ends_at" type="datetime-local" />
+       <label class="lbl">Urutan</label><input name="sort_order" type="number" value="1" />
+       <label class="checkline"><input type="checkbox" name="active" value="on" checked /> Tampilkan</label>
+       <button class="btn btn-solid">Simpan banner</button>
+     </form>
+     <article class="panel" style="margin-top:12px"><h2>Yang sudah ada</h2>${list || `<p class="fine">Kosong.</p>`}</article>`,
+  );
+}
+
+export function rulesPage(brands: Brand[], params: URLSearchParams): string {
+  const forms = brands
+    .map(
+      (b) => `<form class="panel" style="margin-top:12px;${paint(b.accent, b.accent_soft)}" method="post" action="/admin/aturan/${esc(b.id)}">
+        <h2>${esc(b.emoji)} ${esc(b.name)}</h2>
+        <label class="lbl">Nama</label><input name="name" value="${esc(b.name)}" required />
+        <label class="lbl">Nama singkat</label><input name="short_name" value="${esc(b.short_name)}" required />
+        <label class="lbl">Handle</label><input name="handle" value="${esc(b.handle)}" required />
+        <label class="lbl">Emoji</label><input name="emoji" value="${esc(b.emoji)}" maxlength="8" />
+        <label class="lbl">Warna</label><input name="accent" type="color" value="${esc(b.accent)}" />
+        <label class="lbl">Warna lembut</label><input name="accent_soft" type="color" value="${esc(b.accent_soft)}" />
+        <label class="lbl">Stamp untuk reward</label><input name="stamps_required" type="number" min="1" max="30" value="${b.stamps_required}" required />
+        <label class="lbl">Teks reward</label><input name="reward_text" value="${esc(b.reward_text)}" required />
+        <label class="lbl">Teks centang kasir</label><input name="condition_label" value="${esc(b.condition_label)}" required />
+        <label class="lbl">Minimal transaksi (Rp, opsional)</label><input name="min_amount" type="number" min="0" value="${b.min_amount ?? ""}" />
+        <label class="lbl">Maks stamp per member per hari</label><input name="max_stamps_per_day" type="number" min="1" max="10" value="${b.max_stamps_per_day}" required />
+        <label class="lbl">Catatan reward</label><textarea name="reward_note">${esc(b.reward_note)}</textarea>
+        <label class="checkline"><input type="checkbox" name="active" value="on" ${b.active ? "checked" : ""} /> Merek aktif</label>
+        <button class="btn btn-solid">Simpan</button>
+      </form>`,
+    )
+    .join("");
+  return adminShell("/admin/aturan", `<h1>Setting program</h1>${flashes(params)}<p class="fine">Teks centang inilah yang dilihat kasir sebelum kasih stamp.</p>${forms}`);
+}
+
+export function outletsPage(
+  outlets: Array<Outlet & { brand_name: string }>,
+  brands: Brand[],
+  params: URLSearchParams,
+): string {
+  const options = brands.map((b) => `<option value="${esc(b.id)}">${esc(b.short_name)}</option>`).join("");
+  const list = outlets
+    .map(
+      (o) => `<article class="panel" style="margin-top:12px">
+        <h2>${esc(o.name)}</h2>
+        <p class="fine">${esc(o.brand_name)} · ${o.active ? "aktif" : "nonaktif"}</p>
+        <form method="post" action="/admin/outlet/${esc(o.id)}/pin">
+          <label class="lbl">PIN baru (4–8 angka)</label>
+          <div class="actions"><input name="pin" inputmode="numeric" minlength="4" maxlength="8" required /><button class="btn btn-solid">Ganti PIN</button></div>
+        </form>
+        <form method="post" action="/admin/outlet/${esc(o.id)}/aktif">
+          <input type="hidden" name="active" value="${o.active ? "0" : "1"}" />
+          <button class="btn btn-line">${o.active ? "Nonaktifkan" : "Aktifkan"}</button>
+        </form>
+      </article>`,
+    )
+    .join("");
+  return adminShell(
+    "/admin/outlet",
+    `<h1>Outlet &amp; PIN</h1>${flashes(params)}
+     <form class="panel" style="margin-top:12px" method="post" action="/admin/outlet">
+       <h2>Tambah outlet</h2>
+       <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
+       <label class="lbl">Nama outlet</label><input name="name" required maxlength="60" />
+       <label class="lbl">PIN</label><input name="pin" required inputmode="numeric" minlength="4" maxlength="8" />
+       <button class="btn btn-solid">Tambah</button>
+     </form>
+     ${list}`,
+  );
+}
+
+export function activityPage(input: {
+  rows: ActivityRow[];
+  brands: Brand[];
+  outlets: Outlet[];
+  query: string;
+  params: URLSearchParams;
+}): string {
+  const p = input.params;
+  const brandOpts = [`<option value="">Semua merek</option>`]
+    .concat(input.brands.map((b) => `<option value="${esc(b.id)}"${p.get("merek") === b.id ? " selected" : ""}>${esc(b.short_name)}</option>`))
+    .join("");
+  const outletOpts = [`<option value="">Semua outlet</option>`]
+    .concat(input.outlets.map((o) => `<option value="${esc(o.id)}"${p.get("outlet") === o.id ? " selected" : ""}>${esc(o.name)}</option>`))
+    .join("");
+  const types = ["", "stamp", "redeem", "cancel", "join"]
+    .map((t) => `<option value="${t}"${p.get("jenis") === t ? " selected" : ""}>${t || "Semua jenis"}</option>`)
+    .join("");
+  const body = input.rows
+    .map(
+      (r) =>
+        `<tr><td>${esc(feedTime(r.created_at, Date.now()))}</td><td>${esc(r.member_name)}<div class="small muted">${esc(prettyWa(r.wa))}</div></td><td>${esc(r.short_name)}</td><td>${esc(r.outlet_name || "-")}</td><td>${esc(r.type)}${r.voided ? " (batal)" : ""}</td><td>${r.stamps_delta}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.session_id || "-")}</td></tr>`,
+    )
+    .join("");
+  return adminShell(
+    "/admin/aktivitas",
+    `<div class="toprow"><h1>Aktivitas</h1><a class="btn btn-line noprint" style="width:auto;padding:0 16px" href="/admin/aktivitas.csv?${esc(input.query)}">Unduh CSV</a></div>
+     <form class="panel" method="get" action="/admin/aktivitas" style="margin-top:12px">
+       <div class="grid-3">
+         <label>Merek<select name="merek">${brandOpts}</select></label>
+         <label>Outlet<select name="outlet">${outletOpts}</select></label>
+         <label>Jenis<select name="jenis">${types}</select></label>
+       </div>
+       <label class="lbl">Cari nama / nomor</label><input name="q" value="${esc(p.get("q") || "")}" />
+       <div class="actions" style="margin-top:10px">
+         <input type="date" name="dari" value="${esc(p.get("dari") || "")}" />
+         <input type="date" name="sampai" value="${esc(p.get("sampai") || "")}" />
+         <button class="btn btn-solid">Filter</button>
+       </div>
+     </form>
+     <article class="panel" style="margin-top:12px;overflow:auto"><table><thead><tr><th>Waktu</th><th>Member</th><th>Merek</th><th>Outlet</th><th>Jenis</th><th>Delta</th><th>Catatan</th><th>Sesi kasir</th></tr></thead><tbody>${body || `<tr><td colspan="8">Kosong.</td></tr>`}</tbody></table></article>`,
+  );
+}
+
+export function stanPage(brands: Brand[], origin: string, svgs: Record<string, string>): string {
+  const cards = brands
+    .map(
+      (b) => `<article class="stan" style="${paint(b.accent, b.accent_soft)}">
+        <h2>${esc(b.emoji)} ${esc(b.name)}</h2>
+        <p class="fine">Scan untuk gabung kartu stamp</p>
+        <div class="qrbox">${svgs[b.id] || ""}</div>
+        <p class="small">${esc(`${origin}/gabung/${b.id}`)}</p>
+      </article>`,
+    )
+    .join("");
+  return adminShell(
+    "/admin/stan",
+    `<div class="toprow"><h1>QR stan meja</h1><button class="btn btn-line noprint" style="width:auto;padding:0 16px" type="button" data-print>Cetak</button></div>
+     <p class="fine noprint">Cetak, tempel di kasir. Customer scan pakai kamera HP.</p>
+     <div class="grid-3">${cards}</div>`,
+  );
+}
+
+export function emptyDbPage(): string {
+  return messagePage("Database masih kosong", "Jalankan npm run setup di komputer, lalu buka lagi.", "/health", "Cek server");
+}

@@ -1,0 +1,7 @@
+# Salin file ini jadi .dev.vars (tanpa .example).
+# Jangan commit .dev.vars. Isinya password kamu.
+# Ganti ketiga nilai di bawah sebelum dipakai sungguhan.
+
+OWNER_PASSWORD=ganti-dengan-kalimat-panjang
+TOKEN_SECRET=ganti-dengan-acak-panjang-sekali
+PIN_PEPPER=ganti-dengan-acak-lain-jangan-diganti-sembarangan

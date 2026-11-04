@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "loyalty-bos",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-04",
+  "upload_source_maps": true,
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "none"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "loyalty-bos",
+      // Ganti dengan database_id dari: npx wrangler d1 create loyalty-bos
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BANNERS",
+      "bucket_name": "loyalty-banners"
+    }
+  ],
+  "secrets": {
+    "required": ["OWNER_PASSWORD", "TOKEN_SECRET", "PIN_PEPPER"]
+  }
+}
