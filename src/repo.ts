@@ -439,7 +439,7 @@ export async function memberHistory(db: D1Database, memberId: string, brandId: s
     db
       .prepare(
         `${ACTIVITY_SELECT}
-         WHERE a.member_id = ? AND a.brand_id = ? AND a.type IN ('stamp', 'redeem', 'cancel', 'join')
+         WHERE a.member_id = ? AND a.brand_id = ? AND a.type IN ('stamp', 'redeem', 'cancel', 'join', 'birthday', 'mission', 'points')
          ORDER BY a.created_at DESC LIMIT 12`,
       )
       .bind(memberId, brandId),

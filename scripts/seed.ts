@@ -134,6 +134,12 @@ const emails: Record<string, string> = {
   m_kevin: "kevin.t@gmail.com",
 };
 const lines: string[] = [
+  "DELETE FROM redeem_codes;",
+  "DELETE FROM point_ledger;",
+  "DELETE FROM mission_submissions;",
+  "DELETE FROM missions;",
+  "DELETE FROM point_rewards;",
+  "DELETE FROM stamp_tiers;",
   "DELETE FROM flags;",
   "DELETE FROM rate_limits;",
   "DELETE FROM activities;",
@@ -217,7 +223,25 @@ lines.push(
   `INSERT INTO banners (id, brand_id, title, subtitle, image_url, r2_key, link_url, starts_at, ends_at, sort_order, active, created_at) VALUES
   ('ban_loft','loft25','Matcha Strawberry Latte','Beli 2 lebih hemat! s/d 30 Nov',NULL,NULL,NULL,${now - DAY},${sampai},1,1,${now - DAY}),
   ('ban_soto','soto-oseng','Paket Jumat','Oseng + es teh manis',NULL,NULL,NULL,${now - DAY},NULL,1,1,${now - DAY}),
-  ('ban_kris','krispyporkk','Crispy Bowl Baru','Tambah nasi cuma Rp5.000',NULL,NULL,NULL,${now - DAY},NULL,1,1,${now - DAY});`,
+  ('ban_kris','krispyporkk','Crispy Bowl Baru','Tambah nasi cuma Rp5.000',NULL,NULL,NULL,${now - DAY},NULL,1,1,${now - DAY});
+  INSERT INTO missions (id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at) VALUES
+  ('misi_review', NULL, 'Foto & review Google', 'Foto struk atau minuman, lalu kasih review Google. Lampirkan tangkapan layar.', 5, 1, 0, 'once', 1, ${now}),
+  ('misi_threads', NULL, 'Post Threads tag kami', 'Post di Threads dan tag akun kami. Tempel tautannya.', 5, 0, 1, 'week', 1, ${now}),
+  ('misi_story', NULL, 'IG Story tag kami', 'Story Instagram yang nge-tag kami. Lampirkan tangkapan layar.', 10, 1, 0, 'week', 1, ${now});
+  INSERT INTO point_rewards (id, brand_id, title, points_tenths, stock, image_url, r2_key, active, created_at) VALUES
+  ('poin_upsize', 'loft25', 'Upsize', 10, NULL, NULL, NULL, 1, ${now}),
+  ('poin_coffee', 'loft25', 'Coffee', 20, NULL, NULL, NULL, 1, ${now}),
+  ('poin_milktea', 'loft25', 'Milk tea', 25, NULL, NULL, NULL, 1, ${now}),
+  ('poin_matcha', 'loft25', 'Matcha', 30, NULL, NULL, NULL, 1, ${now}),
+  ('poin_es', 'soto-oseng', 'Es teh', 10, NULL, NULL, NULL, 1, ${now}),
+  ('poin_krispy', 'krispyporkk', 'Es krim', 20, NULL, NULL, NULL, 1, ${now});
+  INSERT INTO stamp_tiers (id, brand_id, stamps, reward_text, sort_order, active) VALUES
+  ('tier_loft_5', 'loft25', 5, 'free upsize', 1, 1),
+  ('tier_loft_10', 'loft25', 10, 'free matcha', 2, 1),
+  ('tier_soto_10', 'soto-oseng', 10, 'Soto Oseng paket', 1, 1),
+  ('tier_kris_10', 'krispyporkk', 10, 'diskon 50%', 1, 1);
+  INSERT INTO point_ledger (id, member_id, brand_id, delta_tenths, reason, ref_id, created_at) VALUES
+  ('poin_rina', 'm_rina', 'loft25', 30, 'mission', NULL, ${now});`,
 );
 
 writeFileSync(".seed.tmp.sql", lines.join("\n"));

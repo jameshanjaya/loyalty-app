@@ -7,6 +7,9 @@ import { validOutletPin, weakPin } from "../phone";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { OWNER_SESSION_MS } from "../loyalty";
+import { formatPoints, parsePoints } from "../points";
+import * as pdb from "../points-db";
+import { expireCodes, reviewMission } from "../points-flow";
 import { loginOwner, ownerDeleteMember, ownerSetBirthday, ownerSetPhone, setOutletPinHash } from "../service";
 import { clearCookie, COOKIE, loadOwner, setSessionCookie } from "../session";
 import { WIB_MS, feedTime, memberSince, parseWibDate, parseWibLocal, startOfWibDay, startOfWibMonth, wibDayIndex } from "../time";
@@ -15,6 +18,9 @@ import {
   activityPage,
   adminLoginPage,
   bannersPage,
+  adminCatalogPage,
+  adminMissionsPage,
+  adminTiersPage,
   dashboardPage,
   deleteMemberPage,
   memberDetailPage,
@@ -87,7 +93,27 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const month = new Date(now + WIB_MS).getUTCMonth() + 1;
     const birthdays = (await repo.birthdaysThisMonth(db, month)).map((m) => ({ name: m.name, birthday: m.birthday || "" }));
     const birthdayRedeems = await repo.countBirthdayRedeems(db, startOfWibMonth(now), brandId);
-    return html(dashboardPage({ brands, brand, numbers, days, top, lapsed, banners, flags, now, birthdays, birthdayRedeems }));
+    await expireCodes(db, now);
+    const points = await pdb.pointsTotals(db, startOfWibMonth(now));
+    const pendingMissions = await pdb.countPending(db);
+    return html(
+      dashboardPage({
+        brands,
+        brand,
+        numbers,
+        days,
+        top,
+        lapsed,
+        banners,
+        flags,
+        now,
+        birthdays,
+        birthdayRedeems,
+        pointsIssued: formatPoints(points.issued),
+        pointsRedeemed: formatPoints(points.redeemed),
+        pendingMissions,
+      }),
+    );
   }
 
   if ((path === "/admin/member.csv" || path === "/admin/member.xlsx") && request.method === "GET") {
@@ -308,6 +334,148 @@ export async function handleAdmin(app: App): Promise<Response | null> {
         "cache-control": "no-store",
       },
     });
+  }
+
+  if (path.startsWith("/admin/bukti/") && request.method === "GET") {
+    const id = decodeURIComponent(path.slice("/admin/bukti/".length));
+    const submission = await pdb.getSubmission(db, id);
+    if (!submission?.r2_key?.startsWith("missions/")) return new Response("Tidak ketemu", { status: 404 });
+    const object = await env.BANNERS.get(submission.r2_key);
+    if (!object) return new Response("Tidak ketemu", { status: 404 });
+    return new Response(object.body, {
+      headers: {
+        "content-type": object.httpMetadata?.contentType || "image/jpeg",
+        "cache-control": "private, max-age=3600",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  }
+
+  if (path === "/admin/misi" && request.method === "GET") {
+    const missions = await pdb.listMissions(db, false);
+    const queue = await pdb.listPending(db);
+    const brands = await repo.listBrands(db, false);
+    return html(
+      adminMissionsPage({
+        missions: missions.map((m) => ({
+          id: m.id,
+          title: m.title,
+          points: formatPoints(m.points_tenths),
+          limit: m.limit_kind === "week" ? "seminggu" : "sekali",
+          active: m.active === 1,
+          brand: brands.find((b) => b.id === m.brand_id)?.short_name || "Semua",
+        })),
+        queue: queue.map((q) => ({
+          id: q.id,
+          title: q.title || "",
+          member: q.member_name || "",
+          when: feedTime(q.created_at, now),
+          link: q.link_url || "",
+          image: q.r2_key ? `/admin/bukti/${q.id}` : "",
+        })),
+        brands: brands.map((b) => ({ id: b.id, name: b.short_name })),
+        params: url.searchParams,
+      }),
+    );
+  }
+
+  if (path === "/admin/misi" && request.method === "POST") {
+    const form = await request.formData();
+    const points = parsePoints(String(form.get("points") || ""));
+    const title = clip(String(form.get("title") || ""), 80);
+    const shot = form.get("shot") === "on";
+    const link = form.get("link") === "on";
+    if (!title || points == null || (!shot && !link)) return back("/admin/misi", "aturan");
+    const brandId = String(form.get("brand_id") || "") || null;
+    if (brandId && !(await repo.getBrand(db, brandId))) return back("/admin/misi", "aturan");
+    await pdb.insertMission(db, {
+      id: randomId(),
+      brand_id: brandId,
+      title,
+      description: clip(String(form.get("description") || ""), 240),
+      points_tenths: points,
+      proof_screenshot: shot ? 1 : 0,
+      proof_link: link ? 1 : 0,
+      limit_kind: String(form.get("limit_kind") || "") === "week" ? "week" : "once",
+      active: 1,
+      created_at: now,
+    });
+    return ok("/admin/misi", "simpan");
+  }
+
+  if (path.startsWith("/admin/misi/") && request.method === "POST") {
+    const rest = path.slice("/admin/misi/".length);
+    const approve = rest.endsWith("/setuju");
+    const reject = rest.endsWith("/tolak");
+    if (!approve && !reject) return back("/admin/misi", "umum");
+    const id = decodeURIComponent(rest.slice(0, rest.lastIndexOf("/")));
+    const result = await reviewMission(db, { id, approve, now });
+    if (!result.ok) return back("/admin/misi", result.error);
+    return ok("/admin/misi", approve ? "setuju" : "tolak");
+  }
+
+  if (path === "/admin/katalog" && request.method === "GET") {
+    const rewards = await pdb.listRewards(db, null, false);
+    const brands = await repo.listBrands(db, false);
+    return html(
+      adminCatalogPage({
+        rewards: rewards.map((r) => ({
+          id: r.id,
+          brand: brands.find((b) => b.id === r.brand_id)?.short_name || r.brand_id,
+          title: r.title,
+          cost: formatPoints(r.points_tenths),
+          stock: r.stock == null ? "bebas" : String(r.stock),
+          active: r.active === 1,
+        })),
+        brands: brands.map((b) => ({ id: b.id, name: b.short_name })),
+        params: url.searchParams,
+      }),
+    );
+  }
+
+  if (path === "/admin/katalog" && request.method === "POST") {
+    const form = await request.formData();
+    const points = parsePoints(String(form.get("points") || ""));
+    const title = clip(String(form.get("title") || ""), 60);
+    const brand = await repo.getBrand(db, String(form.get("brand_id") || ""));
+    if (!brand || !title || points == null) return back("/admin/katalog", "aturan");
+    const stockRaw = String(form.get("stock") || "").trim();
+    const stock = stockRaw === "" ? null : Number(stockRaw);
+    if (stock != null && (!Number.isInteger(stock) || stock < 0)) return back("/admin/katalog", "aturan");
+    await pdb.insertReward(db, {
+      id: randomId(),
+      brand_id: brand.id,
+      title,
+      points_tenths: points,
+      stock,
+      image_url: null,
+      r2_key: null,
+      active: form.get("active") === "on" ? 1 : 0,
+      created_at: now,
+    });
+    return ok("/admin/katalog", "simpan");
+  }
+
+  if (path === "/admin/tingkat" && request.method === "GET") {
+    const tiers = await pdb.listAllTiers(db);
+    const brands = await repo.listBrands(db, false);
+    return html(
+      adminTiersPage({
+        tiers: tiers.map((t) => ({ brand: brands.find((b) => b.id === t.brand_id)?.short_name || t.brand_id, stamps: t.stamps, reward: t.reward_text })),
+        brands: brands.map((b) => ({ id: b.id, name: b.short_name })),
+        params: url.searchParams,
+      }),
+    );
+  }
+
+  if (path === "/admin/tingkat" && request.method === "POST") {
+    const form = await request.formData();
+    const brand = await repo.getBrand(db, String(form.get("brand_id") || ""));
+    const stamps = Number(form.get("stamps") || 0);
+    const reward = clip(String(form.get("reward_text") || ""), 80);
+    if (!brand || !reward || !Number.isInteger(stamps) || stamps < 1 || stamps > 50) return back("/admin/tingkat", "aturan");
+    await pdb.insertTier(db, { id: randomId(), brand_id: brand.id, stamps, reward_text: reward, sort_order: stamps, active: 1 });
+    return ok("/admin/tingkat", "simpan");
   }
 
   if (path === "/admin/stan" && request.method === "GET") {

@@ -166,6 +166,10 @@ Pelanggan baru dari Google mengisi nama, tanggal lahir, nomor WA, dan PIN dulu s
 - Satu pelanggan paling 2 stamp per merek per hari. Angka ini bisa diubah di Setting Program.
 - Stamp penuh: kasir tap **Tukar Reward**, pelanggan scan QR untuk setuju. Atau kasir cari nomor WA lalu tukar. Stamp yang lebih dari 10 tetap nyangkut.
 - Hadiah ulang tahun diatur di **Setting Program** (teks hadiah, sepanjang bulan, atau N hari di sekitar ulang tahun, nyala/mati). Pelanggan melihatnya di kartu kalau sedang berlaku. Kasir menukarnya sekali per tahun per merek, lewat QR atau nomor WA. Stamp tidak berkurang.
+- Misi memberi poin, terpisah dari stamp. Owner mengatur misi di menu **Misi** (judul, penjelasan, poin seperti 0.5, merek atau semua merek, bukti tangkapan layar dan/atau tautan, sekali saja atau sekali seminggu, nyala/mati). Pelanggan kirim bukti, statusnya menunggu, lalu owner setujui atau tolak di antrian yang sama. Poin masuk setelah disetujui.
+- Katalog poin ada di **Katalog poin**. Contoh awal di Loft25: Upsize 1, Coffee 2, Milk tea 2.5, Matcha 3. Boleh ada stok dan gambar.
+- Pelanggan tap **Tukar** di aplikasi. Poin (atau stamp, atau hadiah ultah) ditahan, lalu muncul kode 5 angka dan QR sekitar 10 menit. Kasir mengetik kode itu, atau scan QR yang membuka halaman kasir. Kalau hangus, poin atau stamp kembali. Kode cuma sekali, cuma untuk merek outlet itu, dan tebakan dibatasi. Kasir tetap bisa menukar dari sisi kasir kalau pelanggan tidak buka aplikasinya.
+- Tingkat stamp diatur di **Tingkat stamp**. Contoh Loft25: 5 stamp = free upsize, 10 stamp = free matcha. Pelanggan boleh tukar tingkat yang lebih rendah sekarang, atau lanjut kumpulin.
 - Daftar pelanggan ada di **Member**: cari, filter merek, urutkan, buka detail, ganti nomor, hapus (dengan halaman konfirmasi, dan tercatat). Unduh CSV atau Excel.
 - Banner promo di kartu pelanggan diatur di **Banner Promo**. Bisa tempel tautan gambar https, atau unggah file (paling 2 MB, jpg/png/webp/gif).
 - Log aktivitas ada di menu **Aktivitas**. Bisa diunduh sebagai CSV.

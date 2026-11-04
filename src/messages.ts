@@ -34,6 +34,11 @@ export const ERR: Record<string, string> = {
   aturan: "Isian aturannya belum beres.",
   cari: "Terlalu sering cari nomor. Tunggu sebentar.",
   besar: "Filenya kebesaran. Maksimal 2 MB.",
+  poin: "Poin kamu belum cukup.",
+  stok: "Hadiah ini lagi habis.",
+  kode: "Kode tidak berlaku. Cek merek outlet dan masa berlakunya.",
+  bukti: "Bukti misi belum lengkap.",
+  misi: "Misi ini sudah kamu kirim, atau masih menunggu.",
 };
 
 export const OK: Record<string, string> = {
@@ -48,6 +53,10 @@ export const OK: Record<string, string> = {
   telepon: "Nomor WA diganti.",
   lahirsimpan: "Tanggal lahir disimpan.",
   "member-hapus": "Member dihapus. Catatannya tersimpan.",
+  misi: "Bukti terkirim. Tunggu disetujui.",
+  setuju: "Misi disetujui. Poin masuk.",
+  tolak: "Misi ditolak.",
+  kode: "Kode dikonfirmasi.",
 };
 
 export function errText(code: string | null): string | null {

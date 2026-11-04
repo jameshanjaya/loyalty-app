@@ -8,11 +8,13 @@ import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { CASHIER_SESSION_MS, canCancel } from "../loyalty";
 import { LIMITS, enforceLimit } from "../ratelimit";
+import { confirmRedeemCode, expireCodes } from "../points-flow";
 import { cancelOwn, giveBirthday, loginCashier, manualRedeem, manualStamp, openClaim } from "../service";
 import { clearCookie, COOKIE, loadCashier, setSessionCookie } from "../session";
 import { signClaim } from "../tokens";
 import { clock } from "../time";
 import {
+  cashierCodePage,
   cashierDeskPage,
   cashierLoginPage,
   cashierQrPage,
@@ -77,6 +79,7 @@ export async function handleCashier(app: App): Promise<Response | null> {
   if (!cashier) return redirect("/kasir");
 
   if (path === "/kasir/meja" && request.method === "GET") {
+    await expireCodes(db, now);
     const feed = await repo.outletFeed(db, cashier.outlet.id);
     const last = await repo.latestOpenActivity(db, cashier.sessionId);
     const cancelId =
@@ -272,6 +275,27 @@ export async function handleCashier(app: App): Promise<Response | null> {
     const id = decodeURIComponent(path.slice("/kasir/qr/".length, -"/batal".length));
     await repo.markClaimCancelled(db, id, cashier.sessionId);
     return redirect("/kasir/meja");
+  }
+
+  if (path === "/kasir/kode" || path.startsWith("/kasir/kode/")) {
+    const fromPath = path.startsWith("/kasir/kode/") ? decodeURIComponent(path.slice("/kasir/kode/".length)) : "";
+    const filled = /^\d{5}$/.test(fromPath) ? fromPath : "";
+    if (request.method === "POST") {
+      if (!sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
+      const limited = await enforceLimit(db, `kode:${cashier.sessionId}`, now, { windowMs: 10 * 60_000, limit: 15 });
+      if (!limited.ok) return go("/kasir/kode", "pinwait");
+      const form = await request.formData();
+      const result = await confirmRedeemCode(db, {
+        brandId: cashier.brand.id,
+        code: String(form.get("kode") || ""),
+        outletId: cashier.outlet.id,
+        sessionId: cashier.sessionId,
+        now,
+      });
+      if (!result.ok) return go("/kasir/kode", result.error);
+      return redirect(`/kasir/meja?ok=kode&siapa=${encodeURIComponent(result.masked + " · " + result.label)}`);
+    }
+    return html(cashierCodePage({ brand: cashier.brand.short_name, code: filled, params: url.searchParams }));
   }
 
   return html(messagePage("Tidak ketemu", "Halaman kasir itu tidak ada.", "/kasir/meja"), 404);

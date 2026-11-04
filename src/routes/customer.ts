@@ -1,4 +1,7 @@
 import { birthdayStatus } from "../birthday";
+import { formatPoints, tierChoices } from "../points";
+import * as pdb from "../points-db";
+import { expireCodes } from "../points-flow";
 import { html, isPrefetch, readCookie, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
 import { safeNext } from "../format";
@@ -189,6 +192,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
   if (path === "/kartu" && request.method === "GET") {
     if (signup) return redirect("/profil");
     if (!member) return redirect("/masuk");
+    await expireCodes(db, now);
     const brands = await repo.listBrands(db, true);
     if (!brands.length) return html(emptyDbPage());
     const wanted = url.searchParams.get("merek");
@@ -204,6 +208,17 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       days: brand.birthday_days,
     });
     const birthdayUsed = offer.open ? await repo.birthdayTaken(db, member.id, brand.id, offer.rewardYear) : true;
+    const tiers = await pdb.listTiers(db, brand.id);
+    const choice = tierChoices(
+      cards.get(brand.id)?.stamps ?? 0,
+      tiers.map((tier) => ({ stamps: tier.stamps, reward: tier.reward_text })),
+    );
+    const tierView = tiers.map((tier) => ({
+      id: tier.id,
+      stamps: tier.stamps,
+      reward: tier.reward_text,
+      ready: choice.available.some((item) => item.stamps === tier.stamps && item.reward === tier.reward_text),
+    }));
     return html(
       cardPage({
         member,
@@ -215,6 +230,8 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         now,
         params: url.searchParams,
         birthday: offer.open && !birthdayUsed ? brand.birthday_reward : null,
+        points: formatPoints(await pdb.pointsBalance(db, member.id)),
+        tiers: tierView,
       }),
     );
   }
