@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup desain Loyalty Bos</title>
+<link rel="stylesheet" href="screen.css" />
+</head>
+<body>
+<div class="gallery">
+  <h1>Mockup desain</h1>
+  <p>Layar statis, data contoh. Belum dipakai di aplikasi. Poin Side Quest di contoh berlaku 60 hari.</p>
+  <section class="brand-block"><h2>Loft25</h2><div class="links" id="loft25"></div></section>
+  <section class="brand-block"><h2>Soto Oseng</h2><div class="links" id="soto"></div></section>
+  <section class="brand-block"><h2>Krispyporkk</h2><div class="links" id="krispy"></div></section>
+</div>
+<script>
+const screens = [["kartu", "Kartu"], ["quest", "Side Quest"], ["hadiah", "Hadiah"], ["kode", "Kode tukar"], ["profil", "Profil"]];
+for (const id of ["loft25", "soto", "krispy"]) {
+  document.getElementById(id).innerHTML = screens
+    .map(([key, label]) => `<a href="screen.html?brand=${id}&screen=${key}">${label}</a>`)
+    .join("");
+}
+</script>
+</body>
+</html>

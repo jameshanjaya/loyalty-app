@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup Loyalty Bos</title>
+<link rel="stylesheet" href="screen.css" />
+</head>
+<body>
+<main class="phone" id="app"></main>
+<script>
+const CUP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 8h8v5a4 4 0 0 1-8 0V8z"/><path d="M15 9.5h1.8a2.2 2.2 0 0 1 0 4.4H15"/><path d="M8 20h6"/></svg>`;
+const CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M5 12.5 9.2 17 19 7"/></svg>`;
+const LEAF = `<svg viewBox="0 0 24 24" fill="none" stroke="#6a4a12" stroke-width="2"><path d="M5 19C14 19 19 12 19 5 12 5 5 8 5 19z"/><path d="M8 16c2-2 4-5 6-8"/></svg>`;
+const NAV = [
+  ["kartu", "Kartu", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 10h8M8 14h5"/></svg>`],
+  ["quest", "Side Quest", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3.5 14.4 8.4 19.6 9.1 15.8 12.8 16.7 18 12 15.5 7.3 18 8.2 12.8 4.4 9.1 9.6 8.4z"/></svg>`],
+  ["hadiah", "Hadiah", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="8" rx="1.4"/><path d="M12 11v8M4.5 14.5h15"/><path d="M12 11c-1.8-3.4-5-3.2-5-.8 0 1.6 2.2.8 5 .8 2.8 0 5 .8 5-.8 0-2.4-3.2-2.6-5 .8z"/></svg>`],
+  ["profil", "Profil", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.1"/><path d="M5.6 19.2c1.3-2.7 3.5-3.9 6.4-3.9s5.1 1.2 6.4 3.9"/></svg>`],
+];
+const ICO = {
+  cam: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-2h6l2 2h3v10H4z"/><circle cx="12" cy="13" r="3.2"/></svg>`,
+  thread: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7h8M8 12h8M8 17h5"/><circle cx="5" cy="7" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="17" r="1" fill="currentColor"/></svg>`,
+  spark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>`,
+  gift: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="8" rx="1.4"/><path d="M12 11v8"/></svg>`,
+  cup: CUP,
+  bowl: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 10h14c-.6 5-3.2 8-7 8s-6.4-3-7-8z"/><path d="M8 10c.4-3 1.6-4 4-4s3.6 1 4 4"/></svg>`,
+  ice: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 14c0 3 1.8 5 4 5s4-2 4-5H8z"/><circle cx="9" cy="9" r="2"/><circle cx="13" cy="8" r="2.2"/><circle cx="16" cy="11" r="1.6"/></svg>`,
+};
+
+const brands = {
+  loft25: {
+    key: "loft25",
+    short: "Loft25",
+    level: "Matcha Regular",
+    next: "Matcha Master",
+    pct: 62,
+    stamps: 6,
+    lead: "4 stamp lagi dapat free matcha",
+    rule: "Min. Rp50.000 · 10 stamp = free matcha",
+    reward: "Milk tea",
+    code: "48291",
+    slides: [
+      ["../public/banners/loft-1.jpg", "PROMO", "Matcha Strawberry", "Beli 2 lebih hemat"],
+      ["../public/banners/loft-2.jpg", "BARU", "Matcha pagi", "Whisk segar tiap hari"],
+    ],
+    gifts: [
+      ["Upsize", "1", "cup"],
+      ["Coffee", "2", "cup"],
+      ["Milk tea", "2.5", "cup"],
+      ["Matcha", "3", "cup"],
+    ],
+  },
+  soto: {
+    key: "soto",
+    short: "Soto Oseng",
+    level: "Penikmat Soto",
+    next: "Sobat Bang Jem",
+    pct: 48,
+    stamps: 4,
+    lead: "6 stamp lagi dapat Soto Oseng paket",
+    rule: "Ada oseng babi · 10 stamp = paket",
+    reward: "Es teh",
+    code: "19384",
+    slides: [
+      ["../public/banners/soto-1.jpg", "JUMAT", "Paket Jumat", "Oseng + es teh manis"],
+      ["../public/banners/soto-2.jpg", "HANGAT", "Oseng panas", "Gurih, habis cepat"],
+    ],
+    gifts: [
+      ["Es teh", "1", "cup"],
+      ["Kerupuk", "1.5", "bowl"],
+      ["Es jeruk", "2", "cup"],
+      ["Paket kecil", "3", "bowl"],
+    ],
+  },
+  krispy: {
+    key: "krispy",
+    short: "Krispyporkk",
+    level: "Crispy Fan",
+    next: "Crispy Master",
+    pct: 40,
+    stamps: 2,
+    lead: "8 stamp lagi dapat diskon 50%",
+    rule: "Min. Rp100.000 · diskon di kasir",
+    reward: "Es krim",
+    code: "77021",
+    slides: [
+      ["../public/banners/krispy-1.jpg", "BARU", "Crispy Bowl", "Nasi tambahan Rp5.000"],
+      ["../public/banners/krispy-2.jpg", "GARING", "Kulit renyah", "Pedas, gelap, habis"],
+    ],
+    gifts: [
+      ["Nasi +1", "1", "bowl"],
+      ["Saus", "1.5", "bowl"],
+      ["Es krim", "2", "ice"],
+      ["Crispy bite", "3", "bowl"],
+    ],
+  },
+};
+
+const q = new URLSearchParams(location.search);
+const brand = brands[q.get("brand")] || brands.loft25;
+const screen = q.get("screen") || "kartu";
+document.body.dataset.brand = brand.key;
+document.title = `${brand.short} · ${screen}`;
+
+function coin(n) {
+  return `<span class="poin"><span class="coin">${LEAF}</span><b>${n}</b> Poin</span>`;
+}
+function nav(on) {
+  return `<nav class="tabbar">${NAV.map(([id, label, icon]) => `<a class="${on === id ? "on" : ""}" href="screen.html?brand=${brand.key}&screen=${id}">${icon}<span>${label}</span></a>`).join("")}</nav>`;
+}
+function stamps(n) {
+  let html = "";
+  for (let i = 1; i <= 10; i++) {
+    const on = i <= n;
+    html += `<div class="stamp${on ? " on" : ""}${i === n ? " fresh" : ""}">${on ? CUP : i}</div>`;
+  }
+  return `<div class="stamps">${html}</div>`;
+}
+function ring(pct) {
+  const c = 2 * Math.PI * 28;
+  const off = c * (1 - pct / 100);
+  return `<div class="ring">${`<svg viewBox="0 0 72 72"><circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="7"/><circle cx="36" cy="36" r="28" fill="none" stroke="#ffe08a" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 36 36)"/></svg>`}<b>${pct}</b></div>`;
+}
+function burst() {
+  return `<div class="burst" aria-hidden="true">${"<i></i>".repeat(6)}</div>`;
+}
+function qr() {
+  const n = 21;
+  let h = brand.key.length * 17;
+  const cells = [];
+  const finder = (x, y) => {
+    const boxes = [[0, 0], [n - 7, 0], [0, n - 7]];
+    return boxes.some(([ox, oy]) => x >= ox && x < ox + 7 && y >= oy && y < oy + 7);
+  };
+  const finderOn = (x, y) => {
+    const boxes = [[0, 0], [n - 7, 0], [0, n - 7]];
+    for (const [ox, oy] of boxes) {
+      if (x < ox || y < oy || x >= ox + 7 || y >= oy + 7) continue;
+      const lx = x - ox, ly = y - oy;
+      if (lx === 0 || ly === 0 || lx === 6 || ly === 6) return true;
+      if (lx >= 2 && lx <= 4 && ly >= 2 && ly <= 4) return true;
+      return false;
+    }
+    return false;
+  };
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      h = (h * 33 + x * 13 + y) % 97;
+      const on = finder(x, y) ? finderOn(x, y) : h > 46;
+      if (on) cells.push(`<rect x="${x}" y="${y}" width="1" height="1"/>`);
+    }
+  }
+  return `<svg class="qr" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges">${cells.join("")}</svg>`;
+}
+
+function kartu() {
+  const slides = brand.slides.map(([img, kicker, title, sub]) => `
+    <article class="slide" style="background-image:url('${img}')">
+      <div class="slide-copy"><div class="kicker">${kicker}</div><h2>${title}</h2><p>${sub}</p></div>
+    </article>`).join("");
+  return `
+    <header class="stage">
+      <div class="reel">${slides}</div>
+      <div class="dots"><i class="on"></i><i></i></div>
+    </header>
+    <section class="sheet">
+      <div class="who">
+        <div><div class="eyebrow">${brand.short.toUpperCase()}</div><h1 class="display">Halo, Rina</h1></div>
+        ${coin("3")}
+      </div>
+      <section class="pass">
+        ${burst()}
+        <div class="pass-top"><span>Kartu stamp</span><b>${brand.stamps}/10</b></div>
+        ${stamps(brand.stamps)}
+        <p class="lead">${brand.lead}</p>
+        <p class="fine">${brand.rule}</p>
+      </section>
+    </section>
+    ${nav("kartu")}`;
+}
+
+function quest() {
+  const items = [
+    ["done", "cam", "Foto & review Google", "new", "Selesai", 100, "0.5"],
+    ["", "thread", "Post Threads tag kami", "", "Belum minggu ini", 0, "0.5"],
+    ["", "spark", "IG Story tag kami", "lim", "Belum minggu ini", 35, "1"],
+  ];
+  const cards = items.map(([cls, ico, title, tag, status, pct, pts]) => `
+    <article class="quest ${cls}">
+      <div class="qico">${ICO[ico]}</div>
+      <div style="flex:1;min-width:0">
+        <h3>${title}${tag === "new" ? `<span class="tag new">NEW</span>` : tag === "lim" ? `<span class="tag lim">LIMITED</span>` : ""}</h3>
+        <p class="fine">${pts} poin · ${status}</p>
+        <div class="qbar"><span style="width:${pct}%"></span></div>
+      </div>
+      ${cls === "done" ? `<span class="check">${CHECK}</span>` : ""}
+    </article>`).join("");
+  return `
+    <header class="hero-panel">
+      <div class="kicker">SIDE QUEST</div>
+      <div class="who" style="align-items:center">
+        <h1 class="display" style="font-size:1.7rem">Kumpulin Poin</h1>
+        ${coin("3")}
+      </div>
+      <div class="level">
+        ${ring(brand.pct)}
+        <div style="flex:1">
+          <b>${brand.level}</b>
+          <div class="qbar"><span style="width:${brand.pct}%"></span></div>
+          <p class="fine">2 Poin lagi menuju ${brand.next}</p>
+        </div>
+      </div>
+      <div class="expiry">
+        <span class="soon-badge">SEGERA HANGUS</span>
+        <p>1.5 poin hangus tanggal 15 Nov</p>
+        <p class="fine">Poin Side Quest berlaku 60 hari</p>
+      </div>
+    </header>
+    ${cards}
+    <article class="quest locked">
+      <div class="qico">?</div>
+      <div>
+        <h3>Quest rahasia</h3>
+        <p class="fine">Selesaikan side quest dulu. Ada hadiah yang belum kelihatan.</p>
+        <p class="lock">Terbuka setelah 10 Poin</p>
+      </div>
+    </article>
+    ${nav("quest")}`;
+}
+
+function hadiah() {
+  const cards = brand.gifts.map(([name, cost, ico]) => `
+    <article class="gift">
+      <div class="face">${ICO[ico]}</div>
+      <h3>${name}</h3>
+      <div class="price">${coin(cost)}</div>
+    </article>`).join("");
+  return `
+    <div class="shop-head">
+      <div><div class="eyebrow">HADIAH</div><h1 class="display">Toko</h1><p class="fine">${brand.short}</p></div>
+      ${coin("3")}
+    </div>
+    <div class="grid">${cards}</div>
+    ${nav("hadiah")}`;
+}
+
+function kode() {
+  return `
+    <div class="code-wrap">
+      <div class="eyebrow">KODE TUKAR</div>
+      <div class="digits">${brand.code.split("").join(" ")}</div>
+      <p class="fine">${brand.reward} · ${brand.short}</p>
+      <section class="codebox">
+        ${qr()}
+        <div class="timer">Berlaku 08:42</div>
+        <div class="track"><span></span></div>
+        <p class="fine">Kasih ke kasir, atau minta mereka scan.</p>
+      </section>
+    </div>
+    ${nav("hadiah")}`;
+}
+
+function profil() {
+  return `
+    <section class="idcard">
+      <div class="eyebrow" style="color:rgba(255,255,255,.8)">${brand.short.toUpperCase()}</div>
+      <h1>Rina Pratiwi</h1>
+      <p class="fine">Member sejak Agu 2026</p>
+      <div class="level">
+        ${ring(brand.pct)}
+        <div><b>${brand.level}</b><p class="fine">3 Poin · berlaku 60 hari</p></div>
+      </div>
+    </section>
+    <section class="card rows" style="margin-top:12px;padding:4px 16px 8px">
+      <div class="row"><span>WhatsApp</span><b>0812 **** 4567</b></div>
+      <div class="row"><span>Ulang tahun</span><b>4 Nov</b></div>
+      <div class="row"><span>Poin hangus</span><b>1.5 · 15 Nov</b></div>
+    </section>
+    <a class="btn line" href="#">Keluar</a>
+    ${nav("profil")}`;
+}
+
+const views = { kartu, quest, hadiah, kode, profil };
+document.getElementById("app").innerHTML = (views[screen] || kartu)();
+</script>
+</body>
+</html>
