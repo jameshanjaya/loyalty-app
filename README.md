@@ -180,7 +180,7 @@ Setelah login Google dan profil lengkap, pelanggan mengetuk **Verifikasi via WA*
 
 ## Stamp dari Side Quest
 
-Side Quest menambah stamp di kartu merek itu, bukan saldo poin terpisah. Hadiah quest cuma 0,25, 0,5, 0,75, atau 1 stamp. Pecahan yang belum genap tampil sebagai `0,75/1 menuju stamp berikutnya`. Empat perempat jadi satu stamp utuh, lalu sisa pecahan tetap di kartu. Pecahan itu tidak hangus. Menu pelanggan: Kartu, Side Quest, Redeem, Profil. Koin poin dan tulisan hangus tidak ditampilkan. Tabel poin di database tetap ada, tapi tidak dipakai di aplikasi pelanggan.
+Side Quest menambah stamp di kartu merek itu, bukan saldo poin terpisah. Hadiah quest cuma 0,25, 0,5, 0,75, atau 1 stamp. Pecahan yang belum genap tampil sebagai `0,75/1 menuju stamp berikutnya`. Empat perempat jadi satu stamp utuh, lalu sisa pecahan tetap di kartu. Pecahan itu tidak hangus. Menu pelanggan: Kartu, Redeem, Profil. Misi ada di kartu, bagian Bonus Stamp. Koin poin dan tulisan hangus tidak ditampilkan. Tabel poin di database tetap ada, tapi tidak dipakai di aplikasi pelanggan.
 
 ## Tampilan merek
 
