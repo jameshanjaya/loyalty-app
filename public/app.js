@@ -186,7 +186,7 @@ function bootBirthday() {
         const days = Math.floor(total / 1440);
         const hours = Math.floor((total % 1440) / 60);
         const minutes = total % 60;
-        label.textContent = `Claim your birthday gift in ${days} days ${hours} hours ${minutes} minutes`;
+        label.textContent = `Hadiah ultah dalam ${days} hari ${hours} jam ${minutes} menit`;
       }
     };
     tick();

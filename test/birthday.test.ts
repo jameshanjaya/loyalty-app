@@ -57,7 +57,7 @@ describe("hadiah ulang tahun", () => {
     expect(claimed).toEqual({ show: true, phase: "claimed", target: jakarta(2027, 12, 26) });
     expect(birthdayNotice(null, dec20, yearEnd, new Set())).toEqual({ show: false });
     expect(birthdayNotice("1990-01-02", dec20, { ...yearEnd, active: false }, new Set())).toEqual({ show: false });
-    expect(countdownText(dec20 + 90 * 60_000, dec20)).toBe("Claim your birthday freebies in 0 days 1 hours 30 minutes");
+    expect(countdownText(dec20 + 90 * 60_000, dec20)).toBe("Hadiah ultah dalam 0 hari 1 jam 30 menit");
   });
 
   it("Hari H: hitung mundur, terbuka di tanggalnya, tutup besoknya, sekali, dan tanggal baru diblokir", () => {

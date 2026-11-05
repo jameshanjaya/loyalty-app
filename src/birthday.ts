@@ -114,7 +114,7 @@ export function countdownText(target: number, now: number): string {
   const days = Math.floor(total / 1440);
   const hours = Math.floor((total % 1440) / 60);
   const minutes = total % 60;
-  return `Claim your birthday freebies in ${days} days ${hours} hours ${minutes} minutes`;
+  return `Hadiah ultah dalam ${days} hari ${hours} jam ${minutes} menit`;
 }
 
 export type BirthdayDeny = "ok" | "missing" | "closed" | "used" | "fresh" | "off";

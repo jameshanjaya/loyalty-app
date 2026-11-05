@@ -84,7 +84,7 @@ function doc(title: string, inner: string, theme = "#6ea564", brandId = ""): str
 </head>
 <body>
 ${inner}
-<script src="/app.js?v=13" defer></script>
+<script src="/app.js?v=14" defer></script>
 </body>
 </html>`;
 }
@@ -310,15 +310,15 @@ function flipDigits(n: number): string {
 function birthdayBlock(notice: BirthdayNotice, reward: string, brandId: string, now: number): string {
   if (!notice.show) return "";
   if (notice.phase === "open") {
-    return `<section class="bday"><div class="kicker">Claim your birthday gift</div><h3>${esc(reward)}</h3><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(brandId)}" /><button class="btn btn-solid">Claim your birthday gift</button></form></section>`;
+    return `<section class="bday"><div class="kicker">Klaim hadiah ultah</div><h3>${esc(reward)}</h3><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(brandId)}" /><button class="btn btn-solid">Klaim hadiah ultah</button></form></section>`;
   }
   const left = Math.max(0, notice.target - now);
   const days = Math.floor(left / 86_400_000);
   const hours = Math.floor((left % 86_400_000) / 3_600_000);
   const minutes = Math.floor((left % 3_600_000) / 60_000);
   const seconds = Math.floor((left % 60_000) / 1000);
-  const note = notice.phase === "claimed" ? `<p class="bday-note">Udah diklaim, see you next year</p>` : "";
-  return `<section class="bday" data-bday="${notice.target}"><div class="kicker">Claim your birthday gift in…</div>${note}<div class="flip"><div class="u"><div data-dd>${flipDigits(days)}</div><small>HARI</small></div><div class="u"><div data-hh>${flipDigits(hours)}</div><small>JAM</small></div><div class="u"><div data-mm>${flipDigits(minutes)}</div><small>MENIT</small></div><div class="u"><div data-ss>${flipDigits(seconds)}</div><small>DETIK</small></div></div></section>`;
+  const note = notice.phase === "claimed" ? `<p class="bday-note">Udah diklaim, sampai tahun depan</p>` : "";
+  return `<section class="bday" data-bday="${notice.target}"><div class="kicker">Hadiah ultah dalam…</div>${note}<div class="flip"><div class="u"><div data-dd>${flipDigits(days)}</div><small>HARI</small></div><div class="u"><div data-hh>${flipDigits(hours)}</div><small>JAM</small></div><div class="u"><div data-mm>${flipDigits(minutes)}</div><small>MENIT</small></div><div class="u"><div data-ss>${flipDigits(seconds)}</div><small>DETIK</small></div></div></section>`;
 }
 
 function tabbar(on: "kartu" | "hadiah" | "profil", brandId: string): string {
@@ -495,7 +495,7 @@ export function cardPage(input: {
         if (row.type === "redeem") return `<div class="row"><div><b class="reward">Tukar ${esc(row.reward_text)}</b><div class="small muted">${esc(row.outlet_name || row.short_name)}</div></div><div class="muted">${esc(when)}</div></div>`;
         if (row.type === "cancel") return `<div class="row"><div><b class="muted">Dibatalkan</b></div><div class="muted">${esc(when)}</div></div>`;
         if (row.type === "join") return `<div class="row"><div><b>Gabung kartu</b></div><div class="muted">${esc(when)}</div></div>`;
-        if (row.type === "birthday") return `<div class="row"><div><b class="reward">Birthday Freebies</b><div class="small muted">${esc(row.note)}</div></div><div class="muted">${esc(when)}</div></div>`;
+        if (row.type === "birthday") return `<div class="row"><div><b class="reward">Hadiah ultah</b><div class="small muted">${esc(row.note)}</div></div><div class="muted">${esc(when)}</div></div>`;
         const label = row.voided ? "Stamp dibatalkan" : "+1 stamp";
         return `<div class="row"><div><b class="${row.voided ? "muted" : "plus"}">${label}</b><div class="small muted">${esc(row.outlet_name || "")}</div></div><div class="muted">${esc(when)}</div></div>`;
       })
@@ -586,7 +586,7 @@ export function cardPage(input: {
       ${flashes(input.params)}
       <div class="rail" data-rail>${rail}</div>
       <div class="raildots" aria-hidden="true">${dots}</div>
-      <button type="button" class="btn btn-solid"${locked ? " data-open-verify" : " data-scan"}>${locked ? "🔒 Collect Stamps" : "Collect Stamps"}</button>
+      <button type="button" class="btn btn-solid"${locked ? " data-open-verify" : " data-scan"}>${locked ? "🔒 Kumpulin Stamp" : "Kumpulin Stamp"}</button>
       <p class="fine center">${locked ? "Verifikasi dulu biar stamp-nya kebuka." : "Arahin kamera ke QR di kasir ya"}</p>
       ${rests}
       </div>
@@ -660,7 +660,7 @@ export function successPage(input: {
     input.kind === "stamp"
       ? "Yeay, stamp kamu nambah!"
       : input.kind === "birthday"
-        ? `Birthday Freebies ${input.brand.short_name}!`
+        ? `Hadiah ultah ${input.brand.short_name}!`
         : `Reward ${input.brand.short_name} ditukar!`;
   const others = input.otherBrands.length ? `Cek juga kartu kamu di ${input.otherBrands.join(" & ")}` : "Kartu kamu tersimpan di HP ini";
   return doc(
@@ -1247,7 +1247,7 @@ export function profilePage(input: {
               </section>
               <form class="card" method="post" action="/profil">
                 <p class="fine">${input.wa ? esc(maskWa(input.wa)) : ""}${input.email ? ` · ${esc(input.email)}` : ""}</p>
-                ${input.birthday ? `<p><b>Ulang tahun ${esc(formatBirthdayId(input.birthday))}</b> udah tersimpan. Tidak bisa diubah sendiri.</p>` : `${birthdayFields(null)}<p class="fine">Sekali simpan, dikunci. Birthday Freebies baru bisa 30 hari kemudian.</p>`}
+                ${input.birthday ? `<p><b>Ulang tahun ${esc(formatBirthdayId(input.birthday))}</b> udah tersimpan. Tidak bisa diubah sendiri.</p>` : `${birthdayFields(null)}<p class="fine">Sekali simpan, dikunci. Hadiah ultah baru bisa 30 hari kemudian.</p>`}
                 ${input.consent ? `<p class="fine">Persetujuan promo dan ulang tahun sudah tercatat.</p>` : `<label class="checkline"><input type="checkbox" name="setuju" value="on" required /> Aku setuju nerima promo dan ucapan ulang tahun (UU PDP).</label>`}
                 ${!input.birthday || !input.consent ? `<button class="btn btn-solid">Simpan</button>` : ""}
               </form>
