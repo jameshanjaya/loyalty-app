@@ -189,6 +189,8 @@ Di **Setting Program**, tiap merek punya warna utama, warna lembut, warna tombol
 ## Cara pakai sehari-hari
 
 - Pelanggan scan QR stan, isi nama, nomor WA, dan PIN. Login di HP itu bertahan 365 hari. Kalau mereka membuka aplikasi lagi setelah sekitar sehari, cookie diperpanjang 365 hari dari kunjungan itu. Keluar tetap menghapus cookie. Di HP lain, mereka masuk dengan nomor WA + PIN.
+- Di kartu, tombol **Collect Stamps** ada di bawah kotak stamp. Kamera belakang membuka di halaman itu untuk scan QR kasir (stamp, tukar, atau ultah). Kalau kamera ditolak, kasir ketik nomor WA. QR dari situs lain ditolak.
+- Di kartu, tombol **Collect Stamps** ada tepat di bawah kotak stamp. Kamera belakang membuka di halaman itu untuk scan QR kasir (stamp, tukar, atau ultah). Kalau kamera ditolak, minta kasir ketik nomor WA. QR dari situs lain ditolak.
 - Kasir masuk dengan PIN outlet. Satu outlet hanya memberi stamp untuk mereknya. Di **Outlet & PIN**, owner bisa menandai akun member sebagai **Staf** outlet itu (nomor WA atau email). Kasir outlet itu tidak bisa kasih stamp atau tukar ke akun staf. Percobaan yang ditolak muncul di dashboard, bagian **Yang perlu dicek**.
 - Satu transaksi paling satu stamp. Kasir harus mencentang syarat. Teks centangnya diatur di **Setting Program**.
 - Satu pelanggan paling 2 stamp per merek per hari. Angka ini bisa diubah di Setting Program.

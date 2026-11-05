@@ -86,9 +86,41 @@ function bootReel() {
   });
 }
 
+function bootScan() {
+  let loading = false;
+  document.querySelectorAll("[data-scan]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (window.__loyaltyScan) {
+        window.__loyaltyScan();
+        return;
+      }
+      if (loading) return;
+      loading = true;
+      const tag = document.createElement("script");
+      tag.type = "module";
+      tag.src = "/scan.js";
+      tag.onerror = () => {
+        loading = false;
+        const root = document.querySelector("[data-scanner]");
+        const fallback = root && root.querySelector("[data-scan-fallback]");
+        if (root) root.hidden = false;
+        if (fallback) fallback.hidden = false;
+      };
+      document.body.appendChild(tag);
+    });
+  });
+  document.querySelectorAll("[data-scan-cancel]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const root = document.querySelector("[data-scanner]");
+      if (root) root.hidden = true;
+    });
+  });
+}
+
 function boot() {
   bootPoll();
   bootReel();
+  bootScan();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {

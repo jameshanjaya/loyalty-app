@@ -381,6 +381,8 @@ export function cardPage(input: {
       <section class="card">
         <div class="split"><h2>Kartu stamp</h2><b class="count">${stamps}/${input.brand.stamps_required}</b></div>
         ${stampGrid(stamps, input.brand.stamps_required, stampMark(input.brand))}
+        <button type="button" class="btn btn-solid" data-scan>Collect Stamps</button>
+        <p class="fine">Arahin kamera ke QR di kasir ya</p>
         <p class="lead">${esc(copy.headline)}</p>
         <p class="fine">${esc(ruleLine(input.brand))}</p>
         ${(input.tiers || [])
@@ -396,6 +398,23 @@ export function cardPage(input: {
       ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id, input.booking || null, Boolean(input.pickBooking))}
       ${input.birthday ? `<section class="bday"><div class="kicker">ULANG TAHUN</div><h3>Hadiah: ${esc(input.birthday)}</h3><p>Sekali setahun. Tukar di sini, kasir masukkan kodenya.</p><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(input.brand.id)}" /><button class="btn btn-solid">Tukar hadiah ultah</button></form></section>` : ""}
       <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
+      <div class="scan-sheet" data-scanner hidden>
+        <div class="scan-top">
+          <p>Arahin kamera ke QR di kasir ya</p>
+          <button type="button" class="textlink" data-scan-cancel>Batal</button>
+        </div>
+        <div class="scan-stage" data-scan-stage>
+          <video data-scan-video playsinline muted autoplay></video>
+          <div class="scan-frame" aria-hidden="true"></div>
+        </div>
+        <p class="scan-msg" data-scan-msg></p>
+        <button type="button" class="btn btn-line" data-scan-torch hidden>Senter</button>
+        <div class="scan-fallback" data-scan-fallback hidden>
+          <h2>Minta kasir ketik nomor WA kamu</h2>
+          <p class="fine">Kamera tidak bisa dipakai. Kasir bisa ketik nomor WA kamu di tablet. Atau buka kamera HP dan scan QR di kasir dari situ.</p>
+          <button type="button" class="btn btn-solid" data-scan-cancel>Tutup</button>
+        </div>
+      </div>
       ${tabbar("kartu", input.brand.id)}
     </main>`,
     skin.accent,
