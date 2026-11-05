@@ -46,11 +46,11 @@ function doc(title: string, inner: string, theme = "#6ea564"): string {
 <link rel="manifest" href="/app.webmanifest" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/app.css" />
+<link rel="stylesheet" href="/app.css?v=7" />
 </head>
 <body>
 ${inner}
-<script src="/app.js" defer></script>
+<script src="/app.js?v=7" defer></script>
 </body>
 </html>`;
 }

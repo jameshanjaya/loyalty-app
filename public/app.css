@@ -428,28 +428,29 @@ td, th { padding: 8px 4px; border-bottom: 1px solid var(--line); vertical-align:
   box-shadow: 0 1px 2px rgba(0,0,0,.35);
 }
 .dot.on { width: 18px; background: white; }
-.tabbar {
-  position: fixed; z-index: 20; left: 0; right: 0; bottom: 0;
-  width: 100%; max-width: 440px; margin: 0 auto;
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 8px 8px calc(10px + env(safe-area-inset-bottom));
+nav.tabbar {
+  position: fixed; z-index: 30; left: 0; right: 0; bottom: 0;
+  width: min(440px, 100%); margin-left: auto; margin-right: auto;
+  display: flex; box-sizing: border-box;
+  padding: 8px 0 calc(10px + env(safe-area-inset-bottom));
   background: var(--page);
   border-top: 1px solid var(--glass-line);
   box-shadow: 0 -8px 24px rgba(20, 14, 8, .06);
 }
-.tabbar a {
-  display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; justify-content: center;
-  min-width: 0; width: 100%; gap: 2px; text-align: center;
+nav.tabbar > a {
+  flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 0; width: auto; gap: 2px; text-align: center;
   text-decoration: none; color: var(--muted);
   font-size: .68rem; font-weight: 800; letter-spacing: .01em;
 }
 .tabbar svg { width: 22px; height: 22px; }
 .tabbar a.on { color: var(--accent); }
-.bonus-list { display: flex; flex-direction: column; min-width: 0; }
+.bonus-list { display: flex; flex-direction: column; width: 100%; min-width: 0; }
 .bonus-item {
-  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto;
-  gap: 8px 10px; align-items: center;
-  padding: 12px 0; border-top: 1px solid var(--line); min-width: 0;
+  display: flex; flex-direction: row; align-items: center; gap: 10px;
+  width: 100%; box-sizing: border-box; min-width: 0;
+  padding: 12px 0; border-top: 1px solid var(--line);
+  text-decoration: none;
 }
 .bonus-ico {
   width: 36px; height: 36px; border-radius: 12px;
@@ -457,7 +458,8 @@ td, th { padding: 8px 4px; border-bottom: 1px solid var(--line); vertical-align:
   display: grid; place-items: center;
 }
 .bonus-ico svg { width: 18px; height: 18px; }
-.bonus-copy { min-width: 0; }
+.bonus-copy { flex: 1 1 auto; min-width: 0; }
+.bonus-side { flex: 0 0 auto; }
 .bonus-copy b, .bonus-copy p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bonus-copy b { font-size: .98rem; }
 .bonus-copy p { margin: 2px 0 0; color: var(--muted); font-size: .86rem; font-weight: 700; }
