@@ -158,6 +158,10 @@ Jangan taruh Client secret di chat atau di git. Kalau Google belum diisi, tombol
 
 Pelanggan baru dari Google mengisi nama, tanggal lahir, nomor WA, dan PIN dulu sebelum kartu terbuka. Tanggal lahir tidak bisa diubah sendiri setelah tersimpan. Owner bisa mengubahnya di halaman member. Kalau nomor WA itu sudah punya kartu, pelanggan memasukkan PIN kartu itu supaya akun Google-nya tersambung. Kalau nomor itu sudah tersambung ke Google lain, aplikasi menolak.
 
+## Rencana gaya bahasa (belum dipakai di aplikasi)
+
+Tulisan buat pelanggan nanti santai dan sama di semua merek. Pakai "kamu", kalimatnya pendek, emoji secukupnya. Contoh: "Yeay, stamp kamu nambah!", "Dikit lagi dapet matcha gratis", "Poin kamu mau hangus nih, buruan tukar", "Kirim WA-nya ya, biar nomor kamu ke-verif". Dashboard dan kasir tetap jelas, tapi tidak kaku. Mockup di `mockups/` sudah pakai gaya ini. Aplikasi yang jalan sekarang belum.
+
 ## Rencana verifikasi nomor WA (belum dibuat)
 
 Ini desain saja. Aplikasi belum menerima pesan WhatsApp.

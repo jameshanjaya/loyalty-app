@@ -38,14 +38,16 @@ const brands = {
     next: "Matcha Master",
     pct: 62,
     stamps: 6,
-    lead: "4 stamp lagi dapat free matcha",
-    rule: "Min. Rp50.000 · 10 stamp = free matcha",
+    hello: "Hai, Rina",
+    lead: "Dikit lagi dapet matcha gratis",
+    rule: "Belanja 50rb, dapet 1 stamp",
+    pop: "Yeay, stamp kamu nambah! 🎉",
     reward: "Milk tea",
     stamp: "whisk",
     code: "48291",
     slides: [
-      ["../public/banners/loft-1.jpg", "PROMO", "Matcha Strawberry", "Beli 2 lebih hemat"],
-      ["../public/banners/loft-2.jpg", "BARU", "Matcha pagi", "Whisk segar tiap hari"],
+      ["../public/banners/loft-1.jpg", "LAGI HITS", "Matcha Strawberry", "Dua cup, lebih hemat"],
+      ["../public/banners/loft-2.jpg", "PAGI", "Matcha pagi", "Whisk-nya fresh tiap hari"],
     ],
     gifts: [
       ["Upsize", "1", "cup"],
@@ -61,14 +63,16 @@ const brands = {
     next: "Sobat Bang Jem",
     pct: 48,
     stamps: 4,
-    lead: "6 stamp lagi dapat Soto Oseng paket",
-    rule: "Ada oseng babi · 10 stamp = paket",
+    hello: "Hai, Rina",
+    lead: "Dikit lagi dapet paket gratis",
+    rule: "Nota ada oseng babi, dapet 1 stamp",
+    pop: "Yeay, stamp kamu nambah! 🎉",
     reward: "Es teh",
     stamp: "bowl",
     code: "19384",
     slides: [
-      ["../public/banners/soto-1.jpg", "JUMAT", "Paket Jumat", "Oseng + es teh manis"],
-      ["../public/banners/soto-2.jpg", "HANGAT", "Oseng panas", "Gurih, habis cepat"],
+      ["../public/banners/soto-1.jpg", "JUMAT", "Paket Jumat", "Oseng + es teh, nagih"],
+      ["../public/banners/soto-2.jpg", "HANGAT", "Oseng panas", "Gurih, habis duluan"],
     ],
     gifts: [
       ["Es teh", "1", "cup"],
@@ -84,14 +88,16 @@ const brands = {
     next: "Crispy Master",
     pct: 40,
     stamps: 2,
-    lead: "8 stamp lagi dapat diskon 50%",
-    rule: "Min. Rp100.000 · diskon di kasir",
+    hello: "Hai, Rina",
+    lead: "Dikit lagi dapet diskon 50%",
+    rule: "Belanja 100rb, dapet 1 stamp",
+    pop: "Yeay, stamp kamu nambah! 🎉",
     reward: "Es krim",
     stamp: "plate",
     code: "77021",
     slides: [
-      ["../public/banners/krispy-1.jpg", "BARU", "Crispy Bowl", "Nasi tambahan Rp5.000"],
-      ["../public/banners/krispy-2.jpg", "GARING", "Kulit renyah", "Pedas, gelap, habis"],
+      ["../public/banners/krispy-1.jpg", "BARU DROP", "Crispy Bowl", "Nasi tambahannya cuma 5rb"],
+      ["../public/banners/krispy-2.jpg", "GARING", "Kulit renyah", "Pedas, gelap, ludes"],
     ],
     gifts: [
       ["Nasi +1", "1", "bowl"],
@@ -172,13 +178,14 @@ function kartu() {
     </header>
     <section class="sheet">
       <div class="who">
-        <div><div class="eyebrow">${brand.short.toUpperCase()}</div><h1 class="display">Halo, Rina</h1></div>
+        <div><div class="eyebrow">${brand.short.toUpperCase()}</div><h1 class="display">${brand.hello}</h1></div>
         ${coin("3")}
       </div>
       <section class="pass">
         ${burst()}
         <div class="pass-top"><span>Kartu stamp</span><b>${brand.stamps}/10</b></div>
         ${stamps(brand.stamps)}
+        <p class="lead">${brand.pop}</p>
         <p class="lead">${brand.lead}</p>
         <p class="fine">${brand.rule}</p>
       </section>
@@ -188,10 +195,10 @@ function kartu() {
 
 function quest() {
   const items = [
-    ["", "bowl", "Makan ayam pakai kuah gulai", "new", "Kasir cek nota · belum", 0, "1"],
-    ["done", "cam", "Foto & review Google", "", "Selesai", 100, "0.5"],
-    ["", "thread", "Post Threads tag kami", "", "Belum minggu ini", 0, "0.5"],
-    ["", "spark", "IG Story tag kami", "lim", "Belum minggu ini", 35, "1"],
+    ["", "bowl", "Makan ayam pakai kuah gulai", "new", "Kasir cek nota dulu", 0, "1"],
+    ["done", "cam", "Foto & review Google", "", "Beress", 100, "0.5"],
+    ["", "thread", "Post Threads, tag kita", "", "Minggu ini belum", 0, "0.5"],
+    ["", "spark", "IG Story, tag kita", "lim", "Minggu ini belum", 35, "1"],
   ].filter((item) => brand.key === "soto" || item[2] !== "Makan ayam pakai kuah gulai");
   const cards = items.map(([cls, ico, title, tag, status, pct, pts]) => `
     <article class="quest ${cls}">
@@ -207,7 +214,7 @@ function quest() {
     <header class="hero-panel">
       <div class="kicker">SIDE QUEST</div>
       <div class="who" style="align-items:center">
-        <h1 class="display" style="font-size:1.7rem">Kumpulin Poin</h1>
+        <h1 class="display" style="font-size:1.7rem">Kumpulin poin, yuk</h1>
         ${coin("3")}
       </div>
       <div class="level">
@@ -215,13 +222,13 @@ function quest() {
         <div style="flex:1">
           <b>${brand.level}</b>
           <div class="qbar"><span style="width:${brand.pct}%"></span></div>
-          <p class="fine">2 Poin lagi menuju ${brand.next}</p>
+          <p class="fine">2 poin lagi jadi ${brand.next}</p>
         </div>
       </div>
       <div class="expiry">
-        <span class="soon-badge">SEGERA HANGUS</span>
-        <p>1.5 poin hangus tanggal 15 Nov</p>
-        <p class="fine">Poin Side Quest berlaku 60 hari</p>
+        <span class="soon-badge">BURUAN</span>
+        <p>Poin kamu mau hangus nih, buruan tukar</p>
+        <p class="fine">1.5 poin hangus 15 Nov · tahan 60 hari</p>
       </div>
     </header>
     ${cards}
@@ -229,8 +236,8 @@ function quest() {
       <div class="qico">?</div>
       <div>
         <h3>Quest rahasia</h3>
-        <p class="fine">Selesaikan side quest dulu. Ada hadiah yang belum kelihatan.</p>
-        <p class="lock">Terbuka setelah 10 Poin</p>
+        <p class="fine">Selesain quest dulu. Ada kejutan yang belum keliatan.</p>
+        <p class="lock">Kunci sampai 10 poin</p>
       </div>
     </article>
     ${nav("quest")}`;
@@ -245,7 +252,7 @@ function hadiah() {
     </article>`).join("");
   return `
     <div class="shop-head">
-      <div><div class="eyebrow">HADIAH</div><h1 class="display">Toko</h1><p class="fine">${brand.short}</p></div>
+      <div><div class="eyebrow">HADIAH</div><h1 class="display">Tukar yang kamu mau</h1><p class="fine">${brand.short}</p></div>
       ${coin("3")}
     </div>
     <div class="grid">${cards}</div>
@@ -260,9 +267,9 @@ function kode() {
       <p class="fine">${brand.reward} · ${brand.short}</p>
       <section class="codebox">
         ${qr()}
-        <div class="timer">Berlaku 08:42</div>
+        <div class="timer">Masih 08:42</div>
         <div class="track"><span></span></div>
-        <p class="fine">Kasih ke kasir, atau minta mereka scan.</p>
+        <p class="fine">Kasih ke kasir, ya. Atau minta di-scan.</p>
       </section>
     </div>
     ${nav("hadiah")}`;
@@ -273,16 +280,16 @@ function profil() {
     <section class="idcard">
       <div class="eyebrow" style="color:rgba(255,255,255,.8)">${brand.short.toUpperCase()}</div>
       <h1>Rina Pratiwi</h1>
-      <p class="fine">Member sejak Agu 2026</p>
+      <p class="fine">Gabung dari Agu 2026</p>
       <div class="level">
         ${ring(brand.pct)}
-        <div><b>${brand.level}</b><p class="fine">3 Poin · berlaku 60 hari</p></div>
+        <div><b>${brand.level}</b><p class="fine">3 poin · tahan 60 hari</p></div>
       </div>
     </section>
     <section class="card rows" style="margin-top:12px;padding:4px 16px 8px">
       <div class="row"><span>WhatsApp</span><b>0812 **** 4567</b></div>
       <div class="row"><span>Ulang tahun</span><b>4 Nov</b></div>
-      <div class="row"><span>Poin hangus</span><b>1.5 · 15 Nov</b></div>
+      <div class="row"><span>Poin mau hangus</span><b>1.5 · 15 Nov</b></div>
     </section>
     <a class="btn line" href="#">Keluar</a>
     ${nav("profil")}`;
@@ -295,52 +302,52 @@ function detail() {
   ];
   const slides = photos.map(([img, cap], i) => `
     <article class="gslide" style="background-image:url('${img}')">
-      ${i === 0 ? `<span class="zoom">Ketuk untuk zoom</span>` : ""}
+      ${i === 0 ? `<span class="zoom">Ketuk buat zoom</span>` : ""}
     </article>`).join("");
   return `
     <div class="eyebrow">SIDE QUEST · SOTO OSENG</div>
     <h1 class="display" style="font-size:1.55rem;margin-top:4px">Makan ayam pakai kuah gulai <span class="tag new">NEW</span></h1>
-    <p class="fine">1 poin · sekali seminggu · kasir yang verifikasi</p>
+    <p class="fine">1 poin · sekali seminggu · kasir yang cek</p>
     <div class="gallery-reel" style="margin-top:14px">${slides}</div>
     <div class="dots" style="margin:8px 0 0"><i class="on"></i><i></i></div>
     <p class="gcap">Ayam dengan kuah gulai</p>
     <section class="card" style="padding:14px">
-      <h2 style="margin-bottom:10px">Cara ikut</h2>
+      <h2 style="margin-bottom:10px">Gampang, kok</h2>
       <div class="steps">
-        <div class="step"><span class="num">1</span><span>Pesan ayam yang pakai kuah gulai.</span></div>
-        <div class="step"><span class="num">2</span><span>Tunjukkan nota ke kasir.</span></div>
-        <div class="step"><span class="num">3</span><span>Kalau sesuai, kasir mencentang. Poin masuk setelah itu.</span></div>
+        <div class="step"><span class="num">1</span><span>Pesan ayam kuah gulai.</span></div>
+        <div class="step"><span class="num">2</span><span>Kasih liat nota ke kasir.</span></div>
+        <div class="step"><span class="num">3</span><span>Kasir centang, poin kamu masuk.</span></div>
       </div>
-      <a class="btn" href="#">Minta kasir verifikasi</a>
-      <p class="fine">Tidak perlu unggah foto untuk misi ini.</p>
+      <a class="btn" href="#">Kasir, cek nota aku ya</a>
+      <p class="fine">Misi ini nggak perlu upload foto.</p>
     </section>
     ${nav("quest")}`;
 }
 
 function verif() {
   return `
-    <div class="eyebrow">SETELAH PROFIL</div>
-    <h1 class="display" style="font-size:1.7rem;margin-top:6px">Verifikasi nomor WA</h1>
-    <p class="fine">Nama, tanggal lahir, dan nomor sudah tersimpan. Tinggal kirim satu pesan.</p>
+    <div class="eyebrow">HABIS ISI PROFIL</div>
+    <h1 class="display" style="font-size:1.7rem;margin-top:6px">Verifikasi nomor kamu</h1>
+    <p class="fine">Nama, tanggal lahir, sama nomornya udah kesimpen. Tinggal kirim WA.</p>
     <section class="card rows" style="margin-top:14px;padding:4px 16px">
       <div class="row"><span>Nama</span><b>Rina Pratiwi</b></div>
       <div class="row"><span>Lahir</span><b>4 Nov 1998</b></div>
       <div class="row"><span>WhatsApp</span><b>0812 3456 4567</b></div>
     </section>
-    <a class="wa-btn" href="https://wa.me/628111000222?text=VERIF-482913">Verifikasi via WA</a>
+    <a class="wa-btn" href="https://wa.me/628111000222?text=VERIF-482913">Kirim WA-nya ya</a>
     <p class="center" style="margin-top:12px"><span class="codechip">VERIF-482913</span></p>
-    <p class="fine center">Pesan ini sudah terisi. Kirim saja, jangan diubah. Berlaku 10 menit.</p>
-    <p class="fine center">Satu nomor hanya untuk satu akun.</p>`;
+    <p class="fine center">Kirim WA-nya ya, biar nomor kamu ke-verif. Pesannya udah keisi, jangan diubah. 10 menit aja.</p>
+    <p class="fine center">Satu nomor, satu akun.</p>`;
 }
 
 function tunggu() {
   return `
     <div class="code-wrap">
       <div class="spin"></div>
-      <h1 class="display" style="font-size:1.6rem">Menunggu pesan kamu…</h1>
-      <p class="fine">Kirim VERIF-482913 dari 0812 3456 4567. Kami cocokkan nomor pengirimnya.</p>
+      <h1 class="display" style="font-size:1.6rem">Nunggu pesan kamu…</h1>
+      <p class="fine">Kirim VERIF-482913 dari 0812 3456 4567. Nanti nomor pengirimnya kita cocokin.</p>
       <a class="wa-btn" href="https://wa.me/628111000222?text=VERIF-482913">Buka WA lagi</a>
-      <p class="center" style="margin-top:16px"><a href="#" style="font-weight:800;text-decoration:underline">Kirim kode OTP ke WA saya</a></p>
+      <p class="center" style="margin-top:16px"><a href="#" style="font-weight:800;text-decoration:underline">Kirim kode OTP ke WA aku</a></p>
     </div>`;
 }
 
@@ -349,8 +356,8 @@ function waok() {
     <div class="code-wrap celebrate">
       ${burst()}
       <div class="bigcheck">${CHECK}</div>
-      <h1 class="display" style="font-size:1.7rem">Nomor terverifikasi</h1>
-      <p class="fine">0812 3456 4567 sudah terhubung ke akun kamu.</p>
+      <h1 class="display" style="font-size:1.7rem">Nomor kamu ke-verif ✓</h1>
+      <p class="fine">0812 3456 4567 udah nyambung. Gas ke kartu.</p>
       <a class="btn" href="screen.html?brand=${brand.key}&screen=kartu">Lanjut ke kartu</a>
     </div>`;
 }
