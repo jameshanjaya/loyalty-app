@@ -195,7 +195,9 @@ npm run clone-loft-program -- --remote
 npm run clone-loft-program -- --remote --apply
 ```
 
-Perintah pertama hanya menampilkan rencana. `--apply` menulis ke D1. Menjalankan lagi memperbarui baris salinan yang sama, tidak membuat duplikat, dan tidak mengubah `active`. Kata `matcha` di teks yang disalin menjadi `free menu`, dan `Loft25` menjadi nama singkat merek tujuan, supaya kelihatan dan bisa diedit di dashboard.
+Perintah pertama hanya menampilkan rencana. `--apply` menulis ke D1. Menjalankan lagi memperbarui baris salinan yang sama, tidak membuat duplikat, dan tidak mengubah `active`. Kata `matcha` di teks yang disalin menjadi `free menu`, dan `Loft25` menjadi nama singkat merek tujuan, supaya kelihatan dan bisa diedit di dashboard. Bonus Stamp tidak ikut tersalin: tiga misi yang sama diisi migrasi `0014_bonus_missions.sql` untuk ketiga merek.
+
+Bonus Stamp tiap merek ada tiga, masing-masing 1 stamp dan sekali per pelanggan: Review di Google, Posting Threads, dan Story Instagram. Foto dicek Workers AI (`@cf/meta/llama-3.2-11b-vision-instruct`, paket gratis). Lolos langsung dapat stamp. Tidak lolos bisa upload ulang. Kalau AI ragu atau kuotanya habis, bukti masuk antrian **Menunggu dicek**. Akun IG diisi per merek di Setting Program.
 
 ## Cara pakai sehari-hari
 

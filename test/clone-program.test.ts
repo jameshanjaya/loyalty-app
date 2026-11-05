@@ -58,7 +58,7 @@ describe("salin program Loft25", () => {
     expect(plan.sql).toContain("birthday_window = 'day'");
     expect(plan.sql).toContain("c_soto-oseng_tier_loft_5");
     expect(plan.sql).toContain("c_krispyporkk_tier_loft_10");
-    expect(plan.sql).toContain("c_soto-oseng_misi_loft");
+    expect(plan.sql).not.toContain("misi_loft");
     expect(plan.sql).not.toMatch(/UPDATE brands SET[^;]*\bactive\b/);
     expect(plan.sql).toContain("SET active = 0 WHERE brand_id = 'soto-oseng'");
     const again = planClone({ source: loft, targets: [soto, kris], tiers, missions, photos: [] });

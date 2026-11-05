@@ -119,7 +119,6 @@ export function planClone(input: CloneInput): { sql: string; summary: string[] }
   const lines: string[] = ["BEGIN;"];
   const summary: string[] = [];
   const sourceTiers = input.tiers.filter((tier) => tier.brand_id === input.source.id);
-  const sourceMissions = input.missions.filter((mission) => mission.brand_id === input.source.id);
   for (const target of input.targets) {
     if (target.id === input.source.id) continue;
     const sets = PROGRAM_FIELDS.map((field) => {
@@ -156,53 +155,9 @@ export function planClone(input: CloneInput): { sql: string; summary: string[] }
     summary.push(
       `${target.short_name}: Redeem disalin dari Loft25 (${sourceTiers.map((tier) => `${tier.stamps} stamp = ${swapBrandCopy(tier.reward_text, target.short_name)}`).join("; ") || "tidak ada"}). Baris Redeem lama dimatikan, tidak dihapus. Id: ${tierIds.join(", ") || "-"}.`,
     );
-    lines.push(
-      `UPDATE missions SET active = 0 WHERE brand_id = ${sqlLiteral(target.id)} AND id NOT GLOB ${sqlLiteral(`c_${target.id}_*`)};`,
-    );
-    for (const mission of sourceMissions) {
-      const id = cloneId(target.id, mission.id);
-      lines.push(
-        `INSERT INTO missions (id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at, icon, tag, mystery, tease, unlock_points_tenths, sort_order, proof_kind, starts_at, ends_at, steps, points_quarters) VALUES (${[
-          sqlLiteral(id),
-          sqlLiteral(target.id),
-          sqlLiteral(swapBrandCopy(mission.title, target.short_name)),
-          sqlLiteral(swapBrandCopy(mission.description, target.short_name)),
-          sqlLiteral(mission.points_tenths),
-          sqlLiteral(mission.proof_screenshot),
-          sqlLiteral(mission.proof_link),
-          sqlLiteral(mission.limit_kind),
-          sqlLiteral(mission.active),
-          sqlLiteral(mission.created_at),
-          sqlLiteral(mission.icon || "🍃"),
-          sqlLiteral(mission.tag || ""),
-          sqlLiteral(mission.mystery || 0),
-          sqlLiteral(swapBrandCopy(mission.tease || "", target.short_name)),
-          sqlLiteral(mission.unlock_points_tenths || 0),
-          sqlLiteral(mission.sort_order || 0),
-          sqlLiteral(mission.proof_kind || ""),
-          sqlLiteral(mission.starts_at ?? null),
-          sqlLiteral(mission.ends_at ?? null),
-          sqlLiteral(swapBrandCopy(mission.steps || "", target.short_name)),
-          sqlLiteral(mission.points_quarters || 0),
-        ].join(", ")}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, description = excluded.description, points_tenths = excluded.points_tenths, proof_screenshot = excluded.proof_screenshot, proof_link = excluded.proof_link, limit_kind = excluded.limit_kind, active = excluded.active, icon = excluded.icon, tag = excluded.tag, mystery = excluded.mystery, tease = excluded.tease, unlock_points_tenths = excluded.unlock_points_tenths, sort_order = excluded.sort_order, proof_kind = excluded.proof_kind, starts_at = excluded.starts_at, ends_at = excluded.ends_at, steps = excluded.steps, points_quarters = excluded.points_quarters;`,
-      );
-      lines.push(`DELETE FROM mission_photos WHERE mission_id = ${sqlLiteral(id)};`);
-      for (const photo of input.photos.filter((item) => item.mission_id === mission.id)) {
-        lines.push(
-          `INSERT INTO mission_photos (id, mission_id, r2_key, image_url, caption, sort_order) VALUES (${[
-            sqlLiteral(cloneId(target.id, photo.id)),
-            sqlLiteral(id),
-            sqlLiteral(photo.r2_key),
-            sqlLiteral(photo.image_url),
-            sqlLiteral(swapBrandCopy(photo.caption, target.short_name)),
-            sqlLiteral(photo.sort_order),
-          ].join(", ")});`,
-        );
-      }
-    }
-    summary.push(
-      `${target.short_name}: Bonus Stamp disalin (${sourceMissions.map((mission) => swapBrandCopy(mission.title, target.short_name)).join("; ") || "tidak ada misi di Loft25"}). Misi lama merek itu dimatikan, tidak dihapus.`,
-    );
+    summary.push(`${target.short_name}: Bonus Stamp tidak disalin. Tiga misi yang sama diisi migrasi.`);
+    void input.missions;
+    void input.photos;
   }
   lines.push("COMMIT;");
   return { sql: lines.join("\n"), summary };

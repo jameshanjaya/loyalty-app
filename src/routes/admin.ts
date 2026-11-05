@@ -451,8 +451,9 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   if (path.startsWith("/admin/bukti/") && request.method === "GET") {
     const id = decodeURIComponent(path.slice("/admin/bukti/".length));
     const submission = await pdb.getSubmission(db, id);
-    if (!submission?.r2_key?.startsWith("missions/")) return new Response("Tidak ketemu", { status: 404 });
-    const object = await env.BANNERS.get(submission.r2_key);
+    const proofKey = submission?.r2_key?.split(",")[0] || "";
+    if (!proofKey.startsWith("missions/")) return new Response("Tidak ketemu", { status: 404 });
+    const object = await env.BANNERS.get(proofKey);
     if (!object) return new Response("Tidak ketemu", { status: 404 });
     return new Response(object.body, {
       headers: {
@@ -818,6 +819,7 @@ function readBrand(form: FormData) {
     cta,
     page_bg,
     stamp_icon,
+    ig_handle: clip(String(form.get("ig_handle") || ""), 80),
   };
 }
 
@@ -829,7 +831,9 @@ function hexOrEmpty(raw: string): string | null {
 
 function readMission(form: FormData) {
   const title = clip(String(form.get("title") || ""), 80);
-  const quarters = questQuarters(String(form.get("points") || ""));
+  const checkRaw = String(form.get("check_kind") || "");
+  const check_kind = checkRaw === "google" || checkRaw === "threads" || checkRaw === "story" ? checkRaw : "";
+  const quarters = check_kind ? 4 : questQuarters(String(form.get("points") || ""));
   const brandId = String(form.get("brand_id") || "");
   if (!title || !quarters || !brandId) return null;
   const tagRaw = String(form.get("tag") || "");
@@ -849,6 +853,7 @@ function readMission(form: FormData) {
     description: clip(String(form.get("description") || ""), 240),
     points_tenths: quarters,
     points_quarters: quarters,
+    check_kind,
     proof_screenshot: 1,
     proof_link: 0,
     proof_kind: "upload",

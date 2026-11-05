@@ -1109,6 +1109,7 @@ export function rulesPage(brands: Brand[], hidden: Brand[], links: OrderLink[], 
           <option value="around" ${b.birthday_window === "around" ? "selected" : ""}>± N hari</option>
         </select>
         <label class="lbl">N hari (kalau pilih ± N hari)</label><input name="birthday_days" type="number" min="0" max="30" value="${b.birthday_days ?? 7}" />
+        <label class="lbl">Akun Instagram untuk Story</label><input name="ig_handle" value="${esc(b.ig_handle || "")}" maxlength="80" placeholder="@akun" />
         <label class="checkline"><input type="checkbox" name="birthday_active" value="on" ${b.birthday_active ? "checked" : ""} /> Birthday Freebies aktif</label>
         <label class="checkline"><input type="checkbox" name="active" value="on" ${b.active ? "checked" : ""} /> Merek aktif</label>
         <h3 style="margin-top:14px">Tautan lain</h3>
@@ -1428,7 +1429,7 @@ export function adminMissionsPage(input: {
     "/admin/misi",
     `<h1>Kelola Side Quest</h1>${flashes(input.params)}
      <p class="fine">Foto bukti langsung dapat pecahan stamp. Satu quest sekali per pelanggan. Kalau perlu, stamp quest bisa ditarik.</p>
-     <h2 style="margin-top:16px">Antrian lama</h2>
+     <h2 style="margin-top:16px">Menunggu dicek</h2>
      ${queue || `<p class="fine">Tidak ada yang menunggu.</p>`}
      <h2 style="margin-top:16px">Quest yang sudah masuk</h2>
      ${approved || `<p class="fine">Belum ada.</p>`}
@@ -1444,7 +1445,9 @@ export function adminMissionsPage(input: {
        <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
        <label class="lbl">Mulai</label><input name="starts" type="date" />
        <label class="lbl">Selesai</label><input name="ends" type="date" />
-       <p class="fine">Sekali per pelanggan. Buktinya foto.</p>
+       <p class="fine">Sekali per pelanggan. Buktinya foto. Misi Google, Threads, dan Story tetap 1 stamp.</p>
+       <label class="lbl">Pengecekan otomatis</label>
+       <select name="check_kind"><option value="">Langsung masuk</option><option value="google">Review Google</option><option value="threads">Struk + produk</option><option value="story">Tag Instagram</option></select>
        <label class="checkline"><input type="checkbox" name="mystery" value="on" /> Quest rahasia, judul disembunyikan</label>
        <label class="lbl">Teks godaan saat terkunci</label><input name="tease" maxlength="140" placeholder="Selesaikan side quest dulu" />
        <label class="lbl">Terbuka setelah poin quest (0 = langsung)</label><input name="unlock" placeholder="0" />
@@ -1509,6 +1512,7 @@ export function missionDetailPage(input: {
   tease: string;
   photos: Array<{ src: string; caption: string }>;
   params: URLSearchParams;
+  multi?: boolean;
 }): string {
   const skin = customerSkin(input.brand);
   const slides = input.photos
@@ -1529,7 +1533,8 @@ export function missionDetailPage(input: {
     ? `<p class="fine">${esc(input.tease || "Belum kebuka nih.")}</p>`
     : input.open
       ? `<form method="post" action="/misi/${esc(input.id)}" enctype="multipart/form-data">
-          <label class="lbl">Foto bukti</label><input name="gambar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required />
+          <label class="lbl">Foto bukti</label><input name="gambar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" ${input.multi ? "multiple" : ""} required />
+          ${input.multi ? `<p class="fine">Boleh lebih dari satu foto: struk dan produk.</p>` : ""}
           <button class="btn btn-solid">Kirim bukti</button>
         </form>`
       : `<p class="fine">Quest ini sudah kamu selesaikan.</p>`;
@@ -1594,6 +1599,7 @@ export function adminMissionEditPage(input: {
     sort_order: number;
     limit_kind: string;
     proof_kind?: string;
+    check_kind?: string;
     proof_screenshot: number;
     proof_link: number;
     starts_at?: number | null;
@@ -1632,7 +1638,14 @@ export function adminMissionEditPage(input: {
        <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
        <label class="lbl">Mulai</label><input name="starts" type="date" value="${m.starts_at ? esc(toWibDateInput(m.starts_at)) : ""}" />
        <label class="lbl">Selesai</label><input name="ends" type="date" value="${m.ends_at ? esc(toWibDateInput(m.ends_at)) : ""}" />
-       <p class="fine">Sekali per pelanggan. Buktinya foto.</p>
+       <p class="fine">Sekali per pelanggan. Buktinya foto. Misi Google, Threads, dan Story tetap 1 stamp.</p>
+       <label class="lbl">Pengecekan otomatis</label>
+       <select name="check_kind">
+         <option value="" ${m.check_kind ? "" : "selected"}>Langsung masuk</option>
+         <option value="google" ${m.check_kind === "google" ? "selected" : ""}>Review Google</option>
+         <option value="threads" ${m.check_kind === "threads" ? "selected" : ""}>Struk + produk</option>
+         <option value="story" ${m.check_kind === "story" ? "selected" : ""}>Tag Instagram</option>
+       </select>
        <label class="checkline"><input type="checkbox" name="mystery" ${m.mystery ? "checked" : ""} /> Quest rahasia</label>
        <label class="checkline"><input type="checkbox" name="active" ${m.active ? "checked" : ""} /> Aktif</label>
        <label class="lbl">Teks godaan</label><input name="tease" maxlength="140" value="${esc(m.tease)}" />

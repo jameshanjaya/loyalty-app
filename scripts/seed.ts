@@ -289,6 +289,20 @@ lines.push(
   INSERT INTO mission_photos (id, mission_id, r2_key, image_url, caption, sort_order) VALUES
   ('foto_gulai_1', 'misi_gulai', NULL, '/banners/soto-1.jpg', 'Ayamnya disiram kuah gulai', 1),
   ('foto_gulai_2', 'misi_gulai', NULL, '/banners/soto-2.jpg', 'Sajikan panas', 2);
+  UPDATE missions SET active = 0;
+  INSERT INTO missions (id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at, icon, sort_order, proof_kind, steps, points_quarters, check_kind) VALUES
+  ('misi_google_loft25','loft25','Review di Google','Upload screenshot review Google kamu. Nama yang keliatan harus mirip nama akun kamu.',4,1,0,'once',1,${now},'⭐',1,'upload','Buka Google Maps. Kasih review outlet-nya. Screenshot yang keliatan namanya. Upload di sini.',4,'google'),
+  ('misi_threads_loft25','loft25','Posting Threads','Foto struk dan produk di outlet, lalu upload fotonya. Boleh lebih dari satu foto.',4,1,0,'once',1,${now},'🧵',2,'upload','Foto struk pembelian. Foto produknya di outlet. Post di Threads pakai caption. Upload fotonya di sini.',4,'threads'),
+  ('misi_story_loft25','loft25','Story Instagram','Upload screenshot story IG yang nge-tag akun kami.',4,1,0,'once',1,${now},'📸',3,'upload','Buat story dan tag akun kami. Screenshot story-nya. Upload di sini.',4,'story'),
+  ('misi_google_soto-oseng','soto-oseng','Review di Google','Upload screenshot review Google kamu. Nama yang keliatan harus mirip nama akun kamu.',4,1,0,'once',1,${now},'⭐',1,'upload','Buka Google Maps. Kasih review outlet-nya. Screenshot yang keliatan namanya. Upload di sini.',4,'google'),
+  ('misi_threads_soto-oseng','soto-oseng','Posting Threads','Foto struk dan produk di outlet, lalu upload fotonya. Boleh lebih dari satu foto.',4,1,0,'once',1,${now},'🧵',2,'upload','Foto struk pembelian. Foto produknya di outlet. Post di Threads pakai caption. Upload fotonya di sini.',4,'threads'),
+  ('misi_story_soto-oseng','soto-oseng','Story Instagram','Upload screenshot story IG yang nge-tag akun kami.',4,1,0,'once',1,${now},'📸',3,'upload','Buat story dan tag akun kami. Screenshot story-nya. Upload di sini.',4,'story'),
+  ('misi_google_krispyporkk','krispyporkk','Review di Google','Upload screenshot review Google kamu. Nama yang keliatan harus mirip nama akun kamu.',4,1,0,'once',1,${now},'⭐',1,'upload','Buka Google Maps. Kasih review outlet-nya. Screenshot yang keliatan namanya. Upload di sini.',4,'google'),
+  ('misi_threads_krispyporkk','krispyporkk','Posting Threads','Foto struk dan produk di outlet, lalu upload fotonya. Boleh lebih dari satu foto.',4,1,0,'once',1,${now},'🧵',2,'upload','Foto struk pembelian. Foto produknya di outlet. Post di Threads pakai caption. Upload fotonya di sini.',4,'threads'),
+  ('misi_story_krispyporkk','krispyporkk','Story Instagram','Upload screenshot story IG yang nge-tag akun kami.',4,1,0,'once',1,${now},'📸',3,'upload','Buat story dan tag akun kami. Screenshot story-nya. Upload di sini.',4,'story');
+  UPDATE brands SET ig_handle='@loft25.matchastudio' WHERE id='loft25';
+  UPDATE brands SET ig_handle='@krispyporkk' WHERE id='krispyporkk';
+  UPDATE brands SET ig_handle='@sotooseng.bangjem' WHERE id='soto-oseng';
   INSERT INTO settings (key, value) VALUES ('points_expire_days', '60');`,
 );
 

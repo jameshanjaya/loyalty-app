@@ -49,6 +49,7 @@ export async function saveBrand(
     cta: string;
     page_bg: string;
     stamp_icon: string;
+    ig_handle: string;
   },
 ): Promise<void> {
   await db
@@ -56,7 +57,7 @@ export async function saveBrand(
       `UPDATE brands SET name=?, short_name=?, handle=?, emoji=?, accent=?, accent_soft=?,
         stamps_required=?, reward_text=?, condition_label=?, min_amount=?, max_stamps_per_day=?,
         reward_note=?, active=?, birthday_reward=?, birthday_active=?, birthday_window=?, birthday_days=?,
-        cta=?, page_bg=?, stamp_icon=? WHERE id=?`,
+        cta=?, page_bg=?, stamp_icon=?, ig_handle=? WHERE id=?`,
     )
     .bind(
       patch.name,
@@ -79,6 +80,7 @@ export async function saveBrand(
       patch.cta,
       patch.page_bg,
       patch.stamp_icon,
+      patch.ig_handle,
       id,
     )
     .run();
