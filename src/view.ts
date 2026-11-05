@@ -19,9 +19,8 @@ const PLATE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 
 function stampMark(brand: Brand): string {
   if (brand.stamp_key) return `<img class="stampimg" src="/media/stamp/${esc(brand.id)}" alt="" />`;
-  if (brand.stamp_icon === "bowl" || (!brand.stamp_icon && brand.id === "soto-oseng")) return BOWL;
-  if (brand.stamp_icon === "plate" || (!brand.stamp_icon && brand.id === "krispyporkk")) return PLATE;
-  if (brand.stamp_icon === "whisk" || !brand.stamp_icon) return WHISK;
+  if (brand.stamp_icon === "bowl") return BOWL;
+  if (brand.stamp_icon === "plate") return PLATE;
   return WHISK;
 }
 
@@ -87,6 +86,7 @@ type Skin = {
   heroA: string;
   heroB: string;
   dark: boolean;
+  onInk: string;
 };
 
 const SKINS: Record<string, Skin> = {
@@ -103,6 +103,7 @@ const SKINS: Record<string, Skin> = {
     heroA: "#1c5a3c",
     heroB: "#0c2418",
     dark: false,
+    onInk: "#ffffff",
   },
   "soto-oseng": {
     page: "#e7eef8",
@@ -117,6 +118,7 @@ const SKINS: Record<string, Skin> = {
     heroA: "#1e6a9a",
     heroB: "#16324a",
     dark: false,
+    onInk: "#ffffff",
   },
   krispyporkk: {
     page: "#fff5f8",
@@ -131,6 +133,7 @@ const SKINS: Record<string, Skin> = {
     heroA: "#ff6fa8",
     heroB: "#111111",
     dark: false,
+    onInk: "#111111",
   },
 };
 
@@ -150,12 +153,13 @@ export function customerSkin(brand: Brand | null): { style: string; dark: boolea
       heroA: brand?.accent || "#143d28",
       heroB: "#102018",
       dark: false,
+      onInk: "#ffffff",
     } satisfies Skin);
   const accent = brand?.accent || base.accent;
   const soft = brand?.accent_soft || base.soft;
   const page = brand?.page_bg || base.page;
   const cta = brand?.cta || base.cta;
-  const onInk = brand?.id === "krispyporkk" ? "#111111" : "#ffffff";
+  const onInk = base.onInk;
   const divider = base.dark ? "rgba(255,255,255,.12)" : "#efe4d4";
   const style = `--page:${page};--ink:${base.ink};--muted:${base.muted};--accent:${accent};--accent-soft:${soft};--deep:${cta};--cta:${cta};--on-ink:${onInk};--glass:${base.glass};--glass-line:${base.line};--card:${base.glass};--line:${divider};--hero-a:${base.heroA};--hero-b:${base.heroB};background:var(--page);color:var(--ink)`;
   return { style, dark: base.dark, accent };
