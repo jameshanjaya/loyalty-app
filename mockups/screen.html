@@ -288,7 +288,36 @@ function profil() {
     ${nav("profil")}`;
 }
 
-const views = { kartu, quest, hadiah, kode, profil };
+function detail() {
+  const photos = [
+    ["../public/banners/soto-2.jpg", "Ayam dengan kuah gulai"],
+    ["../public/banners/soto-1.jpg", "Contoh porsi di meja"],
+  ];
+  const slides = photos.map(([img, cap], i) => `
+    <article class="gslide" style="background-image:url('${img}')">
+      ${i === 0 ? `<span class="zoom">Ketuk untuk zoom</span>` : ""}
+    </article>`).join("");
+  return `
+    <div class="eyebrow">SIDE QUEST · SOTO OSENG</div>
+    <h1 class="display" style="font-size:1.55rem;margin-top:4px">Makan ayam pakai kuah gulai <span class="tag new">NEW</span></h1>
+    <p class="fine">1 poin · sekali seminggu · kasir yang verifikasi</p>
+    <div class="gallery-reel" style="margin-top:14px">${slides}</div>
+    <div class="dots" style="margin:8px 0 0"><i class="on"></i><i></i></div>
+    <p class="gcap">Ayam dengan kuah gulai</p>
+    <section class="card" style="padding:14px">
+      <h2 style="margin-bottom:10px">Cara ikut</h2>
+      <div class="steps">
+        <div class="step"><span class="num">1</span><span>Pesan ayam yang pakai kuah gulai.</span></div>
+        <div class="step"><span class="num">2</span><span>Tunjukkan nota ke kasir.</span></div>
+        <div class="step"><span class="num">3</span><span>Kalau sesuai, kasir mencentang. Poin masuk setelah itu.</span></div>
+      </div>
+      <a class="btn" href="#">Minta kasir verifikasi</a>
+      <p class="fine">Tidak perlu unggah foto untuk misi ini.</p>
+    </section>
+    ${nav("quest")}`;
+}
+
+const views = { kartu, quest, hadiah, kode, profil, detail };
 document.getElementById("app").innerHTML = (views[screen] || kartu)();
 </script>
 </body>

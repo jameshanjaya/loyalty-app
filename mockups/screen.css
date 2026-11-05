@@ -386,3 +386,27 @@ textarea { min-height: 64px; }
 .knob.on { background: #1b5c3a; }
 .knob.on i { left: 21px; }
 .save { margin-top: 14px; width: 100%; border: 0; border-radius: 14px; background: #1b5c3a; color: white; font-weight: 800; min-height: 46px; }
+.shots { display: flex; gap: 8px; margin-top: 6px; }
+.shot {
+  width: 108px; background: #f6f1e8; border-radius: 12px; overflow: hidden; border: 1px solid #efe4d4;
+}
+.shot img { width: 100%; height: 72px; object-fit: cover; display: block; }
+.shot input { border: 0; border-radius: 0; background: white; padding: 6px 8px; font-size: .75rem; }
+.shot .grip { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; font-size: .72rem; font-weight: 800; color: #6d675d; }
+.addpic { margin-top: 8px; border: 1.5px dashed #d9d0c2; border-radius: 12px; padding: 8px; text-align: center; font-weight: 800; color: #5c6a60; }
+
+.gallery-reel { display: flex; gap: 10px; overflow: hidden; margin: 0 -16px 0 0; }
+.gslide { position: relative; flex: 0 0 86%; height: 210px; border-radius: 22px; overflow: hidden; background: #222 center/cover no-repeat; }
+.zoom {
+  position: absolute; right: 10px; top: 10px;
+  background: rgba(0,0,0,.55); color: white; border-radius: 999px;
+  padding: 6px 10px; font-size: .75rem; font-weight: 800;
+}
+.gcap { font-weight: 800; margin: 8px 0 12px; }
+.steps { display: grid; gap: 8px; }
+.step { display: flex; gap: 10px; align-items: flex-start; font-weight: 800; }
+.num {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; background: var(--accent); color: white; font-size: .85rem;
+}
+body[data-brand="krispy"] .num { color: #1a100c; }

@@ -15,7 +15,7 @@
   <section class="brand-block"><h2>Krispyporkk</h2><div class="links" id="krispy"></div></section>
 </div>
 <script>
-const screens = [["kartu", "Kartu"], ["quest", "Side Quest"], ["hadiah", "Hadiah"], ["kode", "Kode tukar"], ["profil", "Profil"]];
+const screens = [["kartu", "Kartu"], ["quest", "Side Quest"], ["detail", "Detail misi"], ["hadiah", "Hadiah"], ["kode", "Kode tukar"], ["profil", "Profil"]];
 for (const id of ["loft25", "soto", "krispy"]) {
   document.getElementById(id).innerHTML = screens
     .map(([key, label]) => `<a href="screen.html?brand=${id}&screen=${key}">${label}</a>`)
