@@ -15,7 +15,7 @@ const ART: Record<string, BrandArt> = {
 export function brandArt(brand: Pick<Brand, "id" | "logo_key">): BrandArt {
   const base = ART[brand.id] || { full: "/brands/loft-mark.svg", mark: "/brands/loft-mark.svg", chip: "#ffffff" };
   if (brand.logo_key) {
-    const uploaded = `/media/logo/${brand.id}`;
+    const uploaded = `/media/logo/${brand.id}?v=${encodeURIComponent(brand.logo_key)}`;
     return { ...base, full: uploaded, mark: uploaded };
   }
   return base;

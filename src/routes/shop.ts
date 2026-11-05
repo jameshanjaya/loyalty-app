@@ -7,13 +7,13 @@ import * as pdb from "../points-db";
 import { expireCodes, redeemBirthdayCode, redeemPointsReward, redeemTier, submitMission } from "../points-flow";
 import { formatAward, missionQuarters } from "../quest-stamp";
 import { checkProof } from "../vision";
-import { loadBirthdayNotice } from "../birthday-gate";
 import { brandOpen, pickLiveBrand } from "../brands";
 import { mustVerify } from "../wa";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { loadMember, loadSignup } from "../session";
 import { fallbackNewsPhoto } from "../brand-visual";
+import { loadHadiahBundle } from "../fast-read";
 import { catalogPage, codePage, messagePage, missionDetailPage } from "../view";
 import type { App } from "./customer";
 
@@ -127,14 +127,12 @@ export async function handleShop(app: App): Promise<Response | null> {
   }
 
   if (path === "/hadiah" && request.method === "GET") {
-    const brands = await repo.listBrands(db, true);
-    const brand = pickLiveBrand(brands, url.searchParams.get("merek"));
-    if (!brand) return html(messagePage("Kosong", "Belum ada merek."));
-    const card = await repo.getCard(db, member.id, brand.id);
-    const stamps = card?.stamps || 0;
-    const rewards = await pdb.listTiers(db, brand.id);
-    const birthday = await loadBirthdayNotice(db, member, brand, now);
-    const storedNews = await repo.listNews(db, brand.id);
+    const packed = await loadHadiahBundle(db, member.id, url.searchParams.get("merek") || "", now, member.birthday);
+    if (!packed) return html(messagePage("Kosong", "Belum ada merek."));
+    const { brand, brands, stamps } = packed;
+    const rewards = packed.tiers;
+    const birthday = packed.birthday;
+    const storedNews = packed.news;
     const news = [1, 2, 3].map((slot) => {
       const row = storedNews.find((item) => item.slot === slot && item.active);
       return {

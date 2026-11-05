@@ -1,5 +1,5 @@
 // Plain browser JavaScript: this file is served as-is, so no TypeScript syntax here.
-const CACHE = "loyalty-bos-v15";
+const CACHE = "loyalty-bos-v16";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -23,7 +23,8 @@ function shellAsset(pathname) {
     pathname === "/favicon.svg" ||
     pathname.startsWith("/fonts/") ||
     pathname.startsWith("/icons/") ||
-    pathname.startsWith("/brands/")
+    pathname.startsWith("/brands/") ||
+    pathname.startsWith("/banners/")
   );
 }
 

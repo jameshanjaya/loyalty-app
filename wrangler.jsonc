@@ -2,6 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "loyalty-bos",
   "main": "src/index.ts",
+  "placement": { "mode": "smart" },
   "compatibility_date": "2026-11-04",
   "upload_source_maps": true,
   "observability": {
@@ -25,7 +26,7 @@
     {
       "binding": "DB",
       "database_name": "loyalty-bos",
-      // Placeholder di git. Jangan commit ID produksi. Deploy memakai ID asli hanya di mesin yang memasang.
+      // ONLY place the D1 id lives. Swap this one value for the APAC database at deploy. Binding name stays DB.
       "database_id": "00000000-0000-0000-0000-000000000001",
       "migrations_dir": "migrations"
     }

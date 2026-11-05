@@ -165,7 +165,10 @@ function paintFlip(root, left) {
   }
 }
 
+let birthdayTimers = [];
 function bootBirthday() {
+  birthdayTimers.forEach((timer) => window.clearInterval(timer));
+  birthdayTimers = [];
   document.querySelectorAll("[data-bday]").forEach((el) => {
     const target = Number(el.getAttribute("data-bday"));
     if (!Number.isFinite(target)) return;
@@ -190,7 +193,7 @@ function bootBirthday() {
       }
     };
     tick();
-    setInterval(tick, el.querySelector("[data-dd]") ? 1000 : 60000);
+    birthdayTimers.push(window.setInterval(tick, el.querySelector("[data-dd]") ? 1000 : 60000));
   });
 }
 
@@ -356,8 +359,8 @@ function bootCrop() {
     let drag = null;
     const draw = () => {
       if (!image) return;
-      const width = 640;
-      const height = 320;
+      const width = 1200;
+      const height = 600;
       canvas.width = width;
       canvas.height = height;
       const scale = Math.max(width / image.width, height / image.height);
@@ -397,13 +400,18 @@ function bootCrop() {
     form.addEventListener("submit", (event) => {
       if (!image) return;
       event.preventDefault();
-      canvas.toBlob(async (blob) => {
+      const send = (blob, type, name) => {
         if (!blob) return;
         const data = new FormData(form);
-        data.set("gambar", new File([blob], "crop.jpg", { type: "image/jpeg" }));
-        const response = await fetch(form.action, { method: "POST", body: data, credentials: "same-origin" });
-        location.href = response.url || "/admin/banner?ok=simpan";
-      }, "image/jpeg", 0.9);
+        data.set("gambar", new File([blob], name, { type }));
+        fetch(form.action, { method: "POST", body: data, credentials: "same-origin" }).then((response) => {
+          location.href = response.url || "/admin/banner?ok=simpan";
+        });
+      };
+      canvas.toBlob((blob) => {
+        if (blob) send(blob, "image/webp", "banner.webp");
+        else canvas.toBlob((jpeg) => send(jpeg, "image/jpeg", "banner.jpg"), "image/jpeg", 0.82);
+      }, "image/webp", 0.82);
     });
   });
 }
@@ -518,6 +526,85 @@ function bootCelebrate() {
   if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
 }
 
+const tabCache = new Map();
+
+function tabUrl(href) {
+  const url = new URL(href, location.origin);
+  if (url.origin !== location.origin) return "";
+  if (url.pathname !== "/kartu" && url.pathname !== "/hadiah" && url.pathname !== "/profil") return "";
+  return `${url.pathname}${url.search}`;
+}
+
+function fetchTab(href) {
+  const key = tabUrl(href);
+  if (!key) return Promise.resolve("");
+  const hit = tabCache.get(key);
+  if (hit && Date.now() - hit.at < 20000) return Promise.resolve(hit.html);
+  return fetch(key, { headers: { accept: "text/html" }, credentials: "same-origin" })
+    .then((res) => (res.ok ? res.text() : ""))
+    .then((html) => {
+      if (html) tabCache.set(key, { at: Date.now(), html });
+      return html;
+    })
+    .catch(() => "");
+}
+
+function bootTabs() {
+  if (document.documentElement.dataset.tabs) return;
+  document.documentElement.dataset.tabs = "1";
+  document.addEventListener("pointerenter", (event) => {
+    const link = event.target.closest && event.target.closest("nav.tabbar a");
+    if (link) fetchTab(link.href);
+  }, true);
+  document.addEventListener("touchstart", (event) => {
+    const link = event.target.closest && event.target.closest("nav.tabbar a");
+    if (link) fetchTab(link.href);
+  }, { capture: true, passive: true });
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest && event.target.closest("nav.tabbar a");
+    if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    const key = tabUrl(link.href);
+    if (!key) return;
+    event.preventDefault();
+    const shell = document.querySelector("main.phone");
+    if (!shell) {
+      location.href = key;
+      return;
+    }
+    shell.classList.add("is-tabbing");
+    fetchTab(key).then((html) => {
+      if (!html) {
+        location.href = key;
+        return;
+      }
+      const parsed = new DOMParser().parseFromString(html, "text/html");
+      const next = parsed.querySelector("main.phone");
+      const current = document.querySelector("main.phone");
+      if (!next || !current) {
+        location.href = key;
+        return;
+      }
+      current.replaceWith(next);
+      document.title = parsed.title || document.title;
+      history.pushState({}, "", key);
+      boot();
+    });
+  });
+  window.addEventListener("popstate", () => {
+    const key = tabUrl(location.href);
+    if (!key) return;
+    fetchTab(key).then((html) => {
+      const parsed = new DOMParser().parseFromString(html, "text/html");
+      const next = parsed.querySelector("main.phone");
+      const current = document.querySelector("main.phone");
+      if (next && current) {
+        current.replaceWith(next);
+        boot();
+      }
+    });
+  });
+}
+
 function boot() {
   bootPoll();
   bootReel();
@@ -531,6 +618,7 @@ function boot() {
   bootShare();
   bootCelebrate();
   bootConfetti();
+  bootTabs();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {

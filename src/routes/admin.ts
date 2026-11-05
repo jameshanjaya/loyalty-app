@@ -96,32 +96,34 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (path === "/admin/dasbor" && request.method === "GET") {
-    try {
-      await repo.housekeeping(db, now);
-    } catch {
-      /* bersihkan lain kali */
-    }
+    ctx.waitUntil(repo.housekeeping(db, now).catch(() => undefined));
+    ctx.waitUntil(expireCodes(db, now).catch(() => undefined));
     const brands = await repo.listBrands(db, true);
     const brand = brands.find((b) => b.id === url.searchParams.get("merek")) || null;
     const brandId = brand?.id || null;
     const dayStart = startOfWibDay(now);
-    const numbers = await repo.dashNumbers(db, brandId, now, dayStart, startOfWibMonth(now));
     const since = dayStart - 13 * 86_400_000;
-    const buckets = await repo.stampsByDay(db, brandId, since, WIB_MS);
+    const month = new Date(now + WIB_MS).getUTCMonth() + 1;
+    const [numbers, buckets, top, lapsed, bannerRows, flags, birthdayRows, birthdayRedeems, points, pendingMissions, keptDays, story] = await Promise.all([
+      repo.dashNumbers(db, brandId, now, dayStart, startOfWibMonth(now)),
+      repo.stampsByDay(db, brandId, since, WIB_MS),
+      repo.topMembers(db, brandId),
+      repo.lapsedMembers(db, brandId, now - 30 * 86_400_000),
+      repo.listBanners(db, brandId),
+      repo.recentFlags(db, now - 7 * 86_400_000),
+      repo.birthdaysThisMonth(db, month),
+      repo.countBirthdayRedeems(db, startOfWibMonth(now), brandId),
+      pdb.pointsTotals(db, startOfWibMonth(now)),
+      pdb.countPending(db),
+      expireDays(db),
+      repo.dashStory(db, brandId, now),
+    ]);
     const days = Array.from({ length: 14 }, (_, i) => {
       const start = since + i * 86_400_000;
       return { label: String(new Date(start + WIB_MS).getUTCDate()), n: buckets.get(wibDayIndex(start)) ?? 0 };
     });
-    const top = await repo.topMembers(db, brandId);
-    const lapsed = await repo.lapsedMembers(db, brandId, now - 30 * 86_400_000);
-    const banners = (await repo.listBanners(db, brandId)).filter((b) => repo.bannerLive(b, now));
-    const flags = await repo.recentFlags(db, now - 7 * 86_400_000);
-    const month = new Date(now + WIB_MS).getUTCMonth() + 1;
-    const birthdays = (await repo.birthdaysThisMonth(db, month)).map((m) => ({ name: m.name, birthday: m.birthday || "" }));
-    const birthdayRedeems = await repo.countBirthdayRedeems(db, startOfWibMonth(now), brandId);
-    await expireCodes(db, now);
-    const points = await pdb.pointsTotals(db, startOfWibMonth(now));
-    const pendingMissions = await pdb.countPending(db);
+    const banners = bannerRows.filter((b) => repo.bannerLive(b, now));
+    const birthdays = birthdayRows.map((m) => ({ name: m.name, birthday: m.birthday || "" }));
     return html(
       dashboardPage({
         brands,
@@ -138,8 +140,8 @@ export async function handleAdmin(app: App): Promise<Response | null> {
         pointsIssued: formatPoints(points.issued),
         pointsRedeemed: formatPoints(points.redeemed),
         pendingMissions,
-        expireDays: await expireDays(db),
-        story: await repo.dashStory(db, brandId, now),
+        expireDays: keptDays,
+        story,
       }),
     );
   }
