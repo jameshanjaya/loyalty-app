@@ -194,6 +194,10 @@ export async function deleteSession(db: D1Database, id: string): Promise<void> {
   await db.prepare(`DELETE FROM sessions WHERE id=?`).bind(id).run();
 }
 
+export async function extendSession(db: D1Database, id: string, expiresAt: number): Promise<void> {
+  await db.prepare(`UPDATE sessions SET expires_at = ? WHERE id = ? AND kind = 'member'`).bind(expiresAt, id).run();
+}
+
 export async function insertClaim(db: D1Database, record: StoredClaim): Promise<void> {
   await db
     .prepare(

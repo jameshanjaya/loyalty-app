@@ -1,7 +1,9 @@
 export const CLAIM_TTL_MS = 60_000;
 export const CANCEL_WINDOW_MS = 5 * 60_000;
 export const CASHIER_SESSION_MS = 16 * 60 * 60 * 1000;
-export const MEMBER_SESSION_MS = 180 * 24 * 60 * 60 * 1000;
+export const MEMBER_SESSION_MS = 365 * 24 * 60 * 60 * 1000;
+/** Perpanjang cookie kalau kunjungan terakhir sudah lewat sekitar sehari. */
+export const MEMBER_SESSION_REFRESH_MS = 24 * 60 * 60 * 1000;
 export const OWNER_SESSION_MS = 12 * 60 * 60 * 1000;
 export const CASHIER_FLAG_AT = 25;
 export const CASHIER_FLAG_WINDOW_MS = 15 * 60_000;
@@ -63,6 +65,21 @@ export function progressCopy(stamps: number, required: number, reward: string): 
   }
   const left = required - stamps;
   return { ready: false, left, headline: `Dikit lagi! ${left} stamp lagi dapet ${reward}` };
+}
+
+/**
+ * Sesi member menyimpan masa berlaku = waktu perpanjang terakhir + 365 hari.
+ * Kalau sejak perpanjang itu sudah lewat sehari, dan sesinya belum hangus, cookie perlu dibuat lagi.
+ */
+export function memberSessionDue(input: { expiresAt: number; now: number; lifetimeMs: number; refreshAfterMs: number }): boolean {
+  if (input.now >= input.expiresAt) return false;
+  const refreshedAt = input.expiresAt - input.lifetimeMs;
+  return input.now - refreshedAt >= input.refreshAfterMs;
+}
+
+export function cookieAlreadySet(setCookies: string[], name: string): boolean {
+  const prefix = `${name}=`;
+  return setCookies.some((cookie) => cookie.trimStart().startsWith(prefix));
 }
 
 export function canCancel(input: { createdAt: number; now: number; sameSession: boolean; voided: boolean; isLast: boolean }): boolean {

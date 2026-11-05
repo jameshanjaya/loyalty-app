@@ -1,4 +1,5 @@
 import { cookieHeader, isSecure, readCookie } from "./http";
+import { MEMBER_SESSION_MS, MEMBER_SESSION_REFRESH_MS, memberSessionDue } from "./loyalty";
 import * as repo from "./repo";
 import type { Brand, Member, Outlet } from "./types";
 
@@ -48,6 +49,19 @@ export async function loadOwner(request: Request, db: D1Database, now: number): 
   const id = readCookie(request.headers.get("cookie"), COOKIE.owner);
   const session = await liveSession(db, id, "owner", now);
   return session ? id : null;
+}
+
+/** Kalau sesi member sudah lebih dari sehari sejak diperpanjang, kembalikan cookie 365 hari yang baru. */
+export async function renewMemberCookie(request: Request, db: D1Database, now: number): Promise<string | null> {
+  const id = readCookie(request.headers.get("cookie"), COOKIE.member);
+  if (!id) return null;
+  const session = await repo.getSession(db, id);
+  if (!session || session.kind !== "member" || !session.subject_id) return null;
+  if (!memberSessionDue({ expiresAt: session.expires_at, now, lifetimeMs: MEMBER_SESSION_MS, refreshAfterMs: MEMBER_SESSION_REFRESH_MS })) {
+    return null;
+  }
+  await repo.extendSession(db, session.id, now + MEMBER_SESSION_MS);
+  return setSessionCookie(request, COOKIE.member, session.id, MEMBER_SESSION_MS);
 }
 
 export function setSessionCookie(request: Request, name: string, id: string, maxAgeMs: number): string {

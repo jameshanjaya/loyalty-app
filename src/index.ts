@@ -1,5 +1,7 @@
 import { clientIp, html, json, tinyError } from "./http";
+import { cookieAlreadySet } from "./loyalty";
 import { logEvent } from "./log";
+import { COOKIE, renewMemberCookie } from "./session";
 import { handleAdmin } from "./routes/admin";
 import { handleCashier } from "./routes/cashier";
 import { handleCustomer, type App } from "./routes/customer";
@@ -12,20 +14,26 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     try {
-      if (url.pathname === "/health") return json({ ok: true });
-      if (url.pathname === "/app.webmanifest") return appManifest(env, url.origin);
-      const media = await serveMedia(env, url);
-      if (media) return media;
-      const app: App = { request, env, url, now: Date.now(), ip: clientIp(request), ctx };
-      return (
-        (await handleWa(app)) ||
-        (await handleGoogle(app)) ||
-        (await handleShop(app)) ||
-        (await handleCustomer(app)) ||
-        (await handleCashier(app)) ||
-        (await handleAdmin(app)) ||
-        html(tinyError("Halaman tidak ketemu."), 404)
-      );
+      const now = Date.now();
+      let response: Response;
+      if (url.pathname === "/health") response = json({ ok: true });
+      else if (url.pathname === "/app.webmanifest") response = await appManifest(env, url.origin);
+      else {
+        const media = await serveMedia(env, url);
+        if (media) response = media;
+        else {
+          const app: App = { request, env, url, now, ip: clientIp(request), ctx };
+          response =
+            (await handleWa(app)) ||
+            (await handleGoogle(app)) ||
+            (await handleShop(app)) ||
+            (await handleCustomer(app)) ||
+            (await handleCashier(app)) ||
+            (await handleAdmin(app)) ||
+            html(tinyError("Halaman tidak ketemu."), 404);
+        }
+      }
+      return attachMemberRenewal(request, env.DB, now, response);
     } catch (error) {
       logEvent("unhandled", { message: error instanceof Error ? error.message : "error" });
       return html(tinyError("Ada yang macet. Coba lagi sebentar."), 500);
@@ -36,6 +44,16 @@ export default {
     ctx.waitUntil(sweepExpiry(env.DB, Date.now()));
   },
 };
+
+async function attachMemberRenewal(request: Request, db: D1Database, now: number, response: Response): Promise<Response> {
+  const existing = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
+  if (cookieAlreadySet(existing, COOKIE.member)) return response;
+  const cookie = await renewMemberCookie(request, db, now);
+  if (!cookie) return response;
+  const headers = new Headers(response.headers);
+  headers.append("set-cookie", cookie);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
 
 function imageResponse(object: R2ObjectBody): Response {
   const type = object.httpMetadata?.contentType || "application/octet-stream";
