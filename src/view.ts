@@ -26,7 +26,7 @@ function logoSlot(brand: Brand): string {
 }
 
 function confetti(): string {
-  return `<div class="confetti" aria-hidden="true">${"<i></i>".repeat(12)}</div>`;
+  return `<canvas class="confetti" data-confetti aria-hidden="true"></canvas>`;
 }
 
 function doc(title: string, inner: string, theme = "#6ea564", brandId = ""): string {
@@ -45,11 +45,11 @@ function doc(title: string, inner: string, theme = "#6ea564", brandId = ""): str
 <link rel="manifest" href="${manifest}" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/app.css?v=10" />
+<link rel="stylesheet" href="/app.css?v=11" />
 </head>
 <body>
 ${inner}
-<script src="/app.js?v=10" defer></script>
+<script src="/app.js?v=11" defer></script>
 </body>
 </html>`;
 }
@@ -298,16 +298,16 @@ function tabbar(on: "kartu" | "hadiah" | "profil", brandId: string): string {
     .join("")}</nav>`;
 }
 
-function carousel(banners: Banner[], now: number, delayMs = 3000, nonHalal = false): string {
+function carousel(banners: Banner[], now: number, delayMs = 3000, nonHalal = false, eager = true): string {
   const live = pickHeroBanners(banners.filter((banner) => bannerLive(banner, now)));
   const slides = live.map((banner, index) => {
     const img = banner.r2_key ? `/media/${banner.r2_key}` : banner.image_url || "";
     const badge = nonHalal ? `<span class="nonhalal">Non-halal</span>` : "";
     const copy = `<div class="slide-copy">${banner.title ? `<h3>${esc(banner.title)}</h3>` : ""}${banner.subtitle ? `<p>${esc(banner.subtitle)}</p>` : ""}${badge}</div>`;
     const media = img
-      ? index === 0
-        ? `<img src="${esc(img)}" alt="${esc(banner.title)}" fetchpriority="high" decoding="async" width="900" height="450" />`
-        : `<img data-src="${esc(img)}" alt="${esc(banner.title)}" decoding="async" width="900" height="450" />`
+      ? eager && index === 0
+        ? `<img src="${esc(img)}" alt="${esc(banner.title)}" fetchpriority="high" decoding="async" loading="eager" width="860" height="430" sizes="100vw" />`
+        : `<img data-src="${esc(img)}" alt="${esc(banner.title)}" decoding="async" loading="lazy" width="860" height="430" sizes="100vw" />`
       : `<div class="slide-fallback"></div>`;
     const inner = `${media}${copy}`;
     return banner.link_url ? `<a class="slide" href="${esc(banner.link_url)}">${inner}</a>` : `<div class="slide">${inner}</div>`;
@@ -513,7 +513,7 @@ export function cardPage(input: {
       const on = slice.brand.id === input.brand.id;
       const tone = customerSkin(slice.brand);
       const banner =
-        carousel(slice.banners, input.now, slice.brand.banner_ms || 3000, slice.brand.non_halal === 1) ||
+        carousel(slice.banners, input.now, slice.brand.banner_ms || 3000, slice.brand.non_halal === 1, on) ||
         `<section class="reel"><div class="reel-track"><div class="slide"><div class="slide-fallback"></div><div class="slide-copy"><h3>${esc(slice.brand.name)}</h3><p>${esc(slice.brand.handle)}</p></div></div></div></section>`;
       return `<div class="stage" data-pane="${esc(slice.brand.id)}" data-skin="${tone.style}" data-dark="${tone.dark ? "1" : "0"}"${on ? "" : " hidden"}>${banner}<p class="fine igline">${esc(slice.brand.ig_handle || slice.brand.handle)}</p></div>`;
     })
@@ -1572,7 +1572,7 @@ export function catalogPage(input: {
     .join("");
   const news = (input.news || []).slice(0, 3).map((item) => {
     const photo = item.image || "";
-    return `<a class="newscard" href="${esc(item.href || "#")}" style="background-image:url('${esc(photo)}')"><span class="tag">${esc(item.kind || "NEWS")}</span><div><b>${esc(item.title)}</b><small>${esc(item.subtitle)}</small><em>${esc(input.brand.short_name)}</em></div></a>`;
+    return `<a class="newscard" href="${esc(item.href || "#")}">${photo ? `<img src="${esc(photo)}" alt="" loading="lazy" decoding="async" width="860" height="430" sizes="(max-width: 440px) 100vw, 440px" />` : ""}<span class="tag">${esc(item.kind || "NEWS")}</span><div><b>${esc(item.title)}</b><small>${esc(item.subtitle)}</small><em>${esc(input.brand.short_name)}</em></div></a>`;
   });
   const skin = customerSkin(input.brand);
   return doc(

@@ -44,6 +44,21 @@ function bootPoll() {
   poll();
 }
 
+async function decodeImg(img) {
+  if (!img) return;
+  const src = img.getAttribute("data-src");
+  if (src) {
+    img.src = src;
+    img.removeAttribute("data-src");
+  }
+  if (!img.src || !img.decode) return;
+  try {
+    await img.decode();
+  } catch {
+    /* gambar tetap tampil */
+  }
+}
+
 function bootReel() {
   document.querySelectorAll("[data-reel]").forEach((root) => {
     const track = root.querySelector(".reel-track");
@@ -58,15 +73,14 @@ function bootReel() {
       const index = current();
       dots.forEach((dot, n) => dot.classList.toggle("on", n === index));
     };
-    const go = (index) => {
-      track.scrollTo({ left: width() * index, behavior: reduced ? "auto" : "smooth" });
-    };
     const warm = (index) => {
       const slide = track.children[index];
-      const img = slide && slide.querySelector("img[data-src]");
-      if (!img) return;
-      img.src = img.getAttribute("data-src");
-      img.removeAttribute("data-src");
+      return decodeImg(slide && slide.querySelector("img"));
+    };
+    const go = (index) => {
+      warm(index).then(() => {
+        track.scrollTo({ left: width() * index, behavior: reduced ? "auto" : "smooth" });
+      });
     };
     track.addEventListener(
       "scroll",
@@ -185,6 +199,11 @@ function bootRail() {
   if (!rail) return;
   const cards = [...rail.querySelectorAll(".stampcard")];
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const cores = navigator.hardwareConcurrency || 8;
+  const memory = navigator.deviceMemory || 8;
+  const canBlur = !reduced && cores > 4 && memory > 4;
+  if (canBlur) rail.classList.add("can-blur");
+  let swipeTimer = 0;
   const mark = () => {
     const mid = rail.scrollLeft + rail.clientWidth / 2;
     let best = cards[0];
@@ -197,15 +216,32 @@ function bootRail() {
         bestDist = dist;
       }
     }
-    cards.forEach((card) => card.classList.toggle("on", card === best));
+    const index = cards.indexOf(best);
+    cards.forEach((card, n) => {
+      card.classList.toggle("on", card === best);
+      card.classList.toggle("side", canBlur && Math.abs(n - index) === 1);
+    });
     document.querySelectorAll("[data-dot-brand]").forEach((dot) => {
       dot.classList.toggle("on", dot.getAttribute("data-dot-brand") === (best && best.getAttribute("data-brand")));
     });
     return best;
   };
-  rail.addEventListener("scroll", () => mark(), { passive: true });
-  const show = (id) => {
+  rail.addEventListener(
+    "scroll",
+    () => {
+      if (canBlur) {
+        rail.classList.add("is-swiping");
+        window.clearTimeout(swipeTimer);
+        swipeTimer = window.setTimeout(() => rail.classList.remove("is-swiping"), 180);
+      }
+      mark();
+    },
+    { passive: true },
+  );
+  const show = async (id) => {
     if (!id) return;
+    const incoming = [...document.querySelectorAll(`[data-pane="${id}"] img`)];
+    await Promise.all(incoming.map((img) => decodeImg(img)));
     document.querySelectorAll("[data-pane]").forEach((pane) => {
       pane.hidden = pane.getAttribute("data-pane") !== id;
     });
@@ -396,6 +432,51 @@ function bootShare() {
   });
 }
 
+function bootConfetti() {
+  const canvas = document.querySelector("[data-confetti]");
+  if (!canvas) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    canvas.remove();
+    return;
+  }
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  ctx.scale(dpr, dpr);
+  const colors = ["#6ea564", "#f2c14e", "#f3b4c6", "#e08a3c", "#fff"];
+  const parts = Array.from({ length: 60 }, () => ({
+    x: Math.random() * width,
+    y: -10 - Math.random() * height * 0.3,
+    vx: (Math.random() - 0.5) * 1.6,
+    vy: 2.2 + Math.random() * 2.4,
+    w: 4 + Math.random() * 4,
+    h: 6 + Math.random() * 6,
+    color: colors[Math.floor(Math.random() * colors.length)],
+  }));
+  const start = performance.now();
+  const frame = (now) => {
+    const elapsed = now - start;
+    if (elapsed > 1500) {
+      canvas.remove();
+      return;
+    }
+    ctx.clearRect(0, 0, width, height);
+    ctx.globalAlpha = 1 - elapsed / 1500;
+    for (const part of parts) {
+      part.x += part.vx;
+      part.y += part.vy;
+      ctx.fillStyle = part.color;
+      ctx.fillRect(part.x, part.y, part.w, part.h);
+    }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
 function bootCelebrate() {
   if (!document.querySelector("[data-tepok]")) return;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -414,6 +495,7 @@ function boot() {
   bootInstall();
   bootShare();
   bootCelebrate();
+  bootConfetti();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {
