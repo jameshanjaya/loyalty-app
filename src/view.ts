@@ -72,7 +72,6 @@ function paint(accent: string, soft: string): string {
 }
 
 const ICO_CARD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 10h8M8 14h5"/></svg>`;
-const ICO_QUEST = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3.5 14.4 8.4 19.6 9.1 15.8 12.8 16.7 18 12 15.5 7.3 18 8.2 12.8 4.4 9.1 9.6 8.4z"/></svg>`;
 const ICO_USER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="3.1"/><path d="M5.6 19.2c1.3-2.7 3.5-3.9 6.4-3.9s5.1 1.2 6.4 3.9"/></svg>`;
 
 type Skin = {
@@ -192,6 +191,27 @@ function orderBlock(
   </section>`;
 }
 
+function bonusStamp(missions: Array<{ id: string; title: string; points: string; done: boolean; locked: boolean }>, brandId: string): string {
+  if (!missions.length) return "";
+  const open = missions.filter((mission) => !mission.done);
+  const done = missions.filter((mission) => mission.done);
+  const row = (mission: { id: string; title: string; points: string; locked: boolean }) =>
+    mission.locked
+      ? `<div class="bonus-row dim"><span>${esc(mission.title)}</span><span class="muted">Belum kebuka</span></div>`
+      : `<a class="bonus-row" href="/misi/${esc(mission.id)}?merek=${esc(brandId)}"><span>${esc(mission.title)}</span><b>${esc(mission.points)}</b></a>`;
+  const finished = done.length
+    ? `<details class="bonus-done"><summary>Udah beres · ${done.length}</summary>${done
+        .map((mission) => `<div class="bonus-row"><span>${esc(mission.title)}</span><span class="qcheck" aria-label="Selesai">${CHECK}</span></div>`)
+        .join("")}</details>`
+    : "";
+  return `<section class="card" id="bonus-stamp">
+    <h2>Bonus Stamp</h2>
+    <p class="fine">Kerjain misi, dapet stamp tambahan</p>
+    ${open.map(row).join("")}
+    ${finished}
+  </section>`;
+}
+
 function birthdayBlock(notice: BirthdayNotice, reward: string, brandId: string, now: number): string {
   if (!notice.show) return "";
   if (notice.phase === "open") {
@@ -201,11 +221,10 @@ function birthdayBlock(notice: BirthdayNotice, reward: string, brandId: string, 
   return `<section class="bday" data-bday="${notice.target}"><div class="kicker">Birthday Freebies</div>${note}<p data-bday-label>${esc(countdownText(notice.target, now))}</p></section>`;
 }
 
-function tabbar(on: "kartu" | "quest" | "hadiah" | "profil", brandId: string): string {
+function tabbar(on: "kartu" | "hadiah" | "profil", brandId: string): string {
   const q = brandId ? `?merek=${esc(brandId)}` : "";
-  const links: Array<["kartu" | "quest" | "hadiah" | "profil", string, string, string]> = [
+  const links: Array<["kartu" | "hadiah" | "profil", string, string, string]> = [
     ["kartu", `/kartu${q}`, "Kartu", ICO_CARD],
-    ["quest", `/misi${q}`, "Side Quest", ICO_QUEST],
     ["hadiah", `/hadiah${q}`, "Redeem", GIFT],
     ["profil", `/profil${q}`, "Profil", ICO_USER],
   ];
@@ -335,6 +354,7 @@ export function cardPage(input: {
   orderOutlets?: Array<{ id: string; name: string; on: boolean }>;
   booking?: { id: string; name: string; url: string } | null;
   pickBooking?: boolean;
+  missions?: Array<{ id: string; title: string; points: string; done: boolean; locked: boolean }>;
 }): string {
   const card = input.cards.get(input.brand.id);
   const stamps = card?.stamps ?? 0;
@@ -355,9 +375,10 @@ export function cardPage(input: {
     })
     .join("");
   const first = input.member.name.split(" ")[0] || input.member.name;
+  const celebrate = input.params.get("ok") === "stampquest";
   return doc(
     input.brand.short_name,
-    `<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
+    `${celebrate ? confetti() : ""}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
       ${carousel(input.banners, input.now) || `<section class="reel"><div class="reel-track"><div class="slide"><div class="slide-fallback"></div><div class="slide-copy"><h3>${esc(input.brand.name)}</h3><p>${esc(input.brand.handle)}</p></div></div></div></section>`}
       <section class="hello">
         <div class="ident">
@@ -391,6 +412,7 @@ export function cardPage(input: {
       </section>
       ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id, input.booking || null, Boolean(input.pickBooking))}
       ${birthdayBlock(input.birthday, input.birthdayReward, input.brand.id, input.now)}
+      ${bonusStamp(input.missions || [], input.brand.id)}
       <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
       <div class="scan-sheet" data-scanner hidden>
         <div class="scan-top">
@@ -1272,86 +1294,6 @@ function stampChoices(selected: number): string {
   return opts.map(([label, quarters]) => `<option value="${label}"${selected === quarters ? " selected" : ""}>${label} stamp</option>`).join("");
 }
 
-export function missionsPage(input: {
-  stamps: number;
-  progress: string;
-  streak: number;
-  celebrate: boolean;
-  brand: Brand | null;
-  missions: Array<{
-    id: string;
-    title: string;
-    description: string;
-    points: string;
-    limit: string;
-    needShot: boolean;
-    needLink: boolean;
-    cashier?: boolean;
-    open: boolean;
-    brand: string;
-    icon: string;
-    tag: string;
-    locked: boolean;
-    tease: string;
-    unlock: string;
-    pct: number;
-    done: boolean;
-    statusLabel: string;
-  }>;
-  params: URLSearchParams;
-}): string {
-  const cards = input.missions
-    .map((m) => {
-      if (m.locked) {
-        return `<section class="quest locked">
-          <div class="qtop">
-            <div class="qico mystery" aria-hidden="true">?</div>
-            <div><div class="qtitle">Quest rahasia</div><p class="fine">${esc(m.tease || "Ada quest yang belum terbuka.")}</p></div>
-          </div>
-          <div class="lockline">Belum kebuka nih.</div>
-        </section>`;
-      }
-      const tag = m.tag === "new" ? `<span class="tag tag-new">NEW</span>` : m.tag === "limited" ? `<span class="tag tag-lim">Limited</span>` : "";
-      const form = m.open
-        ? `<a class="btn btn-solid" href="/misi/${esc(m.id)}">${m.cashier ? "Lihat quest" : "Kerjain quest"}</a>`
-        : "";
-      return `<section class="quest${m.done ? " done" : ""}">
-        <div class="qtop">
-          <div class="qico" aria-hidden="true">${esc(m.icon || "🍃")}</div>
-          <div class="qbody">
-            <div class="qtitle">${esc(m.title)}${tag}</div>
-            <p class="fine">${esc(m.description)}</p>
-          </div>
-          ${m.done ? `<span class="qcheck" aria-label="Selesai">${CHECK}</span>` : ""}
-        </div>
-        <div class="qfoot">
-          <span class="poinbadge sm"><b>${esc(m.points)}</b></span>
-          <span class="fine">${esc(m.brand)} · ${esc(m.limit)}</span>
-        </div>
-        <div class="qbar" role="progressbar" aria-valuenow="${m.pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${m.pct}%"></span></div>
-        <p class="fine">${esc(m.statusLabel)}</p>
-        ${form}
-      </section>`;
-    })
-    .join("");
-  const streak = input.streak >= 2 ? `<span class="streak">🔥 ${input.streak} minggu</span>` : "";
-  const skin = customerSkin(input.brand);
-  return doc(
-    "Side Quest",
-    `${input.celebrate ? confetti() : ""}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
-      <header class="hero">
-        <div class="hero-kicker">SIDE QUEST</div>
-        <div class="hero-title">${input.stamps} stamp</div>
-        <div class="hero-row"><span class="hero-fine">${esc(input.progress)}</span>${streak}</div>
-      </header>
-      ${flashes(input.params)}
-      ${cards || `<section class="card"><p>Belum ada side quest.</p></section>`}
-      ${tabbar("quest", input.brand?.id || "")}
-    </main>`,
-    skin.accent,
-  );
-}
-
 export function catalogPage(input: {
   stamps: number;
   brandName: string;
@@ -1594,15 +1536,15 @@ export function missionDetailPage(input: {
       ${gallery}
       ${flashes(input.params)}
       <section class="card">
-        <div class="eyebrow">SIDE QUEST</div>
+        <div class="eyebrow">BONUS STAMP</div>
         <h1 class="display" style="font-size:1.6rem">${esc(input.title)}</h1>
         <span class="poinbadge sm"><b>${esc(input.points)}</b></span>
         <p class="fine">${esc(input.description)}</p>
         ${steps ? `<ol class="steps">${steps}</ol>` : ""}
         ${proof}
-        <a class="btn btn-line" href="/misi${input.brand ? `?merek=${esc(input.brand.id)}` : ""}">Kembali</a>
+        <a class="btn btn-line" href="/kartu${input.brand ? `?merek=${esc(input.brand.id)}` : ""}#bonus-stamp">Kembali</a>
       </section>
-      ${tabbar("quest", input.brand?.id || "")}
+      ${tabbar("kartu", input.brand?.id || "")}
     </main>`,
     skin.accent,
   );

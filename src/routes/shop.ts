@@ -2,21 +2,30 @@ import { randomId } from "../crypto";
 import { httpsUrl } from "../format";
 import { html, json, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
-import { formatPoints, missionInWindow, missionOpen, proofKind, questLocked, questProgress, weekStreak } from "../points";
+import { missionInWindow, missionOpen, questLocked } from "../points";
 import * as pdb from "../points-db";
 import { expireCodes, redeemBirthdayCode, redeemPointsReward, redeemTier, submitMission } from "../points-flow";
-import { formatAward, missionQuarters, questProgressLabel } from "../quest-stamp";
+import { formatAward, missionQuarters } from "../quest-stamp";
 import { loadBirthdayNotice } from "../birthday-gate";
 import { brandOpen, pickLiveBrand } from "../brands";
 import { mustVerify } from "../wa";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { loadMember, loadSignup } from "../session";
-import { catalogPage, codePage, messagePage, missionDetailPage, missionsPage } from "../view";
+import { catalogPage, codePage, messagePage, missionDetailPage } from "../view";
 import type { App } from "./customer";
 
 function go(path: string, code: string): Response {
   return redirect(`${path}${path.includes("?") ? "&" : "?"}err=${encodeURIComponent(code)}`);
+}
+
+function kartuBonus(brandId: string | null, extra: { ok?: string | null; err?: string | null } = {}): string {
+  const params = new URLSearchParams();
+  if (brandId) params.set("merek", brandId);
+  if (extra.ok) params.set("ok", extra.ok);
+  if (extra.err) params.set("err", extra.err);
+  const query = params.toString();
+  return `/kartu${query ? `?${query}` : ""}#bonus-stamp`;
 }
 
 export async function handleShop(app: App): Promise<Response | null> {
@@ -24,6 +33,7 @@ export async function handleShop(app: App): Promise<Response | null> {
   const path = url.pathname;
   const shop =
     path === "/misi" ||
+    path === "/side-quest" ||
     path.startsWith("/misi/") ||
     path === "/hadiah" ||
     path.startsWith("/hadiah/") ||
@@ -41,66 +51,17 @@ export async function handleShop(app: App): Promise<Response | null> {
   }
   if (mustVerify(env, member)) return redirect("/verifikasi");
 
-  if (path === "/misi" && request.method === "GET") {
-    const missions = (await pdb.listMissions(db, true)).filter((mission) => missionInWindow(mission.starts_at, mission.ends_at, now));
+  if ((path === "/misi" || path === "/side-quest") && request.method === "GET") {
     const brands = await repo.listBrands(db, true);
-    const earned = await pdb.lifetimeEarned(db, member.id);
-    const streak = weekStreak(await pdb.visitMarks(db, member.id), now);
-    const celebrate = url.searchParams.get("ok") === "stampquest";
     const picked = pickLiveBrand(brands, url.searchParams.get("merek"));
-    const card = picked ? await repo.getCard(db, member.id, picked.id) : null;
-    const view = [];
-    for (const mission of missions) {
-      const state = await pdb.memberMissionState(db, member.id, mission.id);
-      const locked = questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned });
-      const open =
-        !locked &&
-        missionOpen({
-          limit: "once",
-          hasPending: state.pending,
-          lastApprovedAt: state.lastApprovedAt,
-          now,
-        });
-      const progress = questProgress({ limit: "once", pending: state.pending, lastApprovedAt: state.lastApprovedAt, now });
-      view.push({
-        id: mission.id,
-        title: mission.title,
-        description: mission.description,
-        points: formatAward(missionQuarters(mission)),
-        limit: "Sekali saja",
-        needShot: proofKind(mission) === "upload",
-        needLink: proofKind(mission) === "link",
-        cashier: proofKind(mission) === "cashier",
-        open,
-        brand: brands.find((b) => b.id === mission.brand_id)?.short_name || "Semua merek",
-        icon: mission.icon || "🍃",
-        tag: mission.tag === "new" || mission.tag === "limited" ? mission.tag : "",
-        locked,
-        tease: mission.tease || "",
-        unlock: formatPoints(mission.unlock_points_tenths),
-        pct: progress.pct,
-        done: progress.done,
-        statusLabel: progress.label,
-      });
-    }
-    return html(
-      missionsPage({
-        stamps: card?.stamps || 0,
-        progress: questProgressLabel(card?.remainder_quarters || 0),
-        streak,
-        celebrate,
-        brand: picked,
-        missions: view,
-        params: url.searchParams,
-      }),
-    );
+    return redirect(kartuBonus(picked?.id || url.searchParams.get("merek"), { ok: url.searchParams.get("ok"), err: url.searchParams.get("err") }));
   }
 
   const missionDetail = path.startsWith("/misi/") && request.method === "GET" ? decodeURIComponent(path.slice("/misi/".length)) : "";
   if (missionDetail && !missionDetail.includes("/")) {
     const mission = await pdb.getMission(db, missionDetail);
-    if (!mission || !mission.active || !missionInWindow(mission.starts_at, mission.ends_at, now)) return go("/misi", "umum");
-    if (!brandOpen(mission.brand_id ? await repo.getBrand(db, mission.brand_id) : null)) return go("/misi", "merek");
+    if (!mission || !mission.active || !missionInWindow(mission.starts_at, mission.ends_at, now)) return redirect(kartuBonus(url.searchParams.get("merek"), { err: "umum" }));
+    if (!brandOpen(mission.brand_id ? await repo.getBrand(db, mission.brand_id) : null)) return redirect(kartuBonus(mission.brand_id, { err: "merek" }));
     const brands = await repo.listBrands(db, true);
     const earned = await pdb.lifetimeEarned(db, member.id);
     const state = await pdb.memberMissionState(db, member.id, mission.id);
@@ -133,21 +94,20 @@ export async function handleShop(app: App): Promise<Response | null> {
     const id = decodeURIComponent(path.slice("/misi/".length));
     const form = await request.formData();
     const mission = await pdb.getMission(db, id);
-    if (!mission) return go("/misi", "umum");
+    if (!mission) return redirect(kartuBonus(null, { err: "umum" }));
     let link = httpsUrl(String(form.get("link") || ""));
     let r2Key: string | null = null;
     const file = form.get("gambar");
     if (file instanceof File && file.size > 0) {
       const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-      if (file.size > 2_000_000 || !allowed.has(file.type)) return go("/misi", "gambar");
+      if (file.size > 2_000_000 || !allowed.has(file.type)) return redirect(kartuBonus(mission.brand_id, { err: "gambar" }));
       const keyId = randomId();
       r2Key = `missions/${keyId}`;
       await env.BANNERS.put(r2Key, file.stream(), { httpMetadata: { contentType: file.type } });
     }
     const result = await submitMission(db, { member, missionId: id, link, r2Key, now });
-    if (!result.ok) return go("/misi", result.error);
-    const merek = mission.brand_id ? `&merek=${encodeURIComponent(mission.brand_id)}` : "";
-    return redirect(result.stampsAdded > 0 ? `/misi?ok=stampquest${merek}` : `/misi?ok=misi${merek}`);
+    if (!result.ok) return redirect(kartuBonus(mission.brand_id, { err: result.error }));
+    return redirect(kartuBonus(mission.brand_id, { ok: result.stampsAdded > 0 ? "stampquest" : "misi" }));
   }
 
   if (path === "/hadiah" && request.method === "GET") {

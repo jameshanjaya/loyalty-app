@@ -2,7 +2,8 @@ import { randomId } from "../crypto";
 import { loadBirthdayNotice } from "../birthday-gate";
 import { brandOpen, pickLiveBrand } from "../brands";
 import { bookingTarget, bookingUrl, hiddenOrderPlatform, visibleOrderLinks } from "../orders";
-import { tierChoices } from "../points";
+import { missionInWindow, questLocked, questProgress, tierChoices } from "../points";
+import { formatAward, missionQuarters } from "../quest-stamp";
 import { LIMITS, enforceLimit } from "../ratelimit";
 import * as pdb from "../points-db";
 import { expireCodes } from "../points-flow";
@@ -228,6 +229,20 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const banners = await repo.listBanners(db, brand.id);
     const history = await repo.memberHistory(db, member.id, brand.id);
     const birthday = await loadBirthdayNotice(db, member, brand, now);
+    const earned = await pdb.lifetimeEarned(db, member.id);
+    const missions = [];
+    for (const mission of (await pdb.listMissions(db, true)).filter((item) => item.brand_id === brand.id && missionInWindow(item.starts_at, item.ends_at, now))) {
+      const state = await pdb.memberMissionState(db, member.id, mission.id);
+      const locked = questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned });
+      const progress = questProgress({ limit: "once", pending: state.pending, lastApprovedAt: state.lastApprovedAt, now });
+      missions.push({
+        id: mission.id,
+        title: mission.title,
+        points: formatAward(missionQuarters(mission)),
+        done: progress.done,
+        locked: locked && !progress.done,
+      });
+    }
     const links = await repo.listOrderLinks(db, brand.id);
     const named = (await repo.listOutlets(db)).filter((outlet) => outlet.brand_id === brand.id && outlet.active);
     const outletParam = url.searchParams.get("outlet") || "";
@@ -274,6 +289,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         orderOutlets,
         booking: target,
         pickBooking: bookable.length > 1 && !target,
+        missions,
       }),
     );
   }
