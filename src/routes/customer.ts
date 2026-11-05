@@ -1,12 +1,10 @@
 import { randomId } from "../crypto";
 import { birthdayNotice, type BirthdayNotice } from "../birthday";
 import { bookingTarget, bookingUrl, hiddenOrderPlatform, visibleOrderLinks } from "../orders";
-import { expiryCopy } from "../expiry";
-import { formatPoints, tierChoices } from "../points";
+import { tierChoices } from "../points";
 import { LIMITS, enforceLimit } from "../ratelimit";
 import * as pdb from "../points-db";
-import { expireCodes, memberPointState } from "../points-flow";
-import { shortDate } from "../time";
+import { expireCodes } from "../points-flow";
 import { mustVerify, waReady } from "../wa";
 import { html, isPrefetch, readCookie, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
@@ -257,7 +255,6 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const orderOutlets = named
       .filter((outlet) => chipIds.has(outlet.id))
       .map((outlet) => ({ id: outlet.id, name: outlet.name, on: outlet.id === selected }));
-    const pointState = await memberPointState(db, member.id, now);
     const tiers = await pdb.listTiers(db, brand.id);
     const choice = tierChoices(
       cards.get(brand.id)?.stamps ?? 0,
@@ -281,10 +278,6 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         params: url.searchParams,
         birthday,
         birthdayReward: brand.birthday_reward,
-        points: formatPoints(pointState.balance),
-        expiry: pointState.batch
-          ? expiryCopy({ points: formatPoints(pointState.batch.tenths), date: shortDate(pointState.batch.expiresAt), days: pointState.days, soon: pointState.batch.soon })
-          : null,
         tiers: tierView,
         orders,
         orderOutlets,

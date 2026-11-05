@@ -17,6 +17,7 @@ export type Mission = {
   tease: string;
   unlock_points_tenths: number;
   sort_order: number;
+  points_quarters?: number;
   proof_kind?: string;
   starts_at?: number | null;
   ends_at?: number | null;
@@ -59,6 +60,10 @@ export type StampTier = {
   reward_text: string;
   sort_order: number;
   active: number;
+  icon?: string;
+  stock?: number | null;
+  image_url?: string | null;
+  r2_key?: string | null;
 };
 
 export type RedeemCode = {
@@ -101,8 +106,8 @@ export async function insertMission(db: D1Database, row: Mission): Promise<void>
     .prepare(
       `INSERT INTO missions (
          id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at,
-         icon, tag, mystery, tease, unlock_points_tenths, sort_order, proof_kind, starts_at, ends_at, steps
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         icon, tag, mystery, tease, unlock_points_tenths, sort_order, proof_kind, starts_at, ends_at, steps, points_quarters
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       row.id,
@@ -125,6 +130,7 @@ export async function insertMission(db: D1Database, row: Mission): Promise<void>
       row.starts_at ?? null,
       row.ends_at ?? null,
       row.steps || "",
+      row.points_quarters || 0,
     )
     .run();
 }
@@ -134,7 +140,7 @@ export async function updateMission(db: D1Database, row: Mission): Promise<void>
     .prepare(
       `UPDATE missions SET brand_id=?, title=?, description=?, points_tenths=?, proof_screenshot=?, proof_link=?,
         limit_kind=?, active=?, icon=?, tag=?, mystery=?, tease=?, unlock_points_tenths=?, sort_order=?,
-        proof_kind=?, starts_at=?, ends_at=?, steps=? WHERE id=?`,
+        proof_kind=?, starts_at=?, ends_at=?, steps=?, points_quarters=? WHERE id=?`,
     )
     .bind(
       row.brand_id,
@@ -155,6 +161,7 @@ export async function updateMission(db: D1Database, row: Mission): Promise<void>
       row.starts_at ?? null,
       row.ends_at ?? null,
       row.steps || "",
+      row.points_quarters || 0,
       row.id,
     )
     .run();
@@ -384,6 +391,18 @@ export async function takeStock(db: D1Database, id: string): Promise<"unlimited"
   return result.meta.changes === 1 ? "taken" : "empty";
 }
 
+export async function takeTierStock(db: D1Database, id: string): Promise<"unlimited" | "taken" | "empty"> {
+  const row = await db.prepare(`SELECT stock, active FROM stamp_tiers WHERE id = ?`).bind(id).first<{ stock: number | null; active: number }>();
+  if (!row || !row.active) return "empty";
+  if (row.stock == null) return "unlimited";
+  const result = await db.prepare(`UPDATE stamp_tiers SET stock = stock - 1 WHERE id = ? AND stock > 0`).bind(id).run();
+  return result.meta.changes === 1 ? "taken" : "empty";
+}
+
+export async function returnTierStock(db: D1Database, id: string): Promise<void> {
+  await db.prepare(`UPDATE stamp_tiers SET stock = stock + 1 WHERE id = ? AND stock IS NOT NULL`).bind(id).run();
+}
+
 export async function returnStock(db: D1Database, id: string): Promise<void> {
   await db.prepare(`UPDATE point_rewards SET stock = stock + 1 WHERE id = ? AND stock IS NOT NULL`).bind(id).run();
 }
@@ -400,9 +419,15 @@ export async function listAllTiers(db: D1Database): Promise<StampTier[]> {
 
 export async function insertTier(db: D1Database, row: StampTier): Promise<void> {
   await db
-    .prepare(`INSERT INTO stamp_tiers (id, brand_id, stamps, reward_text, sort_order, active) VALUES (?, ?, ?, ?, ?, ?)`)
-    .bind(row.id, row.brand_id, row.stamps, row.reward_text, row.sort_order, row.active)
+    .prepare(
+      `INSERT INTO stamp_tiers (id, brand_id, stamps, reward_text, sort_order, active, icon, stock, image_url, r2_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(row.id, row.brand_id, row.stamps, row.reward_text, row.sort_order, row.active, row.icon || "🎁", row.stock ?? null, row.image_url ?? null, row.r2_key ?? null)
     .run();
+}
+
+export async function setTierActive(db: D1Database, id: string, active: number): Promise<void> {
+  await db.prepare(`UPDATE stamp_tiers SET active = ? WHERE id = ?`).bind(active, id).run();
 }
 
 export async function getTier(db: D1Database, id: string): Promise<StampTier | null> {

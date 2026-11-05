@@ -1,4 +1,5 @@
 import type { OrderLink } from "./orders";
+import { applyQuestQuarters } from "./quest-stamp";
 import type { ActivityRow, Banner, Brand, Card, FlagRow, Member, Outlet, SessionRow } from "./types";
 import type { StoredClaim } from "./tokens";
 
@@ -324,6 +325,28 @@ export async function reopenClaim(db: D1Database, id: string): Promise<void> {
 }
 
 type StampUpdate = { stamps: number; lifetime_stamps: number };
+
+export async function adjustQuestProgress(
+  db: D1Database,
+  input: { memberId: string; brandId: string; quarterDelta: number; now: number },
+): Promise<{ stampDelta: number; stamps: number; quarters: number }> {
+  const card = await ensureCard(db, input.memberId, input.brandId, input.now);
+  const next = applyQuestQuarters(
+    { stamps: card.quest_stamps || 0, quarters: card.remainder_quarters || 0 },
+    input.quarterDelta,
+  );
+  const stampDelta = next.stampDelta;
+  const stamps = Math.max(0, card.stamps + stampDelta);
+  const lifetime = Math.max(0, card.lifetime_stamps + stampDelta);
+  await db
+    .prepare(
+      `UPDATE cards SET stamps = ?, lifetime_stamps = ?, remainder_quarters = ?, quest_stamps = ?, updated_at = ?
+       WHERE member_id = ? AND brand_id = ?`,
+    )
+    .bind(stamps, lifetime, next.pool.quarters, next.pool.stamps, input.now, input.memberId, input.brandId)
+    .run();
+  return { stampDelta, stamps, quarters: next.pool.quarters };
+}
 
 export async function addStampAtomic(
   db: D1Database,

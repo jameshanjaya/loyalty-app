@@ -57,6 +57,8 @@ export type Card = {
   stamps: number;
   lifetime_stamps: number;
   lifetime_redeems: number;
+  remainder_quarters?: number;
+  quest_stamps?: number;
   day_count: number;
   day_on: number;
   updated_at: number;

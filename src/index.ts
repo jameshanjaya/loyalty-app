@@ -83,6 +83,13 @@ async function serveMedia(env: Env, url: URL): Promise<Response | null> {
     const object = await env.BANNERS.get(row.r2_key);
     return object ? imageResponse(object) : new Response("Tidak ketemu", { status: 404 });
   }
+  const redeem = url.pathname.match(/^\/media\/redeem\/([A-Za-z0-9_-]{8,80})$/);
+  if (redeem) {
+    const row = await env.DB.prepare(`SELECT r2_key FROM stamp_tiers WHERE id = ?`).bind(redeem[1]).first<{ r2_key: string | null }>();
+    if (!row?.r2_key) return new Response("Tidak ketemu", { status: 404 });
+    const object = await env.BANNERS.get(row.r2_key);
+    return object ? imageResponse(object) : new Response("Tidak ketemu", { status: 404 });
+  }
   if (!url.pathname.startsWith("/media/banners/")) return null;
   const id = url.pathname.slice("/media/banners/".length);
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(id)) return new Response("Tidak ketemu", { status: 404 });
