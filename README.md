@@ -4,7 +4,7 @@ Kartu stamp digital untuk kafe dan resto. Satu akun pelanggan dipakai di semua m
 
 Aplikasi ini jalan di Cloudflare versi gratis: Workers, database D1, dan tempat gambar R2. Tidak perlu aplikasi di Play Store. Pelanggan buka lewat browser HP, lalu bisa dipasang seperti aplikasi (PWA).
 
-Tidak ada SMS dan tidak ada OTP WhatsApp, karena itu berbayar. Pelanggan bikin PIN sendiri.
+Aplikasi yang jalan sekarang tidak mengirim SMS atau OTP. Pelanggan bikin PIN sendiri. Rencana verifikasi WhatsApp ada di bawah, dan belum dibuat.
 
 ## Yang perlu disiapkan
 
@@ -157,6 +157,16 @@ GOOGLE_CLIENT_SECRET=tempel-client-secret
 Jangan taruh Client secret di chat atau di git. Kalau Google belum diisi, tombol Google menampilkan pesan bahwa owner belum menyetelnya. Nomor WA + PIN tetap jalan.
 
 Pelanggan baru dari Google mengisi nama, tanggal lahir, nomor WA, dan PIN dulu sebelum kartu terbuka. Tanggal lahir tidak bisa diubah sendiri setelah tersimpan. Owner bisa mengubahnya di halaman member. Kalau nomor WA itu sudah punya kartu, pelanggan memasukkan PIN kartu itu supaya akun Google-nya tersambung. Kalau nomor itu sudah tersambung ke Google lain, aplikasi menolak.
+
+## Rencana verifikasi nomor WA (belum dibuat)
+
+Ini desain saja. Aplikasi belum menerima pesan WhatsApp.
+
+Setelah login Google dan isi profil (nama, tanggal lahir, nomor), pelanggan tap **Verifikasi via WA**. Tombol itu membuka `wa.me/<nomor bisnis>?text=VERIF-XXXXXX`. Pesannya sudah terisi. Pelanggan kirim saja, tidak mengetik OTP. Layar berikutnya menunggu, dengan tombol **Buka WA lagi**. Cadangannya tautan **Kirim kode OTP ke WA saya**. Kalau nomor cocok, muncul **Nomor terverifikasi**.
+
+Nanti, WhatsApp Cloud API mengirim pesan masuk ke webhook. Server mencocokkan kode dan nomor pengirim, lalu menandai nomor itu terverifikasi. Kode berlaku 10 menit. Satu nomor hanya untuk satu akun.
+
+Mockupnya ada di `mockups/screen.html?screen=verif`, `tunggu`, dan `waok`.
 
 ## Cara pakai sehari-hari
 

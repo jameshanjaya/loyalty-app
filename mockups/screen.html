@@ -317,7 +317,45 @@ function detail() {
     ${nav("quest")}`;
 }
 
-const views = { kartu, quest, hadiah, kode, profil, detail };
+function verif() {
+  return `
+    <div class="eyebrow">SETELAH PROFIL</div>
+    <h1 class="display" style="font-size:1.7rem;margin-top:6px">Verifikasi nomor WA</h1>
+    <p class="fine">Nama, tanggal lahir, dan nomor sudah tersimpan. Tinggal kirim satu pesan.</p>
+    <section class="card rows" style="margin-top:14px;padding:4px 16px">
+      <div class="row"><span>Nama</span><b>Rina Pratiwi</b></div>
+      <div class="row"><span>Lahir</span><b>4 Nov 1998</b></div>
+      <div class="row"><span>WhatsApp</span><b>0812 3456 4567</b></div>
+    </section>
+    <a class="wa-btn" href="https://wa.me/628111000222?text=VERIF-482913">Verifikasi via WA</a>
+    <p class="center" style="margin-top:12px"><span class="codechip">VERIF-482913</span></p>
+    <p class="fine center">Pesan ini sudah terisi. Kirim saja, jangan diubah. Berlaku 10 menit.</p>
+    <p class="fine center">Satu nomor hanya untuk satu akun.</p>`;
+}
+
+function tunggu() {
+  return `
+    <div class="code-wrap">
+      <div class="spin"></div>
+      <h1 class="display" style="font-size:1.6rem">Menunggu pesan kamu…</h1>
+      <p class="fine">Kirim VERIF-482913 dari 0812 3456 4567. Kami cocokkan nomor pengirimnya.</p>
+      <a class="wa-btn" href="https://wa.me/628111000222?text=VERIF-482913">Buka WA lagi</a>
+      <p class="center" style="margin-top:16px"><a href="#" style="font-weight:800;text-decoration:underline">Kirim kode OTP ke WA saya</a></p>
+    </div>`;
+}
+
+function waok() {
+  return `
+    <div class="code-wrap celebrate">
+      ${burst()}
+      <div class="bigcheck">${CHECK}</div>
+      <h1 class="display" style="font-size:1.7rem">Nomor terverifikasi</h1>
+      <p class="fine">0812 3456 4567 sudah terhubung ke akun kamu.</p>
+      <a class="btn" href="screen.html?brand=${brand.key}&screen=kartu">Lanjut ke kartu</a>
+    </div>`;
+}
+
+const views = { kartu, quest, hadiah, kode, profil, detail, verif, tunggu, waok };
 document.getElementById("app").innerHTML = (views[screen] || kartu)();
 </script>
 </body>
