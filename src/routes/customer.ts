@@ -1,6 +1,6 @@
 import { randomId } from "../crypto";
 import { birthdayStatus } from "../birthday";
-import { bookingTarget, bookingUrl, visibleOrderLinks } from "../orders";
+import { bookingTarget, bookingUrl, hiddenOrderPlatform, visibleOrderLinks } from "../orders";
 import { expiryCopy } from "../expiry";
 import { formatPoints, tierChoices } from "../points";
 import { LIMITS, enforceLimit } from "../ratelimit";
@@ -246,7 +246,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       selected || null,
     );
     const chipIds = new Set<string>([
-      ...links.flatMap((link) => (link.outlet_id ? [link.outlet_id] : [])),
+      ...orders.flatMap((link) => (link.outlet_id ? [link.outlet_id] : [])),
       ...(bookable.length > 1 ? bookable.map((outlet) => outlet.id) : []),
     ]);
     const orderOutlets = named
@@ -311,7 +311,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     }
     const id = decodeURIComponent(path.slice("/pesan/".length));
     const link = await repo.getOrderLink(db, id);
-    if (!link || link.active !== 1 || !link.url.startsWith("https://")) return redirect("/kartu");
+    if (!link || link.active !== 1 || !link.url.startsWith("https://") || hiddenOrderPlatform(link.platform)) return redirect("/kartu");
     const gate = await enforceLimit(db, `order:${ip}`, now, LIMITS.orderClick);
     if (gate.ok) {
       await repo.logOrderClick(db, {

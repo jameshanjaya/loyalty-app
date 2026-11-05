@@ -1,5 +1,5 @@
 import { esc, formatInt, maskName, maskWa, prettyWa } from "./format";
-import { orderLabel, type OrderLink } from "./orders";
+import { hiddenOrderPlatform, orderLabel, type OrderLink } from "./orders";
 import { progressCopy } from "./loyalty";
 import { errText, okText } from "./messages";
 import { bannerLive } from "./repo";
@@ -180,13 +180,10 @@ function orderBlock(
   booking: { id: string; name: string } | null,
   pickBooking: boolean,
 ): string {
-  if (!links.length && !booking && !pickBooking) return "";
-  const primary = links.filter((link) => link.platform === "gofood" || link.platform === "grabfood");
-  const extras = links.filter((link) => link.platform !== "gofood" && link.platform !== "grabfood");
-  const badge = (link: OrderLink) => {
-    const kind = link.platform === "gofood" || link.platform === "grabfood" ? link.platform : "extra";
-    return `<a class="obadge ${kind}" href="/pesan/${esc(link.id)}" target="_blank" rel="noopener noreferrer">${esc(orderLabel(link.platform, link.label))}</a>`;
-  };
+  const extras = links.filter((link) => !hiddenOrderPlatform(link.platform));
+  if (!extras.length && !booking && !pickBooking) return "";
+  const badge = (link: OrderLink) =>
+    `<a class="obadge extra" href="/pesan/${esc(link.id)}" target="_blank" rel="noopener noreferrer">${esc(orderLabel(link.platform, link.label))}</a>`;
   const chips = outlets.length
     ? `<div class="pills">${[`<a class="pill${!outlets.some((o) => o.on) ? " on" : ""}" href="/kartu?merek=${esc(brandId)}">Semua outlet</a>`]
         .concat(outlets.map((o) => `<a class="pill${o.on ? " on" : ""}" href="/kartu?merek=${esc(brandId)}&outlet=${esc(o.id)}">${esc(o.name)}</a>`))
@@ -198,11 +195,10 @@ function orderBlock(
       ? `<p class="fine">Pilih outlet dulu buat order / booking.</p>`
       : "";
   return `<section class="card order">
-    <div class="eyebrow">Pesan online</div>
-    <h2>Pesan sekarang</h2>
+    <div class="eyebrow">Order</div>
+    <h2>Order / Booking</h2>
     ${chips}
     ${book}
-    ${primary.length ? `<div class="order-row">${primary.map(badge).join("")}</div>` : ""}
     ${extras.length ? `<div class="order-extra">${extras.map(badge).join("")}</div>` : ""}
   </section>`;
 }
@@ -722,7 +718,6 @@ export function dashboardPage(input: {
   pointsRedeemed: string;
   pendingMissions: number;
   expireDays?: number;
-  orderClicks: Array<{ brand: string; platform: string; n: number }>;
 }): string {
   const chips = [`<a class="chip${input.brand ? "" : " on"}" href="/admin/dasbor">Semua</a>`]
     .concat(input.brands.map((b) => `<a class="chip${input.brand?.id === b.id ? " on" : ""}" href="/admin/dasbor?merek=${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`))
@@ -760,14 +755,7 @@ export function dashboardPage(input: {
       <article class="kpi"><span>Poin masuk bulan ini</span><b>${input.pointsIssued}</b><span>poin disetujui</span></article>
       <article class="kpi"><span>Poin ditukar bulan ini</span><b>${input.pointsRedeemed}</b><span>dari katalog</span></article>
       <article class="kpi"><span>Side Quest menunggu</span><b>${input.pendingMissions}</b><span><a href="/admin/misi">Kelola Side Quest</a></span></article>
-      <article class="kpi"><span>Klik pesan bulan ini</span><b>${input.orderClicks.reduce((sum, row) => sum + row.n, 0)}</b><span>GoFood, GrabFood, dan lain</span></article>
     </section>
-    <article class="panel" style="margin-top:12px"><h2>Pesan online</h2>
-      <table><thead><tr><th>Merek</th><th>Platform</th><th>Klik</th></tr></thead><tbody>${
-        input.orderClicks.map((row) => `<tr><td>${esc(row.brand)}</td><td>${esc(row.platform)}</td><td>${row.n}</td></tr>`).join("") ||
-        `<tr><td colspan="3">Belum ada klik bulan ini.</td></tr>`
-      }</tbody></table>
-    </article>
     <section class="grid-2">
       <article class="panel"><h2>Stamp per hari (14 hari)</h2><div class="bars">${bars}</div></article>
       <article class="panel"><h2>Member paling loyal</h2>
@@ -1099,12 +1087,10 @@ export function rulesPage(brands: Brand[], links: OrderLink[], params: URLSearch
         <label class="lbl">N hari (kalau pilih hari di sekitar)</label><input name="birthday_days" type="number" min="0" max="30" value="${b.birthday_days ?? 7}" />
         <label class="checkline"><input type="checkbox" name="birthday_active" value="on" ${b.birthday_active ? "checked" : ""} /> Hadiah ulang tahun aktif</label>
         <label class="checkline"><input type="checkbox" name="active" value="on" ${b.active ? "checked" : ""} /> Merek aktif</label>
-        <h3 style="margin-top:14px">Pesan online</h3>
-        <p class="fine">Kosongkan kalau tombolnya tidak dipakai. Tautan outlet di halaman Outlet menimpa tautan merek.</p>
-        <label class="lbl">GoFood (https)</label><input name="gofood" type="url" placeholder="https://gofood.co.id/..." value="${esc(storeUrl(links, b.id, "gofood"))}" />
-        <label class="lbl">GrabFood (https)</label><input name="grabfood" type="url" placeholder="https://food.grab.com/..." value="${esc(storeUrl(links, b.id, "grabfood"))}" />
+        <h3 style="margin-top:14px">Tautan lain</h3>
+        <p class="fine">Order / Booking diatur per outlet. GoFood, GrabFood, dan ShopeeFood tidak ditampilkan.</p>
         <label class="lbl">Tautan tambahan</label>
-        <select name="extra_platform"><option value="">Tidak tambah</option><option value="wa">WhatsApp</option><option value="shopeefood">ShopeeFood</option><option value="other">Lainnya</option></select>
+        <select name="extra_platform"><option value="">Tidak tambah</option><option value="wa">WhatsApp</option><option value="other">Lainnya</option></select>
         <label class="lbl">Nama tombol tambahan</label><input name="extra_label" maxlength="24" placeholder="WhatsApp" />
         <label class="lbl">URL tambahan (https)</label><input name="extra_url" type="url" placeholder="https://wa.me/62..." />
         <button class="btn btn-solid">Simpan</button>
@@ -1123,12 +1109,10 @@ export function rulesPage(brands: Brand[], links: OrderLink[], params: URLSearch
   return adminShell("/admin/aturan", `<h1>Setting program</h1>${flashes(params)}<p class="fine">Teks centang inilah yang dilihat kasir sebelum kasih stamp.</p>${forms}`);
 }
 
-function storeUrl(links: OrderLink[], brandId: string, platform: string, outletId: string | null = null): string {
-  return links.find((link) => link.brand_id === brandId && link.platform === platform && (link.outlet_id || null) === outletId)?.url || "";
-}
-
 function extraLinks(links: OrderLink[], brandId: string): string {
-  const extras = links.filter((link) => link.brand_id === brandId && !link.outlet_id && link.platform !== "gofood" && link.platform !== "grabfood");
+  const extras = links.filter(
+    (link) => link.brand_id === brandId && !link.outlet_id && !hiddenOrderPlatform(link.platform),
+  );
   if (!extras.length) return "";
   return extras
     .map(
@@ -1143,7 +1127,6 @@ function extraLinks(links: OrderLink[], brandId: string): string {
 export function outletsPage(
   outlets: Array<Outlet & { brand_name: string }>,
   brands: Brand[],
-  links: OrderLink[],
   params: URLSearchParams,
   staff: Array<{ outlet_id: string; id: string; name: string; wa: string; email: string | null }> = [],
 ): string {
@@ -1162,10 +1145,7 @@ export function outletsPage(
           <button class="btn btn-line">${o.active ? "Nonaktifkan" : "Aktifkan"}</button>
         </form>
         <form method="post" action="/admin/outlet/${esc(o.id)}/pesan">
-          <h3 style="margin-top:8px">Pesan online outlet ini</h3>
-          <p class="fine">Kalau diisi, tombol di kartu memakai tautan ini, bukan tautan merek.</p>
-          <label class="lbl">GoFood</label><input name="gofood" type="url" value="${esc(storeUrl(links, o.brand_id, "gofood", o.id))}" placeholder="https://" />
-          <label class="lbl">GrabFood</label><input name="grabfood" type="url" value="${esc(storeUrl(links, o.brand_id, "grabfood", o.id))}" placeholder="https://" />
+          <h3 style="margin-top:8px">Order / Booking</h3>
           <label class="lbl">WhatsApp order / booking</label><input name="wa" inputmode="tel" value="${esc(o.wa || "")}" placeholder="0812 3456 4567" />
           <p class="fine">Tombol Order / Booking membuka chat dengan pesan “Halo, mau order/booking di ${esc(o.name)}”. Kosongkan untuk menyembunyikan.</p>
           <button class="btn btn-solid">Simpan tautan</button>

@@ -22,12 +22,12 @@ describe("tautan pesan", () => {
     link({ id: "out-go", platform: "gofood", url: "https://gofood.co.id/senopati", outlet_id: "o_loft" }),
   ];
 
-  it("menyembunyikan yang kosong atau mati, dan outlet menimpa merek", () => {
+  it("menyembunyikan GoFood, GrabFood, ShopeeFood, dan tautan mati", () => {
     const brand = visibleOrderLinks(links, null).map((item) => item.id);
-    expect(brand).toEqual(["go", "grab", "wa"]);
+    expect(brand).toEqual(["wa"]);
     const outlet = visibleOrderLinks(links, "o_loft").map((item) => item.id);
-    expect(outlet).toEqual(["out-go", "grab", "wa"]);
-    expect(visibleOrderLinks(links, "lain").map((item) => item.id)).toEqual(["go", "grab", "wa"]);
+    expect(outlet).toEqual(["wa"]);
+    expect(visibleOrderLinks(links, "lain").map((item) => item.id)).toEqual(["wa"]);
   });
 
   it("order / booking memakai nomor outlet, dan disembunyikan kalau kosong", () => {

@@ -11,21 +11,20 @@ export type OrderLink = {
   active: number;
 };
 
-const PRIMARY = ["gofood", "grabfood"] as const;
+const HIDDEN_ORDER = new Set(["gofood", "grabfood", "shopeefood"]);
+
+/** GoFood, GrabFood, and ShopeeFood stay in the database but are not shown. */
+export function hiddenOrderPlatform(platform: string): boolean {
+  return HIDDEN_ORDER.has(platform);
+}
 
 export function visibleOrderLinks(links: OrderLink[], outletId: string | null): OrderLink[] {
-  const usable = links.filter((link) => link.active === 1 && link.url.trim().startsWith("https://"));
+  const usable = links.filter(
+    (link) => link.active === 1 && link.url.trim().startsWith("https://") && !hiddenOrderPlatform(link.platform),
+  );
   const brand = usable.filter((link) => !link.outlet_id);
   const outlet = outletId ? usable.filter((link) => link.outlet_id === outletId) : [];
-  const picked: OrderLink[] = [];
-  for (const platform of PRIMARY) {
-    const chosen = outlet.find((link) => link.platform === platform) || brand.find((link) => link.platform === platform);
-    if (chosen) picked.push(chosen);
-  }
-  const extras = [...brand, ...outlet]
-    .filter((link) => link.platform !== "gofood" && link.platform !== "grabfood")
-    .sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));
-  return [...picked, ...extras];
+  return [...brand, ...outlet].sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));
 }
 
 export function orderPlatform(raw: string): "gofood" | "grabfood" | "shopeefood" | "wa" | "other" | null {
