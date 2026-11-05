@@ -1,4 +1,6 @@
+import { nextRewardLine } from "../brand-visual";
 import { randomId } from "../crypto";
+import { attachReferral, referralProgress, refreshReferral } from "../referral-flow";
 import { loadBirthdayNotice } from "../birthday-gate";
 import { brandOpen, pickLiveBrand } from "../brands";
 import { bookingTarget, bookingUrl, hiddenOrderPlatform, visibleOrderLinks } from "../orders";
@@ -136,7 +138,11 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const slug = path.startsWith("/gabung/") ? decodeURIComponent(path.slice("/gabung/".length)) : url.searchParams.get("merek") || "";
     const brand = brands.find((b) => b.id === slug) || null;
     const next = safeNext(url.searchParams.get("next"), brand ? `/kartu?merek=${brand.id}` : "/kartu");
-    return html(joinPage({ brands, brand, next, params: url.searchParams }));
+    const ajak = (url.searchParams.get("ajak") || "").trim().toLowerCase();
+    const params = new URLSearchParams(url.searchParams);
+    if (ajak) params.set("ajak", ajak);
+    const cookie = ajak ? `ajak=${encodeURIComponent(`${ajak}.${brand?.id || ""}`)}; Path=/; Max-Age=604800; SameSite=Lax; HttpOnly` : "";
+    return html(joinPage({ brands, brand, next, params }), 200, cookie ? { "set-cookie": cookie } : undefined);
   }
 
   if (path === "/gabung" && request.method === "POST") {
@@ -166,6 +172,10 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       return html(joinPage({ brands, brand, next, params: errQuery(result.error), values: { nama, wa } }), 400);
     }
     await repo.setPromoConsent(db, result.member.id, now);
+    const ajakCookie = readCookie(request.headers.get("cookie"), "ajak") || "";
+    const ajakCode = String(form.get("ajak") || ajakCookie.split(".")[0] || "");
+    const ajakBrand = merek || ajakCookie.split(".")[1] || "";
+    if (ajakCode && ajakBrand) await attachReferral(db, { friend: result.member, code: ajakCode, brandId: ajakBrand, now });
     const dest = merek ? `/kartu?merek=${encodeURIComponent(merek)}` : next;
     return redirect(safeNext(dest, "/kartu"), [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)]);
   }
@@ -196,6 +206,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     if (!member) return redirect("/masuk");
     const brands = await repo.listBrands(db, true);
     const brand = pickLiveBrand(brands, url.searchParams.get("merek"));
+    const referral = brand ? await referralProgress(db, member.id, brand.id) : null;
     return html(
       profilePage({
         mode: "member",
@@ -208,6 +219,9 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         wa: member.wa,
         since: member.created_at,
         consent: member.promo_consent === 1,
+        referral: referral
+          ? { ...referral, url: `${url.origin}/gabung/${encodeURIComponent(brand?.id || "")}?ajak=${encodeURIComponent(referral.code)}` }
+          : undefined,
       }),
     );
   }
@@ -256,6 +270,9 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         );
       }
       await repo.setPromoConsent(db, result.member.id, now);
+      const ajakCookie = readCookie(request.headers.get("cookie"), "ajak") || "";
+      const [ajakCode, ajakBrand] = ajakCookie.split(".");
+      if (ajakCode && ajakBrand) await attachReferral(db, { friend: result.member, code: ajakCode, brandId: ajakBrand, now });
       await repo.deleteSession(db, signup.sessionId);
       const cookies = [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)];
       if (waReady(env)) {
@@ -266,6 +283,11 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     }
     if (!member) return redirect("/masuk");
     if (form.get("setuju") === "on") await repo.setPromoConsent(db, member.id, now);
+    try {
+      await refreshReferral(db, member.id, now);
+    } catch {
+      /* referral dicek lagi nanti */
+    }
     if (member.birthday && !form.get("lahir")) return redirect("/profil?ok=setuju");
     const saved = await setOwnBirthday(db, { member, birthdayRaw: String(form.get("lahir") || ""), now });
     if (!saved.ok) return redirect(`/profil?err=${saved.error}`);
@@ -309,6 +331,11 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const slices = [];
     for (const item of brands) slices.push(await brandSlice(db, member, item, now, item.id === brand.id ? outletParam : ""));
     const active = slices.find((slice) => slice.brand.id === brand.id) || slices[0];
+    try {
+      await refreshReferral(db, member.id, now);
+    } catch {
+      /* referral dicek lagi nanti */
+    }
     const lockOn = (await repo.getSetting(db, "wa_verify_lock")) === "1";
     if (!lockOn && mustVerify(env, member)) return redirect("/verifikasi");
     return html(
@@ -424,6 +451,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const card = await repo.ensureCard(db, member.id, brand.id, now);
     const banners = await repo.listBanners(db, brand.id);
     const brands = await repo.listBrands(db, true);
+    const tiers = await pdb.listTiers(db, brand.id);
     return html(
       successPage({
         member,
@@ -435,6 +463,8 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         otherBrands: brands.filter((b) => b.id !== brand.id).map((b) => b.short_name),
         kind: activity.type,
         now,
+        unlocked: activity.type === "stamp" && tiers.some((tier) => tier.stamps === card.stamps),
+        nextLine: activity.type === "stamp" ? nextRewardLine(card.stamps, tiers.map((tier) => ({ stamps: tier.stamps, reward: tier.reward_text }))) : "",
       }),
     );
   }

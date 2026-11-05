@@ -57,6 +57,7 @@ export type Member = {
   wa_verified?: number;
   promo_consent?: number;
   promo_consent_at?: number | null;
+  referral_code?: string | null;
 };
 
 export type Card = {

@@ -337,6 +337,71 @@ function bootCrop() {
   });
 }
 
+function bootInstall() {
+  const box = document.querySelector("[data-install]");
+  if (!box || !document.querySelector("[data-member]")) return;
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+  if (standalone) return;
+  const hiddenUntil = Number(localStorage.getItem("loyalty-install-hide") || "0");
+  if (hiddenUntil > Date.now()) return;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const iosNote = box.querySelector("[data-ios]");
+  if (ios && iosNote) iosNote.hidden = false;
+  box.hidden = false;
+  let promptEvent = null;
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    promptEvent = event;
+  });
+  const hide = () => {
+    box.hidden = true;
+    localStorage.setItem("loyalty-install-hide", String(Date.now() + 7 * 86400000));
+  };
+  const later = box.querySelector("[data-install-no]");
+  const go = box.querySelector("[data-install-go]");
+  if (later) later.addEventListener("click", hide);
+  if (go) {
+    go.addEventListener("click", async () => {
+      if (promptEvent) {
+        promptEvent.prompt();
+        await promptEvent.userChoice;
+      }
+      hide();
+    });
+  }
+  if (reduced) box.style.animation = "none";
+}
+
+function bootShare() {
+  document.querySelectorAll("[data-share]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const url = button.getAttribute("data-url") || location.href;
+      const text = "Ajak temen ke kartu stamp";
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "Ajak temen", text, url });
+          return;
+        } catch {
+          /* salin aja */
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        button.textContent = "Link ke-copy";
+      } catch {
+        window.prompt("Salin link ini", url);
+      }
+    });
+  });
+}
+
+function bootCelebrate() {
+  if (!document.querySelector("[data-tepok]")) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+}
+
 function boot() {
   bootPoll();
   bootReel();
@@ -346,6 +411,9 @@ function boot() {
   bootRail();
   bootVerify();
   bootCrop();
+  bootInstall();
+  bootShare();
+  bootCelebrate();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {

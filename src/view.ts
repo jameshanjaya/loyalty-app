@@ -29,7 +29,8 @@ function confetti(): string {
   return `<div class="confetti" aria-hidden="true">${"<i></i>".repeat(12)}</div>`;
 }
 
-function doc(title: string, inner: string, theme = "#6ea564"): string {
+function doc(title: string, inner: string, theme = "#6ea564", brandId = ""): string {
+  const manifest = brandId ? `/app.webmanifest?merek=${encodeURIComponent(brandId)}` : "/app.webmanifest";
   return `<!doctype html>
 <html lang="id">
 <head>
@@ -38,17 +39,27 @@ function doc(title: string, inner: string, theme = "#6ea564"): string {
 <meta name="theme-color" content="${esc(theme)}" />
 <meta name="robots" content="noindex, nofollow" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Loyalty Bos" />
 <title>${esc(title)}</title>
-<link rel="manifest" href="/app.webmanifest" />
+<link rel="manifest" href="${manifest}" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/app.css?v=9" />
+<link rel="stylesheet" href="/app.css?v=10" />
 </head>
 <body>
 ${inner}
-<script src="/app.js?v=9" defer></script>
+<script src="/app.js?v=10" defer></script>
 </body>
 </html>`;
+}
+
+function installPrompt(): string {
+  return `<aside class="install" data-install hidden>
+    <p><b>Simpan ke home screen biar gampang</b></p>
+    <p class="fine" data-ios hidden>Di iPhone: tap tombol Share, lalu Add to Home Screen.</p>
+    <div class="actions"><button type="button" class="btn btn-solid" data-install-go>Simpan</button><button type="button" class="btn btn-line" data-install-no>Nanti</button></div>
+  </aside>`;
 }
 
 export function flashes(params: URLSearchParams): string {
@@ -316,13 +327,14 @@ export function stampGrid(
   mark = `<img class="stampimg" src="${stampIconSrc("whisk")}" alt="" />`,
   gifts: Array<{ stamps: number; icon: string }> = [],
   brandId = "",
+  celebrate = false,
 ): string {
   const n = Math.max(1, Math.min(total, 20));
   const on = Math.min(Math.max(filled, 0), n);
   const giftAt = new Map(gifts.map((gift) => [gift.stamps, gift.icon || "🎁"]));
   let html = `<div class="stamps" data-brand="${esc(brandId)}" style="--stamp-fill:${esc(stampFill(brandId))}" aria-label="${on} dari ${n} stamp">`;
   for (let i = 1; i <= n; i++) {
-    if (i <= on) html += `<div class="stamp on">${mark}</div>`;
+    if (i <= on) html += `<div class="stamp on${celebrate && i === on ? " tepok" : ""}">${mark}</div>`;
     else if (giftAt.has(i)) html += `<div class="stamp gift" title="${esc(giftAt.get(i) || "")}">${esc(giftAt.get(i) || "🎁")}</div>`;
     else html += `<div class="stamp">${i}</div>`;
   }
@@ -365,6 +377,7 @@ export function joinPage(input: { brands: Brand[]; brand: Brand | null; next: st
       <form class="card" method="post" action="/gabung">
         <input type="hidden" name="next" value="${esc(input.next)}" />
         <input type="hidden" name="merek" value="${esc(input.brand?.id || "")}" />
+        <input type="hidden" name="ajak" value="${esc(input.params.get("ajak") || "")}" />
         <label class="lbl" for="nama">Nama</label>
         <input id="nama" name="nama" required maxlength="40" autocomplete="name" value="${esc(input.values?.nama || "")}" />
         <label class="lbl" for="wa">Nomor WhatsApp</label>
@@ -520,7 +533,7 @@ export function cardPage(input: {
     .join("");
   return doc(
     input.brand.short_name,
-    `${celebrate ? confetti() : ""}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}" data-brand-root>
+    `${celebrate ? confetti() : ""}${installPrompt()}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}" data-brand-root data-member="1">
       ${stages}
       <section class="hello">
         <h1 class="display">Hai, ${esc(first)} 👋</h1>
@@ -566,6 +579,7 @@ export function cardPage(input: {
       ${tabbar("kartu", input.brand.id)}
     </main>`,
     skin.accent,
+    input.brand.id,
   );
 }
 
@@ -591,9 +605,12 @@ export function successPage(input: {
   otherBrands: string[];
   kind: "stamp" | "redeem" | "birthday";
   now: number;
+  unlocked?: boolean;
+  nextLine?: string;
 }): string {
   const copy = progressCopy(input.stamps, input.brand.stamps_required, input.brand.reward_text);
   const skin = customerSkin(input.brand);
+  const burst = input.kind === "stamp" && input.unlocked;
   const title =
     input.kind === "stamp"
       ? "Yeay, stamp kamu nambah!"
@@ -603,7 +620,7 @@ export function successPage(input: {
   const others = input.otherBrands.length ? `Cek juga kartu kamu di ${input.otherBrands.join(" & ")}` : "Kartu kamu tersimpan di HP ini";
   return doc(
     title,
-    `${confetti()}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
+    `${burst ? confetti() : ""}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}" ${input.kind === "stamp" ? "data-tepok" : ""}>
       ${carousel(input.banners, input.now)}
       <header class="hello">
         <div>
@@ -614,8 +631,9 @@ export function successPage(input: {
       </header>
       <section class="card">
         <div class="split"><h2>Kartu stamp ${esc(input.brand.short_name)}</h2><b class="count">${input.stamps}/${input.brand.stamps_required}</b></div>
-        ${stampGrid(input.stamps, input.brand.stamps_required, stampMark(input.brand), [], input.brand.id)}
+        ${stampGrid(input.stamps, input.brand.stamps_required, stampMark(input.brand), [], input.brand.id, input.kind === "stamp")}
         <p class="lead">${esc(copy.headline)}</p>
+        ${input.nextLine ? `<p class="stampnote">${esc(input.nextLine)}</p>` : ""}
         <p class="fine">${esc(ruleLine(input.brand))}</p>
       </section>
       <div class="hint">${esc(others)}</div>
@@ -623,6 +641,7 @@ export function successPage(input: {
       ${tabbar("kartu", input.brand.id)}
     </main>`,
     skin.accent,
+    input.brand.id,
   );
 }
 
@@ -818,6 +837,7 @@ const NAV: Array<[string, string]> = [
   ["/admin/aktivitas", "Aktivitas"],
   ["/admin/stan", "QR Stan"],
   ["/admin/password", "Ganti Password"],
+  ["/admin/ajak", "Ajak temen"],
 ];
 
 function adminShell(active: string, body: string, accent = "#5c8f4b"): string {
@@ -831,6 +851,33 @@ function adminShell(active: string, body: string, accent = "#5c8f4b"): string {
       <div class="main">${body}</div>
     </div>`,
     accent,
+  );
+}
+
+export function referralsAdminPage(input: {
+  rows: Array<{ friend: string; referrer: string; brand: string; qualified: number; consumed: number; grantId: string | null }>;
+  batch: number;
+  bonus: number;
+  params: URLSearchParams;
+}): string {
+  const body = input.rows
+    .map(
+      (row) => `<tr><td>${esc(row.referrer)}</td><td>${esc(row.friend)}</td><td>${esc(row.brand)}</td><td>${row.qualified ? "lolos" : "belum"}</td><td>${
+        row.grantId
+          ? `<form method="post" action="/admin/ajak/${esc(row.grantId)}/tarik"><button class="textlink">Tarik stamp</button></form>`
+          : "-"
+      }</td></tr>`,
+    )
+    .join("");
+  return adminShell(
+    "/admin/ajak",
+    `<h1>Ajak temen</h1>${flashes(input.params)}
+     <form class="panel" method="post" action="/admin/ajak">
+       <label class="lbl">Temen per 1 stamp (batch)</label><input name="batch" type="number" min="1" max="50" value="${input.batch}" required />
+       <label class="lbl">Bonus stamp buat temen (0 = tidak ada)</label><input name="bonus" type="number" min="0" max="20" value="${input.bonus}" required />
+       <button class="btn btn-solid">Simpan</button>
+     </form>
+     <article class="panel" style="margin-top:12px;overflow:auto"><table><thead><tr><th>Yang ngajak</th><th>Temen</th><th>Merek</th><th>Status</th><th></th></tr></thead><tbody>${body || `<tr><td colspan="5">Belum ada.</td></tr>`}</tbody></table></article>`,
   );
 }
 
@@ -883,6 +930,15 @@ export function dashboardPage(input: {
   pointsRedeemed: string;
   pendingMissions: number;
   expireDays?: number;
+  story?: {
+    new7: number;
+    new30: number;
+    returnPct: number;
+    stamps30: number;
+    referralSigned: number;
+    referralQualified: number;
+    topRewards: Array<{ label: string; n: number }>;
+  };
 }): string {
   const chips = [`<a class="chip${input.brand ? "" : " on"}" href="/admin/dasbor">Semua</a>`]
     .concat(input.brands.map((b) => `<a class="chip${input.brand?.id === b.id ? " on" : ""}" href="/admin/dasbor?merek=${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`))
@@ -919,6 +975,22 @@ export function dashboardPage(input: {
       <article class="kpi"><span>Birthday Freebies bulan ini</span><b>${input.birthdayRedeems}</b><span>yang sudah diklaim</span></article>
       <article class="kpi"><span>Misi menunggu</span><b>${input.pendingMissions}</b><span><a href="/admin/misi">Kelola Misi</a></span></article>
     </section>
+    ${
+      input.story
+        ? `<section class="kpis">
+            <article class="kpi"><span>Member baru 7 hari</span><b>${input.story.new7}</b></article>
+            <article class="kpi"><span>Member baru 30 hari</span><b>${input.story.new30}</b></article>
+            <article class="kpi"><span>Balik dalam 30 hari</span><b>${input.story.returnPct}%</b><span>yang pernah stamp, lalu stamp lagi</span></article>
+            <article class="kpi"><span>Stamp 30 hari</span><b>${input.story.stamps30}</b></article>
+            <article class="kpi"><span>Ajak temen</span><b>${input.story.referralQualified}/${input.story.referralSigned}</b><span>lolos / daftar</span></article>
+          </section>
+          <article class="panel" style="margin-top:12px"><h2>Reward paling sering ditukar</h2>
+            <table><thead><tr><th>Reward</th><th>Jumlah</th></tr></thead><tbody>${
+              input.story.topRewards.map((row) => `<tr><td>${esc(row.label || "-")}</td><td>${row.n}</td></tr>`).join("") || `<tr><td colspan="2">Belum ada.</td></tr>`
+            }</tbody></table>
+          </article>`
+        : ""
+    }
     <section class="grid-2">
       <article class="panel"><h2>Stamp per hari (14 hari)</h2><div class="bars">${bars}</div></article>
       <article class="panel"><h2>Member paling loyal</h2>
@@ -1088,12 +1160,13 @@ export function profilePage(input: {
   brand?: Brand | null;
   since?: number;
   consent?: boolean;
+  referral?: { have: number; need: number; code: string; url: string };
 }): string {
   const link = input.mode === "link";
   const skin = input.mode === "member" && input.brand ? customerSkin(input.brand) : null;
   return doc(
     "Profil",
-    `<main class="phone${skin ? ` skin with-tabs${skin.dark ? " skin-dark" : ""}` : ""}"${skin ? ` style="${skin.style}"` : ""}>
+    `<main class="phone${skin ? ` skin with-tabs${skin.dark ? " skin-dark" : ""}` : ""}"${skin ? ` style="${skin.style}"` : ""} ${input.mode === "member" ? `data-member="1"` : ""}>
       ${skin ? "" : `<header class="hero"><div class="hero-title">${link ? "Nomor ini sudah punya kartu" : "Lengkapi profil"}</div><div class="hero-sub">${esc(input.email || input.name)}</div></header>`}
       ${flashes(input.params)}
       ${
@@ -1131,11 +1204,18 @@ export function profilePage(input: {
                 ${input.consent ? `<p class="fine">Persetujuan promo dan ulang tahun sudah tercatat.</p>` : `<label class="checkline"><input type="checkbox" name="setuju" value="on" required /> Aku setuju nerima promo dan ucapan ulang tahun (UU PDP).</label><button class="btn btn-solid">Simpan</button>`}
               </form>
               ${input.google ? "" : `<a class="btn btn-google" href="/masuk/google?niat=hubung">Hubungkan Google</a>`}
+              ${
+                input.referral
+                  ? `<section class="card" id="ajak"><h2>Ajak temen</h2><p>Temen yang udah gabung: ${input.referral.have}/${input.referral.need}</p><p class="fine">Kode ${esc(input.referral.code)}. ${input.referral.need} temen baru, profil lengkap, dan udah kena stamp = 1 stamp buat kamu.</p><button type="button" class="btn btn-solid" data-share data-url="${esc(input.referral.url)}">Bagikan link</button></section>`
+                  : ""
+              }
+              ${installPrompt()}
               <form method="post" action="/keluar"><button class="linkbtn">Keluar</button></form>`
       }
       ${skin && input.brand ? tabbar("profil", input.brand.id) : ""}
     </main>`,
     skin?.accent,
+    input.brand?.id || "",
   );
 }
 
@@ -1505,6 +1585,7 @@ export function catalogPage(input: {
       ${tabbar("hadiah", input.brand.id)}
     </main>`,
     skin.accent,
+    input.brand.id,
   );
 }
 

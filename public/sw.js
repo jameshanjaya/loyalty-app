@@ -1,4 +1,4 @@
-const CACHE = "loyalty-bos-v9";
+const CACHE = "loyalty-bos-v10";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -13,23 +13,29 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+function shellAsset(pathname: string): boolean {
+  return (
+    pathname === "/app.css" ||
+    pathname === "/app.js" ||
+    pathname === "/offline.html" ||
+    pathname === "/favicon.svg" ||
+    pathname.startsWith("/fonts/") ||
+    pathname.startsWith("/icons/") ||
+    pathname.startsWith("/brands/")
+  );
+}
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
-  const asset = url.pathname === "/app.css" || url.pathname === "/app.js" || url.pathname.startsWith("/fonts/") || url.pathname.startsWith("/icons/");
-  if (asset) {
-    event.respondWith(
-      fetch(event.request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-          return res;
-        })
-        .catch(() => caches.match(event.request)),
-    );
-    return;
-  }
-  if (event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).catch(() => caches.match("/offline.html")));
-  }
+  if (!shellAsset(url.pathname)) return;
+  event.respondWith(
+    fetch(event.request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        return res;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("/offline.html"))),
+  );
 });

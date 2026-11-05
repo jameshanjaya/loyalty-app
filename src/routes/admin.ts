@@ -10,6 +10,8 @@ import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { OWNER_SESSION_MS } from "../loyalty";
 import { brandOpen } from "../brands";
+import { referralBatchSize, referralFriendBonus } from "../referral";
+import { clawReferralGrant } from "../referral-flow";
 import { formatPoints, parsePointsOrZero, proofKind } from "../points";
 import { formatAward, missionQuarters, questQuarters } from "../quest-stamp";
 import * as pdb from "../points-db";
@@ -28,6 +30,7 @@ import {
   adminMissionEditPage,
   adminTiersPage,
   dashboardPage,
+  referralsAdminPage,
   deleteMemberPage,
   memberDetailPage,
   membersPage,
@@ -135,8 +138,53 @@ export async function handleAdmin(app: App): Promise<Response | null> {
         pointsRedeemed: formatPoints(points.redeemed),
         pendingMissions,
         expireDays: await expireDays(db),
+        story: await repo.dashStory(db, brandId, now),
       }),
     );
+  }
+
+  if (path === "/admin/ajak" && request.method === "GET") {
+    const rows = await db
+      .prepare(
+        `SELECT r.friend_id, r.qualified, r.consumed, f.name AS friend, p.name AS referrer, b.short_name AS brand,
+                (SELECT g.id FROM referral_grants g WHERE g.referrer_id = r.referrer_id AND g.brand_id = r.brand_id AND g.revoked = 0 ORDER BY g.created_at DESC LIMIT 1) AS grant_id
+         FROM referrals r
+         JOIN members f ON f.id = r.friend_id
+         JOIN members p ON p.id = r.referrer_id
+         JOIN brands b ON b.id = r.brand_id
+         ORDER BY r.created_at DESC LIMIT 100`,
+      )
+      .all<{ friend: string; referrer: string; brand: string; qualified: number; consumed: number; grant_id: string | null }>();
+    return html(
+      referralsAdminPage({
+        rows: (rows.results || []).map((row) => ({
+          friend: row.friend,
+          referrer: row.referrer,
+          brand: row.brand,
+          qualified: row.qualified,
+          consumed: row.consumed,
+          grantId: row.consumed ? row.grant_id : null,
+        })),
+        batch: referralBatchSize(await repo.getSetting(db, "referral_batch")),
+        bonus: referralFriendBonus(await repo.getSetting(db, "referral_friend_bonus")),
+        params: url.searchParams,
+      }),
+    );
+  }
+
+  if (path === "/admin/ajak" && request.method === "POST") {
+    const form = await request.formData();
+    const batch = referralBatchSize(String(form.get("batch") || ""));
+    const bonus = referralFriendBonus(String(form.get("bonus") || ""));
+    await repo.setSetting(db, "referral_batch", String(batch));
+    await repo.setSetting(db, "referral_friend_bonus", String(bonus));
+    return ok("/admin/ajak", "simpan");
+  }
+
+  if (path.startsWith("/admin/ajak/") && path.endsWith("/tarik") && request.method === "POST") {
+    const id = decodeURIComponent(path.slice("/admin/ajak/".length, -"/tarik".length));
+    const pulled = await clawReferralGrant(db, id, now);
+    return ok("/admin/ajak", pulled ? "hapus" : "batal");
   }
 
   if ((path === "/admin/member.csv" || path === "/admin/member.xlsx") && request.method === "GET") {

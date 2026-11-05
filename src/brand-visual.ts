@@ -51,7 +51,7 @@ export function nextRewardLine(stamps: number, tiers: Array<{ stamps: number; re
   const next = [...tiers].filter((tier) => tier.stamps > stamps).sort((a, b) => a.stamps - b.stamps)[0];
   if (!next) return "Stamp penuh, gas tuker";
   const left = next.stamps - stamps;
-  return `${left} stamp lagi, ${next.reward}`;
+  return `Kurang ${left} lagi buat ${next.reward}`;
 }
 
 export function defaultStampIcon(brandId: string): "whisk" | "bowl" | "snout" {

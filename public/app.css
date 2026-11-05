@@ -583,9 +583,13 @@ nav.tabbar > a.on { color: var(--accent); box-shadow: inset 0 -3px 0 var(--accen
   .kasir-desk .hero, .kasir-desk .flash { grid-column: 1 / -1; }
 }
 .cropbox, .croppreview { width: 100%; max-width: 420px; aspect-ratio: 2/1; background: #111; border-radius: 12px; object-fit: cover; display: block; margin: 8px 0; touch-action: none; cursor: grab; }
+.stamp.tepok { animation: tepok .45s cubic-bezier(.2, 1.4, .4, 1); transform-origin: center; }
+@keyframes tepok { 0% { transform: scale(.6); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
+.install { position: sticky; top: 8px; z-index: 15; background: var(--card, #fff); border: 1px solid var(--line, #efe4d4); border-radius: 18px; padding: 12px 14px; margin-bottom: 12px; }
+.install .btn { min-height: 42px; margin-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   .stampcard:not(.on) { filter: none; opacity: .55; }
-  .phone, .theme-shift .stage, .theme-shift .rest { transition: none; animation: none; }
+  .phone, .theme-shift .stage, .theme-shift .rest, .stamp.tepok, .confetti { transition: none; animation: none; }
 }
 
 @media print {

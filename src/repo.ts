@@ -879,6 +879,79 @@ export async function dashNumbers(db: D1Database, brandId: string | null, now: n
   };
 }
 
+export async function dashStory(
+  db: D1Database,
+  brandId: string | null,
+  now: number,
+): Promise<{
+  new7: number;
+  new30: number;
+  returnPct: number;
+  stamps30: number;
+  referralSigned: number;
+  referralQualified: number;
+  topRewards: Array<{ label: string; n: number }>;
+}> {
+  const day = 86_400_000;
+  const since7 = now - 7 * day;
+  const since30 = now - 30 * day;
+  const brandCard = brandId ? `AND EXISTS (SELECT 1 FROM cards c WHERE c.member_id = m.id AND c.brand_id = ?)` : "";
+  const brandAct = brandId ? `AND brand_id = ?` : `AND brand_id ${LIVE_BRAND}`;
+  const newCount = async (since: number) => {
+    const stmt = brandId
+      ? db.prepare(`SELECT COUNT(*) AS n FROM members m WHERE m.created_at >= ? ${brandCard}`).bind(since, brandId)
+      : db.prepare(`SELECT COUNT(*) AS n FROM members m WHERE m.created_at >= ?`).bind(since);
+    const row = await stmt.first<{ n: number }>();
+    return row?.n ?? 0;
+  };
+  const stamps = await db
+    .prepare(`SELECT COUNT(*) AS n FROM activities WHERE type = 'stamp' AND voided = 0 AND created_at >= ? ${brandAct}`)
+    .bind(...(brandId ? [since30, brandId] : [since30]))
+    .first<{ n: number }>();
+  const base = await db
+    .prepare(
+      `SELECT COUNT(DISTINCT member_id) AS n FROM activities WHERE type = 'stamp' AND voided = 0 AND created_at < ? ${brandAct}`,
+    )
+    .bind(...(brandId ? [since30, brandId] : [since30]))
+    .first<{ n: number }>();
+  const cameBack = await db
+    .prepare(
+      `SELECT COUNT(DISTINCT a.member_id) AS n FROM activities a
+       WHERE a.type = 'stamp' AND a.voided = 0 AND a.created_at >= ? ${brandId ? "AND a.brand_id = ?" : `AND a.brand_id ${LIVE_BRAND}`}
+       AND EXISTS (
+         SELECT 1 FROM activities older
+         WHERE older.member_id = a.member_id AND older.type = 'stamp' AND older.voided = 0 AND older.created_at < ?
+         ${brandId ? "AND older.brand_id = ?" : `AND older.brand_id ${LIVE_BRAND}`}
+       )`,
+    )
+    .bind(...(brandId ? [since30, brandId, since30, brandId] : [since30, since30]))
+    .first<{ n: number }>();
+  const signed = await db
+    .prepare(`SELECT COUNT(*) AS n FROM referrals ${brandId ? "WHERE brand_id = ?" : ""}`)
+    .bind(...(brandId ? [brandId] : []))
+    .first<{ n: number }>();
+  const qualified = await db
+    .prepare(`SELECT COUNT(*) AS n FROM referrals WHERE qualified = 1 ${brandId ? "AND brand_id = ?" : ""}`)
+    .bind(...(brandId ? [brandId] : []))
+    .first<{ n: number }>();
+  const rewards = await db
+    .prepare(
+      `SELECT note AS label, COUNT(*) AS n FROM activities WHERE type = 'redeem' AND voided = 0 ${brandAct} GROUP BY note ORDER BY n DESC LIMIT 5`,
+    )
+    .bind(...(brandId ? [brandId] : []))
+    .all<{ label: string; n: number }>();
+  const earlier = base?.n ?? 0;
+  return {
+    new7: await newCount(since7),
+    new30: await newCount(since30),
+    returnPct: earlier ? Math.round(((cameBack?.n ?? 0) / earlier) * 100) : 0,
+    stamps30: stamps?.n ?? 0,
+    referralSigned: signed?.n ?? 0,
+    referralQualified: qualified?.n ?? 0,
+    topRewards: rewards.results || [],
+  };
+}
+
 export async function stampsByDay(db: D1Database, brandId: string | null, since: number, wibMs: number): Promise<Map<number, number>> {
   const sql = brandId
     ? `SELECT CAST((created_at + ?) / 86400000 AS INTEGER) AS day, COUNT(*) AS n
