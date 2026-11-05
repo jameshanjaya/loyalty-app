@@ -175,7 +175,11 @@ export async function setMissionActive(db: D1Database, id: string, active: numbe
   await db.prepare(`UPDATE missions SET active = ? WHERE id = ?`).bind(active, id).run();
 }
 
-export async function memberMissionState(db: D1Database, memberId: string, missionId: string): Promise<{ pending: boolean; lastApprovedAt: number | null }> {
+export async function memberMissionState(
+  db: D1Database,
+  memberId: string,
+  missionId: string,
+): Promise<{ pending: boolean; lastApprovedAt: number | null; rejectedNote: string | null }> {
   const pending = await db
     .prepare(`SELECT id FROM mission_submissions WHERE member_id = ? AND mission_id = ? AND status = 'pending' LIMIT 1`)
     .bind(memberId, missionId)
@@ -186,7 +190,13 @@ export async function memberMissionState(db: D1Database, memberId: string, missi
     )
     .bind(memberId, missionId)
     .first<{ reviewed_at: number | null }>();
-  return { pending: Boolean(pending), lastApprovedAt: approved?.reviewed_at ?? null };
+  const rejected = await db
+    .prepare(
+      `SELECT reviewer_note FROM mission_submissions WHERE member_id = ? AND mission_id = ? AND status = 'rejected' ORDER BY reviewed_at DESC LIMIT 1`,
+    )
+    .bind(memberId, missionId)
+    .first<{ reviewer_note: string }>();
+  return { pending: Boolean(pending), lastApprovedAt: approved?.reviewed_at ?? null, rejectedNote: rejected?.reviewer_note || null };
 }
 
 export async function insertSubmission(

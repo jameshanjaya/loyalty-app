@@ -1,34 +1,31 @@
-const CACHE = "loyalty-bos-v5";
-const ASSETS = ["/app.css", "/app.js", "/offline.html", "/favicon.svg", "/icons/icon-192.png"];
+const CACHE = "loyalty-bos-v7";
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))),
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+      .then(() => self.clients.claim()),
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
-  const cacheable = ASSETS.includes(url.pathname) || url.pathname.startsWith("/fonts/") || url.pathname.startsWith("/icons/");
-  if (cacheable) {
+  const asset = url.pathname === "/app.css" || url.pathname === "/app.js" || url.pathname.startsWith("/fonts/") || url.pathname.startsWith("/icons/");
+  if (asset) {
     event.respondWith(
-      caches.open(CACHE).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        const fresh = fetch(event.request)
-          .then((res) => {
-            if (res.ok) cache.put(event.request, res.clone());
-            return res;
-          })
-          .catch(() => cached);
-        return cached || fresh;
-      }),
+      fetch(event.request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+          return res;
+        })
+        .catch(() => caches.match(event.request)),
     );
     return;
   }

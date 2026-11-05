@@ -3,7 +3,6 @@ import { loadBirthdayNotice } from "../birthday-gate";
 import { brandOpen, pickLiveBrand } from "../brands";
 import { bookingTarget, bookingUrl, hiddenOrderPlatform, visibleOrderLinks } from "../orders";
 import { missionInWindow, questLocked, questProgress, tierChoices } from "../points";
-import { formatAward, missionQuarters } from "../quest-stamp";
 import { LIMITS, enforceLimit } from "../ratelimit";
 import * as pdb from "../points-db";
 import { expireCodes } from "../points-flow";
@@ -235,12 +234,14 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       const state = await pdb.memberMissionState(db, member.id, mission.id);
       const locked = questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned });
       const progress = questProgress({ limit: "once", pending: state.pending, lastApprovedAt: state.lastApprovedAt, now });
+      const status = progress.done ? "done" : state.pending ? "wait" : locked ? "locked" : state.rejectedNote ? "no" : "open";
       missions.push({
         id: mission.id,
         title: mission.title,
-        points: formatAward(missionQuarters(mission)),
-        done: progress.done,
-        locked: locked && !progress.done,
+        blurb: (mission.description || "").split("\n")[0] || "",
+        kind: mission.check_kind || "",
+        status,
+        reason: status === "no" ? state.rejectedNote || "" : "",
       });
     }
     const links = await repo.listOrderLinks(db, brand.id);

@@ -46,11 +46,11 @@ function doc(title: string, inner: string, theme = "#6ea564"): string {
 <link rel="manifest" href="/app.webmanifest" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/app.css" />
+<link rel="stylesheet" href="/app.css?v=7" />
 </head>
 <body>
 ${inner}
-<script src="/app.js" defer></script>
+<script src="/app.js?v=7" defer></script>
 </body>
 </html>`;
 }
@@ -194,23 +194,65 @@ function orderBlock(
   </section>`;
 }
 
-function bonusStamp(missions: Array<{ id: string; title: string; points: string; done: boolean; locked: boolean }>, brandId: string): string {
+const BONUS_STAR = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3.2 14.5 8.6l5.9.6-4.4 3.9 1.3 5.7L12 16.2 6.7 18.8l1.3-5.7L3.6 9.2l5.9-.6z"/></svg>`;
+const BONUS_AT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.4a2.6 2.6 0 0 0 5.2 0V12a9.2 9.2 0 1 0-3.6 7.3"/></svg>`;
+const BONUS_CAM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 7.2 9.2 5h5.6L16 7.2h3.2v11.2H4.8V7.2z"/><circle cx="12" cy="12.4" r="3.1"/></svg>`;
+
+function bonusIcon(kind: string): string {
+  if (kind === "google") return BONUS_STAR;
+  if (kind === "threads") return BONUS_AT;
+  if (kind === "story") return BONUS_CAM;
+  return BONUS_STAR;
+}
+
+function bonusReason(code: string): string {
+  if (code === "namafoto") return "Nama belum mirip";
+  if (code === "struk") return "Struk belum keliatan";
+  if (code === "produk") return "Produk belum keliatan";
+  if (code === "tag") return "Tag IG belum keliatan";
+  if (code === "ditolak") return "Ditolak";
+  return code;
+}
+
+function bonusStamp(
+  missions: Array<{ id: string; title: string; blurb: string; kind: string; status: string; reason: string }>,
+  brandId: string,
+): string {
   if (!missions.length) return "";
-  const open = missions.filter((mission) => !mission.done);
-  const done = missions.filter((mission) => mission.done);
-  const row = (mission: { id: string; title: string; points: string; locked: boolean }) =>
-    mission.locked
-      ? `<div class="bonus-row dim"><span>${esc(mission.title)}</span><span class="muted">Belum kebuka</span></div>`
-      : `<a class="bonus-row" href="/misi/${esc(mission.id)}?merek=${esc(brandId)}"><span>${esc(mission.title)}</span><b>${esc(mission.points)}</b></a>`;
+  const open = missions.filter((mission) => mission.status !== "done");
+  const done = missions.filter((mission) => mission.status === "done");
+  const row = (mission: { id: string; title: string; blurb: string; kind: string; status: string; reason: string }, finished = false) => {
+    const status =
+      finished || mission.status === "done"
+        ? `<span class="bonus-status ok">Beres ${CHECK}</span>`
+        : mission.status === "wait"
+          ? `<span class="bonus-status">Menunggu dicek</span>`
+          : mission.status === "no"
+            ? `<span class="bonus-status no">Ditolak${mission.reason ? ` · ${esc(bonusReason(mission.reason))}` : ""}</span>`
+            : mission.status === "locked"
+              ? `<span class="bonus-status">Belum kebuka</span>`
+              : `<span class="bonus-status">Belum</span>`;
+    const cta =
+      finished || mission.status === "done" || mission.status === "wait" || mission.status === "locked"
+        ? ""
+        : `<a class="bonus-go" href="/misi/${esc(mission.id)}?merek=${esc(brandId)}">Kerjain</a>`;
+    return `<div class="bonus-item">
+      <span class="bonus-ico">${bonusIcon(mission.kind)}</span>
+      <div class="bonus-copy">
+        <b>${esc(mission.title)}</b>
+        <p>${esc(mission.blurb)}</p>
+        ${status}
+      </div>
+      <div class="bonus-side"><span class="stamp-pill">+1 stamp</span>${cta}</div>
+    </div>`;
+  };
   const finished = done.length
-    ? `<details class="bonus-done"><summary>Udah beres · ${done.length}</summary>${done
-        .map((mission) => `<div class="bonus-row"><span>${esc(mission.title)}</span><span class="qcheck" aria-label="Selesai">${CHECK}</span></div>`)
-        .join("")}</details>`
+    ? `<details class="bonus-done"><summary>Udah beres · ${done.length}</summary>${done.map((mission) => row(mission, true)).join("")}</details>`
     : "";
   return `<section class="card" id="bonus-stamp">
     <h2>Bonus Stamp</h2>
     <p class="fine">Kerjain misi, dapet stamp tambahan</p>
-    ${open.map(row).join("")}
+    <div class="bonus-list">${open.map((mission) => row(mission)).join("")}</div>
     ${finished}
   </section>`;
 }
@@ -357,7 +399,7 @@ export function cardPage(input: {
   orderOutlets?: Array<{ id: string; name: string; on: boolean }>;
   booking?: { id: string; name: string; url: string } | null;
   pickBooking?: boolean;
-  missions?: Array<{ id: string; title: string; points: string; done: boolean; locked: boolean }>;
+  missions?: Array<{ id: string; title: string; blurb: string; kind: string; status: string; reason: string }>;
 }): string {
   const card = input.cards.get(input.brand.id);
   const stamps = card?.stamps ?? 0;
