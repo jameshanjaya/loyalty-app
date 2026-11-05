@@ -17,6 +17,7 @@ import { normalizeWa, validName, validOutletPin, validPin, weakPin } from "./pho
 import { birthdayEditAllowed, decidePhone } from "./profile";
 import * as repo from "./repo";
 import { LIMITS, enforceLimit, failureBlocked } from "./ratelimit";
+import { STAFF_FLAG_REASON, staffFlagDetail } from "./staff";
 import { startOfWibDay } from "./time";
 import { issueClaim, inspectClaim, type ClaimReader } from "./tokens";
 import type { Brand, Member, Outlet } from "./types";
@@ -57,6 +58,26 @@ async function paceFlag(db: D1Database, sessionId: string | null, outletId: stri
   logEvent("flag_ramai", { outlet: outletId, count: n });
 }
 
+async function blockIfStaff(
+  db: D1Database,
+  input: { outletId: string | null; member: Member; sessionId: string | null; now: number },
+): Promise<Fail | null> {
+  if (!input.outletId) return null;
+  if (!(await repo.isOutletStaff(db, input.outletId, input.member.id))) return null;
+  await repo.insertFlag(db, {
+    id: randomId(),
+    outletId: input.outletId,
+    sessionId: input.sessionId,
+    memberId: input.member.id,
+    reason: STAFF_FLAG_REASON,
+    detail: staffFlagDetail(input.member.name),
+    now: input.now,
+    dedupe: false,
+  });
+  logEvent("staff_block", { outlet: input.outletId, member: input.member.id });
+  return { ok: false, error: "sendiri" };
+}
+
 async function capFlag(db: D1Database, memberId: string, outletId: string | null, sessionId: string | null, now: number): Promise<void> {
   await repo.insertFlag(db, {
     id: randomId(),
@@ -82,6 +103,8 @@ export async function giveStamp(
     note: string;
   },
 ): Promise<{ ok: true; activityId: string; balance: number; masked: string } | Fail> {
+  const staff = await blockIfStaff(db, input);
+  if (staff) return staff;
   const previewRule = applyStamp({ confirmed: input.confirmed, balance: 0 });
   if (!previewRule.ok) return { ok: false, error: "syarat" };
   const today = startOfWibDay(input.now);
@@ -145,6 +168,8 @@ export async function giveRedeem(
     note: string;
   },
 ): Promise<{ ok: true; activityId: string; balance: number; masked: string } | Fail> {
+  const staff = await blockIfStaff(db, input);
+  if (staff) return staff;
   await repo.ensureCard(db, input.member.id, input.brand.id, input.now);
   const updated = await repo.redeemAtomic(db, {
     memberId: input.member.id,
@@ -636,6 +661,8 @@ export async function giveBirthday(
     note: string;
   },
 ): Promise<{ ok: true; activityId: string; balance: number; masked: string } | Fail> {
+  const staff = await blockIfStaff(db, input);
+  if (staff) return staff;
   const offer = birthdayStatus(input.member.birthday, input.now, {
     active: input.brand.birthday_active === 1,
     window: input.brand.birthday_window === "around" ? "around" : "month",

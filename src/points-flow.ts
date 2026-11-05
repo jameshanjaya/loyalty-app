@@ -8,6 +8,7 @@ import * as repo from "./repo";
 import type { Brand, Member } from "./types";
 import { maskName } from "./format";
 import { logEvent } from "./log";
+import { STAFF_FLAG_REASON, staffFlagDetail } from "./staff";
 
 export type Fail = { ok: false; error: string };
 
@@ -177,10 +178,24 @@ export async function confirmRedeemCode(
   if (!/^\d{5}$/.test(input.code)) return { ok: false, error: "kode" };
   const row = await pdb.findPendingCode(db, input.brandId, input.code, input.now);
   if (!row) return { ok: false, error: "kode" };
-  const won = await pdb.confirmCodeRow(db, row.id, input.outletId, input.sessionId, input.now);
-  if (!won) return { ok: false, error: "kode" };
   const member = await repo.getMember(db, row.member_id);
   if (!member) return { ok: false, error: "kode" };
+  if (await repo.isOutletStaff(db, input.outletId, member.id)) {
+    await repo.insertFlag(db, {
+      id: randomId(),
+      outletId: input.outletId,
+      sessionId: input.sessionId,
+      memberId: member.id,
+      reason: STAFF_FLAG_REASON,
+      detail: staffFlagDetail(member.name),
+      now: input.now,
+      dedupe: false,
+    });
+    logEvent("staff_block", { outlet: input.outletId, member: member.id });
+    return { ok: false, error: "sendiri" };
+  }
+  const won = await pdb.confirmCodeRow(db, row.id, input.outletId, input.sessionId, input.now);
+  if (!won) return { ok: false, error: "kode" };
   if (row.kind === "stamp") {
     await dbBumpRedeems(db, member.id, row.brand_id);
     const card = await repo.getCard(db, member.id, row.brand_id);

@@ -42,6 +42,7 @@ export const ERR: Record<string, string> = {
   passpendek: "Password baru minimal 8 karakter, ya.",
   passbeda: "Password baru dan ulangi-nya belum sama.",
   passsalah: "Password sekarang kurang tepat.",
+  sendiri: "Gak bisa kasih stamp ke akun sendiri ya",
 };
 
 export const OK: Record<string, string> = {

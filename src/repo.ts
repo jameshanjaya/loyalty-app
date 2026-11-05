@@ -161,6 +161,36 @@ export async function touchMember(db: D1Database, id: string, now: number): Prom
   await db.prepare(`UPDATE members SET last_seen_at=? WHERE id=?`).bind(now, id).run();
 }
 
+export async function isOutletStaff(db: D1Database, outletId: string, memberId: string): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT 1 AS n FROM outlet_staff WHERE outlet_id = ? AND member_id = ?`)
+    .bind(outletId, memberId)
+    .first<{ n: number }>();
+  return Boolean(row);
+}
+
+export async function listOutletStaff(db: D1Database): Promise<Array<Member & { outlet_id: string }>> {
+  return rows<Member & { outlet_id: string }>(
+    db.prepare(
+      `SELECT m.*, s.outlet_id AS outlet_id
+       FROM outlet_staff s JOIN members m ON m.id = s.member_id
+       ORDER BY m.name`,
+    ),
+  );
+}
+
+export async function addOutletStaff(db: D1Database, outletId: string, memberId: string, now: number): Promise<void> {
+  await db.prepare(`INSERT OR IGNORE INTO outlet_staff (outlet_id, member_id, created_at) VALUES (?, ?, ?)`).bind(outletId, memberId, now).run();
+}
+
+export async function removeOutletStaff(db: D1Database, outletId: string, memberId: string): Promise<void> {
+  await db.prepare(`DELETE FROM outlet_staff WHERE outlet_id = ? AND member_id = ?`).bind(outletId, memberId).run();
+}
+
+export async function findMemberByEmail(db: D1Database, email: string): Promise<Member | null> {
+  return db.prepare(`SELECT * FROM members WHERE email = ? COLLATE NOCASE LIMIT 1`).bind(email.trim()).first<Member>();
+}
+
 export async function searchMembers(db: D1Database, q: string): Promise<Member[]> {
   const like = `%${q.replace(/[%_]/g, "")}%`;
   return rows<Member>(
@@ -551,13 +581,15 @@ export async function countSessionStamps(db: D1Database, sessionId: string, sinc
 
 export async function insertFlag(
   db: D1Database,
-  flag: { id: string; outletId: string | null; sessionId: string | null; memberId: string | null; reason: string; detail: string; now: number },
+  flag: { id: string; outletId: string | null; sessionId: string | null; memberId: string | null; reason: string; detail: string; now: number; dedupe?: boolean },
 ): Promise<void> {
-  const existing = await db
-    .prepare(`SELECT id FROM flags WHERE session_id IS ? AND reason = ? AND created_at > ? LIMIT 1`)
-    .bind(flag.sessionId, flag.reason, flag.now - 60 * 60 * 1000)
-    .first<{ id: string }>();
-  if (existing) return;
+  if (flag.dedupe !== false) {
+    const existing = await db
+      .prepare(`SELECT id FROM flags WHERE session_id IS ? AND reason = ? AND created_at > ? LIMIT 1`)
+      .bind(flag.sessionId, flag.reason, flag.now - 60 * 60 * 1000)
+      .first<{ id: string }>();
+    if (existing) return;
+  }
   await db
     .prepare(`INSERT INTO flags (id, outlet_id, session_id, member_id, reason, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .bind(flag.id, flag.outletId, flag.sessionId, flag.memberId, flag.reason, flag.detail, flag.now)

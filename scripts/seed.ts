@@ -146,6 +146,7 @@ const lines: string[] = [
   "DELETE FROM levels;",
   "DELETE FROM point_rewards;",
   "DELETE FROM stamp_tiers;",
+  "DELETE FROM outlet_staff;",
   "DELETE FROM flags;",
   "DELETE FROM rate_limits;",
   "DELETE FROM activities;",
