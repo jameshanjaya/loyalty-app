@@ -80,15 +80,18 @@ h1, h2, h3, p { margin: 0; }
 .stamp {
   aspect-ratio: 1; border-radius: 50%;
   display: grid; place-items: center;
-  border: 1.7px dashed color-mix(in srgb, var(--accent) 45%, #c9c3b6);
-  color: color-mix(in srgb, var(--accent) 35%, #9a9488);
+  border: 2px dashed color-mix(in srgb, var(--accent) 42%, #d9d3c6);
+  color: color-mix(in srgb, var(--accent) 55%, #8a8478);
   font-weight: 800; background: transparent;
 }
 .stamp.on {
-  background: color-mix(in srgb, var(--accent) 82%, white);
-  border: 0; color: white;
+  background: var(--stamp-fill, var(--accent));
+  border: 2.5px solid #fff;
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.04);
 }
-.stamp svg { width: 46%; height: 46%; }
+.stamp.gift { border-style: dashed; border-color: #e7c36a; color: #e7c36a; background: transparent; }
+.stamp img, .stamp svg { width: 62%; height: 62%; object-fit: contain; }
 
 .btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -360,8 +363,12 @@ td, th { padding: 8px 4px; border-bottom: 1px solid var(--line); vertical-align:
   box-shadow: 0 8px 18px rgba(20, 14, 8, .05);
 }
 .skin .count { font-size: 1.55rem; letter-spacing: -0.04em; }
-.skin .stamp.on { background: var(--accent); color: var(--on-ink, #fff); }
-.skin .stamp.on svg, .stampimg { width: 22px; height: 22px; }
+.skin .stamp.on { background: var(--stamp-fill, var(--accent)); color: #fff; border: 2.5px solid #fff; }
+.stampcard .stamps .stamp:not(.on) { border-color: rgba(255,255,255,.75); color: #fff; }
+.stampcard .stamp.gift { border-color: #e7c36a; color: #e7c36a; }
+.stamps[data-brand="krispyporkk"] .stamp:not(.on) { border-color: #ffd0e4; color: #ff7fb0; }
+.stamps[data-brand="soto-oseng"] .stamp:not(.on) { border-color: #b9cff8; color: #1F3A8A; }
+.stamps[data-brand="loft25"] .stamp:not(.on) { border-color: #cfe3b8; color: #1f3d2b; }
 .skin .btn-solid { background: var(--cta, var(--deep)); color: #fff; }
 .logo-slot {
   width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; flex: none;

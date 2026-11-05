@@ -54,6 +54,32 @@ export function nextRewardLine(stamps: number, tiers: Array<{ stamps: number; re
   return `${left} stamp lagi, ${next.reward}`;
 }
 
+export function defaultStampIcon(brandId: string): "whisk" | "bowl" | "snout" {
+  if (brandId === "soto-oseng") return "bowl";
+  if (brandId === "krispyporkk") return "snout";
+  return "whisk";
+}
+
+/** Old plate/logo values fall back to the brand default. Custom upload wins only when a file exists. */
+export function resolveStampIcon(brand: { id: string; stamp_icon?: string | null; stamp_key?: string | null }): "whisk" | "bowl" | "snout" | "custom" {
+  const raw = brand.stamp_icon || "";
+  if (raw === "custom" && brand.stamp_key) return "custom";
+  if (raw === "whisk" || raw === "bowl" || raw === "snout") return raw;
+  return defaultStampIcon(brand.id);
+}
+
+export function stampIconSrc(kind: string): string {
+  if (kind === "bowl") return "/brands/toni-bowl.svg";
+  if (kind === "snout") return "/brands/toni-snout.svg";
+  return "/brands/toni-whisk.svg";
+}
+
+export function stampFill(brandId: string): string {
+  if (brandId === "soto-oseng") return "#1F3A8A";
+  if (brandId === "krispyporkk") return "#111111";
+  return "#1f3d2b";
+}
+
 export function slugifyOutlet(name: string): string {
   const slug = name
     .toLowerCase()

@@ -7,23 +7,17 @@ import { errText, okText } from "./messages";
 import { bannerLive } from "./repo";
 import { clock, feedTime, memberSince, toWibDateInput } from "./time";
 import type { DashNumbers, Lapsed, TopMember } from "./repo";
-import { brandArt, nextRewardLine, pickHeroBanners, rewardFace } from "./brand-visual";
+import { brandArt, defaultStampIcon, nextRewardLine, pickHeroBanners, resolveStampIcon, rewardFace, stampFill, stampIconSrc } from "./brand-visual";
 import type { ActivityRow, Banner, Brand, Card, FlagRow, Member, Outlet } from "./types";
 
 const CUP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8h8v5a4 4 0 0 1-8 0V8z"/><path d="M15 9.5h1.8a2.2 2.2 0 0 1 0 4.4H15"/><path d="M8 20h6"/></svg>`;
 const CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 9.2 17 19 7"/></svg>`;
 const GIFT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="11" width="16" height="8" rx="1.4"/><path d="M12 11v8M4.5 14.5h15"/><path d="M12 11c-1.8-3.4-5-3.2-5-.8 0 1.6 2.2.8 5 .8 2.8 0 5 .8 5-.8 0-2.4-3.2-2.6-5 .8z"/></svg>`;
 const LEAF = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 19C14 19 19 12 19 5 12 5 5 8 5 19z"/><path d="M8 16c2-2 4-5 6-8"/></svg>`;
-const WHISK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M12 22v-7.2"/><path d="M9.2 14.6h5.6"/><path d="M12 14.6V4.2"/><path d="M12 14.6 9.2 4.8"/><path d="M12 14.6 14.8 4.8"/><path d="M12 14.6 7.2 6.6"/><path d="M12 14.6 16.8 6.6"/><path d="M12 14.6 6.2 9"/><path d="M12 14.6 17.8 9"/></svg>`;
-const BOWL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4.2 10.2h15.6c-.7 5.4-3.5 8.2-7.8 8.2s-7.1-2.8-7.8-8.2z"/><path d="M8 10.2c.4-2.8 1.7-4.4 4-4.4s3.6 1.6 4 4.4"/><path d="M9.2 8.2h.01M12 7.6h.01M14.6 8.4h.01"/></svg>`;
-const PLATE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><ellipse cx="12" cy="15.2" rx="8" ry="3.3"/><ellipse cx="12" cy="14.4" rx="5.2" ry="1.7"/><path d="M8 13.6c.7-2.6 2.2-4 4-4s3.3 1.4 4 4"/><path d="M10.2 12.4h3.6"/></svg>`;
-
 function stampMark(brand: Brand): string {
-  if (brand.stamp_icon === "logo") return `<img class="stampimg" src="${esc(brandArt(brand).mark)}" alt="" />`;
-  if (brand.stamp_key) return `<img class="stampimg" src="/media/stamp/${esc(brand.id)}" alt="" />`;
-  if (brand.stamp_icon === "bowl") return BOWL;
-  if (brand.stamp_icon === "plate") return PLATE;
-  return WHISK;
+  const kind = resolveStampIcon(brand);
+  if (kind === "custom") return `<img class="stampimg" src="/media/stamp/${esc(brand.id)}" alt="" />`;
+  return `<img class="stampimg" src="${stampIconSrc(kind)}" alt="" />`;
 }
 
 function logoSlot(brand: Brand): string {
@@ -48,11 +42,11 @@ function doc(title: string, inner: string, theme = "#6ea564"): string {
 <link rel="manifest" href="/app.webmanifest" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/app.css?v=8" />
+<link rel="stylesheet" href="/app.css?v=9" />
 </head>
 <body>
 ${inner}
-<script src="/app.js?v=8" defer></script>
+<script src="/app.js?v=9" defer></script>
 </body>
 </html>`;
 }
@@ -319,13 +313,14 @@ function carousel(banners: Banner[], now: number, delayMs = 3000, nonHalal = fal
 export function stampGrid(
   filled: number,
   total: number,
-  mark = WHISK,
+  mark = `<img class="stampimg" src="${stampIconSrc("whisk")}" alt="" />`,
   gifts: Array<{ stamps: number; icon: string }> = [],
+  brandId = "",
 ): string {
   const n = Math.max(1, Math.min(total, 20));
   const on = Math.min(Math.max(filled, 0), n);
   const giftAt = new Map(gifts.map((gift) => [gift.stamps, gift.icon || "🎁"]));
-  let html = `<div class="stamps" aria-label="${on} dari ${n} stamp">`;
+  let html = `<div class="stamps" data-brand="${esc(brandId)}" style="--stamp-fill:${esc(stampFill(brandId))}" aria-label="${on} dari ${n} stamp">`;
   for (let i = 1; i <= n; i++) {
     if (i <= on) html += `<div class="stamp on">${mark}</div>`;
     else if (giftAt.has(i)) html += `<div class="stamp gift" title="${esc(giftAt.get(i) || "")}">${esc(giftAt.get(i) || "🎁")}</div>`;
@@ -457,7 +452,7 @@ export function cardPage(input: {
       return `<article class="stampcard${active ? " on" : ""}" data-brand="${esc(brand.id)}" data-href="/kartu?merek=${esc(brand.id)}" style="${tone.style};background:${esc(cardBg)};color:#fff${brand.id === "krispyporkk" ? ";border:1.5px solid #F27BA6" : ""}">
         ${veil}
         <div class="stamphead"><img src="${esc(art.full)}" alt="${esc(brand.short_name)}" /><b>${count}/${brand.stamps_required}</b></div>
-        ${stampGrid(count, brand.stamps_required, stampMark(brand), active ? gifts : [])}
+        ${stampGrid(count, brand.stamps_required, stampMark(brand), active ? gifts : [], brand.id)}
         <p class="stampnote">${esc(nextRewardLine(count, (active ? input.tiers : []) || []))}</p>
       </article>`;
     })
@@ -566,7 +561,7 @@ export function successPage(input: {
       </header>
       <section class="card">
         <div class="split"><h2>Kartu stamp ${esc(input.brand.short_name)}</h2><b class="count">${input.stamps}/${input.brand.stamps_required}</b></div>
-        ${stampGrid(input.stamps, input.brand.stamps_required, stampMark(input.brand))}
+        ${stampGrid(input.stamps, input.brand.stamps_required, stampMark(input.brand), [], input.brand.id)}
         <p class="lead">${esc(copy.headline)}</p>
         <p class="fine">${esc(ruleLine(input.brand))}</p>
       </section>
@@ -647,7 +642,7 @@ export function cashierDeskPage(input: {
     found = `<section class="card">
       <div class="split"><h2>${esc(input.found.member.name)}</h2><b class="count">${input.found.stamps}/${input.brand.stamps_required}</b></div>
       <p class="fine">${esc(prettyWa(input.found.member.wa))}</p>
-      ${stampGrid(input.found.stamps, input.brand.stamps_required, stampMark(input.brand))}
+      ${stampGrid(input.found.stamps, input.brand.stamps_required, stampMark(input.brand), [], input.brand.id)}
       <p class="lead">${esc(copy.headline)}</p>
       ${(input.found.quests || [])
         .map(
@@ -1186,11 +1181,11 @@ export function rulesPage(brands: Brand[], hidden: Brand[], links: OrderLink[], 
         <label class="lbl">Warna latar</label><input name="page_bg" type="color" value="${esc(b.page_bg || "#f3eee4")}" />
         <label class="lbl">Ikon stamp</label>
         <select name="stamp_icon">
-          <option value="whisk" ${b.stamp_icon === "bowl" || b.stamp_icon === "plate" || b.stamp_icon === "custom" || b.stamp_icon === "logo" ? "" : "selected"}>Pengocok matcha</option>
-          <option value="bowl" ${b.stamp_icon === "bowl" ? "selected" : ""}>Mangkuk</option>
-          <option value="plate" ${b.stamp_icon === "plate" ? "selected" : ""}>Piring</option>
-          <option value="logo" ${b.stamp_icon === "logo" ? "selected" : ""}>Logo merek</option>
-          <option value="custom" ${b.stamp_icon === "custom" ? "selected" : ""}>Upload sendiri</option>
+          ${["whisk", "bowl", "snout", "custom"].map((kind) => {
+            const chosen = b.stamp_icon === "whisk" || b.stamp_icon === "bowl" || b.stamp_icon === "snout" || b.stamp_icon === "custom" ? b.stamp_icon : defaultStampIcon(b.id);
+            const label = kind === "whisk" ? "Whisk · Loft25" : kind === "bowl" ? "Mangkok · Soto" : kind === "snout" ? "Hidung babi · Krispy" : "Upload sendiri";
+            return `<option value="${kind}" ${chosen === kind ? "selected" : ""}>${label}</option>`;
+          }).join("")}
         </select>
         ${b.logo_key ? `<p class="fine">Logo header sudah ada.</p>` : `<p class="fine">Logo header masih slot LOGO.</p>`}
         <label class="lbl">Stamp untuk reward</label><input name="stamps_required" type="number" min="1" max="30" value="${b.stamps_required}" required />
@@ -1445,7 +1440,7 @@ export function catalogPage(input: {
 export function codePage(input: { code: string; label: string; brand: string; svg: string; remainingMs: number; status: string; claimUrl: string; brandTheme?: Brand | null }): string {
   const live = input.status === "pending";
   const skin = customerSkin(input.brandTheme || null);
-  const mark = input.brandTheme ? stampMark(input.brandTheme) : WHISK;
+  const mark = input.brandTheme ? stampMark(input.brandTheme) : `<img class="stampimg" src="${stampIconSrc("whisk")}" alt="" />`;
   return doc(
     "Kode tukar",
     `<main class="phone skin${skin.dark ? " skin-dark" : ""}" style="${skin.style}">

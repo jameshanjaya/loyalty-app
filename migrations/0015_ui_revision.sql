@@ -2,9 +2,9 @@ ALTER TABLE brands ADD COLUMN banner_ms INTEGER NOT NULL DEFAULT 3000;
 ALTER TABLE brands ADD COLUMN non_halal INTEGER NOT NULL DEFAULT 0;
 
 UPDATE brands SET non_halal = 1 WHERE id IN ('soto-oseng', 'krispyporkk');
-UPDATE brands SET accent = '#143d28', accent_soft = '#cfe3b8', cta = '#143d28', page_bg = '#f4efe4', stamp_icon = 'logo' WHERE id = 'loft25';
-UPDATE brands SET accent = '#1F3A8A', accent_soft = '#d6e4f5', cta = '#D7262E', page_bg = '#f7f3ee', stamp_icon = 'logo' WHERE id = 'soto-oseng';
-UPDATE brands SET accent = '#F27BA6', accent_soft = '#ffd0e4', cta = '#F27BA6', page_bg = '#1a1a1a', stamp_icon = 'logo' WHERE id = 'krispyporkk';
+UPDATE brands SET accent = '#143d28', accent_soft = '#cfe3b8', cta = '#143d28', page_bg = '#f4efe4', stamp_icon = 'whisk' WHERE id = 'loft25';
+UPDATE brands SET accent = '#1F3A8A', accent_soft = '#d6e4f5', cta = '#D7262E', page_bg = '#f7f3ee', stamp_icon = 'bowl' WHERE id = 'soto-oseng';
+UPDATE brands SET accent = '#F27BA6', accent_soft = '#ffd0e4', cta = '#F27BA6', page_bg = '#1a1a1a', stamp_icon = 'snout' WHERE id = 'krispyporkk';
 
 ALTER TABLE outlets ADD COLUMN slug TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_outlets_slug ON outlets(slug) WHERE slug IS NOT NULL AND slug != '';

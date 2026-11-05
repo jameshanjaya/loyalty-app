@@ -811,7 +811,7 @@ function readBrand(form: FormData) {
   const page_bg = hexOrEmpty(String(form.get("page_bg") || ""));
   const stamp_icon = String(form.get("stamp_icon") || "whisk");
   if (cta == null || page_bg == null) return null;
-  if (!["whisk", "bowl", "plate", "custom", "logo"].includes(stamp_icon)) return null;
+  if (!["whisk", "bowl", "snout", "custom"].includes(stamp_icon)) return null;
   return {
     name,
     short_name,
