@@ -1,0 +1,25 @@
+{
+  "name": "loyalty-bos",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Kartu stamp digital multi-merek untuk F&B. Jalan di Cloudflare Workers, D1, dan R2.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "setup": "wrangler d1 migrations apply loyalty-bos --local && node --experimental-strip-types scripts/seed.ts",
+    "db:migrate": "wrangler d1 migrations apply loyalty-bos --local",
+    "db:seed": "node --experimental-strip-types scripts/seed.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "uqr": "^0.1.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251104.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.157.0"
+  }
+}

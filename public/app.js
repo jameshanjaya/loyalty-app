@@ -1,0 +1,101 @@
+function bootPoll() {
+  const box = document.querySelector("[data-poll]");
+  if (!box) return;
+  const url = box.getAttribute("data-poll");
+  const remaining0 = Number(box.getAttribute("data-remaining") || "0");
+  const ttl = Number(box.getAttribute("data-ttl") || "60000");
+  const started = Date.now();
+  const label = box.querySelector("[data-count]");
+  const bar = box.querySelector("[data-bar]");
+  const wait = box.querySelector("[data-wait]");
+  let stopped = false;
+
+  const tick = () => {
+    if (stopped) return;
+    const left = Math.max(0, remaining0 - (Date.now() - started));
+    const s = Math.ceil(left / 1000);
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    if (label) label.textContent = `${m}:${String(r).padStart(2, "0")}`;
+    if (bar) bar.style.width = `${Math.max(0, Math.min(100, (left / ttl) * 100))}%`;
+    if (left <= 0) {
+      stopped = true;
+      if (wait) wait.textContent = "QR hangus. Tap Kasih Stamp lagi.";
+      return;
+    }
+    setTimeout(tick, 250);
+  };
+  tick();
+
+  const poll = async () => {
+    if (stopped || !url) return;
+    try {
+      const res = await fetch(url, { headers: { accept: "application/json" } });
+      const data = await res.json();
+      if (data.status && data.status !== "pending") {
+        location.reload();
+        return;
+      }
+    } catch {
+      /* coba lagi */
+    }
+    setTimeout(poll, 2000);
+  };
+  poll();
+}
+
+function bootReel() {
+  document.querySelectorAll("[data-reel]").forEach((root) => {
+    const track = root.querySelector(".reel-track");
+    const dots = [...root.querySelectorAll("[data-dot]")];
+    if (!track || dots.length < 2) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let timer = 0;
+    let paused = false;
+    const width = () => track.clientWidth || 1;
+    const current = () => Math.round(track.scrollLeft / width());
+    const mark = () => {
+      const index = current();
+      dots.forEach((dot, n) => dot.classList.toggle("on", n === index));
+    };
+    const go = (index) => {
+      track.scrollTo({ left: width() * index, behavior: reduced ? "auto" : "smooth" });
+    };
+    track.addEventListener("scroll", mark, { passive: true });
+    dots.forEach((dot) => {
+      dot.addEventListener("click", () => go(Number(dot.getAttribute("data-dot") || "0")));
+    });
+    const arm = () => {
+      window.clearInterval(timer);
+      if (reduced || paused || document.hidden) return;
+      const ms = Number(root.getAttribute("data-ms") || "4800");
+      timer = window.setInterval(() => go((current() + 1) % dots.length), ms);
+    };
+    track.addEventListener("pointerdown", () => {
+      paused = true;
+      window.clearInterval(timer);
+    });
+    const resume = () => {
+      paused = false;
+      arm();
+    };
+    track.addEventListener("pointerup", resume);
+    track.addEventListener("pointercancel", resume);
+    document.addEventListener("visibilitychange", arm);
+    arm();
+  });
+}
+
+function boot() {
+  bootPoll();
+  bootReel();
+}
+
+document.querySelectorAll("[data-print]").forEach((el) => {
+  el.addEventListener("click", () => window.print());
+});
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+document.addEventListener("DOMContentLoaded", boot);

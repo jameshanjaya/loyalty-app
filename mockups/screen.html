@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup Loyalty Bos</title>
+<link rel="stylesheet" href="screen.css" />
+</head>
+<body>
+<main class="phone" id="app"></main>
+<script>
+const CUP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 9h8v4.5a4 4 0 0 1-8 0V9z"/><path d="M15 10.5h1.6a1.8 1.8 0 0 1 0 3.6H15"/><path d="M8.5 20h6"/></svg>`;
+const WHISK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 22v-7.2"/><path d="M9.2 14.6h5.6"/><path d="M12 14.6V4.2"/><path d="M12 14.6 9.2 4.8"/><path d="M12 14.6 14.8 4.8"/><path d="M12 14.6 7.2 6.6"/><path d="M12 14.6 16.8 6.6"/><path d="M12 14.6 6.2 9"/><path d="M12 14.6 17.8 9"/></svg>`;
+const BOWL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4.2 10.2h15.6c-.7 5.4-3.5 8.2-7.8 8.2s-7.1-2.8-7.8-8.2z"/><path d="M8 10.2c.4-2.8 1.7-4.4 4-4.4s3.6 1.6 4 4.4"/><path d="M9.2 8.2h.01M12 7.6h.01M14.6 8.4h.01"/></svg>`;
+const PLATE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><ellipse cx="12" cy="15.2" rx="8" ry="3.3"/><ellipse cx="12" cy="14.4" rx="5.2" ry="1.7"/><path d="M8 13.6c.7-2.6 2.2-4 4-4s3.3 1.4 4 4"/><path d="M10.2 12.4h3.6"/></svg>`;
+const CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M5 12.5 9.2 17 19 7"/></svg>`;
+const LEAF = `<svg viewBox="0 0 24 24" fill="none" stroke="#6a4a12" stroke-width="2"><path d="M5 19C14 19 19 12 19 5 12 5 5 8 5 19z"/><path d="M8 16c2-2 4-5 6-8"/></svg>`;
+const NAV = [
+  ["kartu", "Kartu", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 10h8M8 14h5"/></svg>`],
+  ["quest", "Side Quest", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3.5 14.4 8.4 19.6 9.1 15.8 12.8 16.7 18 12 15.5 7.3 18 8.2 12.8 4.4 9.1 9.6 8.4z"/></svg>`],
+  ["hadiah", "Hadiah", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="8" rx="1.4"/><path d="M12 11v8M4.5 14.5h15"/><path d="M12 11c-1.8-3.4-5-3.2-5-.8 0 1.6 2.2.8 5 .8 2.8 0 5 .8 5-.8 0-2.4-3.2-2.6-5 .8z"/></svg>`],
+  ["profil", "Profil", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.1"/><path d="M5.6 19.2c1.3-2.7 3.5-3.9 6.4-3.9s5.1 1.2 6.4 3.9"/></svg>`],
+];
+const ICO = {
+  cam: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-2h6l2 2h3v10H4z"/><circle cx="12" cy="13" r="3.2"/></svg>`,
+  thread: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7h8M8 12h8M8 17h5"/><circle cx="5" cy="7" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="17" r="1" fill="currentColor"/></svg>`,
+  spark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>`,
+  gift: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="8" rx="1.4"/><path d="M12 11v8"/></svg>`,
+  cup: CUP,
+  whisk: WHISK,
+  bowl: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 10h14c-.6 5-3.2 8-7 8s-6.4-3-7-8z"/><path d="M8 10c.4-3 1.6-4 4-4s3.6 1 4 4"/></svg>`,
+  ice: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 14c0 3 1.8 5 4 5s4-2 4-5H8z"/><circle cx="9" cy="9" r="2"/><circle cx="13" cy="8" r="2.2"/><circle cx="16" cy="11" r="1.6"/></svg>`,
+};
+
+const brands = {
+  loft25: {
+    key: "loft25",
+    short: "Loft25",
+    level: "Matcha Regular",
+    next: "Matcha Master",
+    pct: 62,
+    stamps: 6,
+    hello: "Hai, Rina",
+    lead: "Dikit lagi dapet matcha gratis",
+    rule: "Belanja 50rb, dapet 1 stamp",
+    pop: "Yeay, stamp kamu nambah! 🎉",
+    reward: "Milk tea",
+    stamp: "whisk",
+    code: "48291",
+    slides: [
+      ["../public/banners/loft-1.jpg", "LAGI HITS", "Matcha Strawberry", "Dua cup, lebih hemat"],
+      ["../public/banners/loft-2.jpg", "PAGI", "Matcha pagi", "Whisk-nya fresh tiap hari"],
+    ],
+    gifts: [
+      ["Upsize", "1", "whisk"],
+      ["Coffee", "2", "whisk"],
+      ["Milk tea", "2.5", "whisk"],
+      ["Matcha", "3", "whisk"],
+    ],
+  },
+  soto: {
+    key: "soto",
+    short: "Soto Oseng",
+    level: "Penikmat Soto",
+    next: "Sobat Bang Jem",
+    pct: 48,
+    stamps: 4,
+    hello: "Hai, Rina",
+    lead: "Dikit lagi dapet paket gratis",
+    rule: "Nota ada oseng babi, dapet 1 stamp",
+    pop: "Yeay, stamp kamu nambah! 🎉",
+    reward: "Es teh",
+    stamp: "bowl",
+    code: "19384",
+    slides: [
+      ["../public/banners/soto-1.jpg", "JUMAT", "Paket Jumat", "Oseng + es teh, nagih"],
+      ["../public/banners/soto-2.jpg", "HANGAT", "Oseng panas", "Gurih, habis duluan"],
+    ],
+    gifts: [
+      ["Es teh", "1", "cup"],
+      ["Kerupuk", "1.5", "bowl"],
+      ["Es jeruk", "2", "cup"],
+      ["Paket kecil", "3", "bowl"],
+    ],
+  },
+  krispy: {
+    key: "krispy",
+    short: "Krispyporkk",
+    level: "Crispy Fan",
+    next: "Crispy Master",
+    pct: 40,
+    stamps: 2,
+    hello: "Hai, Rina",
+    lead: "Dikit lagi dapet diskon 50%",
+    rule: "Belanja 100rb, dapet 1 stamp",
+    pop: "Yeay, stamp kamu nambah! 🎉",
+    reward: "Es krim",
+    stamp: "plate",
+    code: "77021",
+    slides: [
+      ["../public/banners/krispy-1.jpg", "BARU DROP", "Crispy Bowl", "Nasi tambahannya cuma 5rb"],
+      ["../public/banners/krispy-2.jpg", "GARING", "Kulit renyah", "Pedas, gelap, ludes"],
+    ],
+    gifts: [
+      ["Nasi +1", "1", "bowl"],
+      ["Saus", "1.5", "bowl"],
+      ["Es krim", "2", "ice"],
+      ["Crispy bite", "3", "bowl"],
+    ],
+  },
+};
+
+const q = new URLSearchParams(location.search);
+const brand = brands[q.get("brand")] || brands.loft25;
+const screen = q.get("screen") || "kartu";
+document.body.dataset.brand = brand.key;
+document.title = `${brand.short} · ${screen}`;
+
+function coin(n) {
+  return `<span class="poin"><span class="coin">${LEAF}</span><b>${n}</b> Poin</span>`;
+}
+function nav(on) {
+  return `<nav class="tabbar">${NAV.map(([id, label, icon]) => `<a class="${on === id ? "on" : ""}" href="screen.html?brand=${brand.key}&screen=${id}">${icon}<span>${label}</span></a>`).join("")}</nav>`;
+}
+function stamps(n) {
+  const icon = brand.stamp === "bowl" ? BOWL : brand.stamp === "plate" ? PLATE : WHISK;
+  let html = "";
+  for (let i = 1; i <= 10; i++) {
+    const on = i <= n;
+    html += `<div class="stamp${on ? " on" : ""}${i === n ? " fresh" : ""}">${icon}</div>`;
+  }
+  return `<div class="stamps">${html}</div>`;
+}
+function ring(pct) {
+  const c = 2 * Math.PI * 28;
+  const off = c * (1 - pct / 100);
+  return `<div class="ring">${`<svg viewBox="0 0 72 72"><circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="7"/><circle cx="36" cy="36" r="28" fill="none" stroke="#ffe08a" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 36 36)"/></svg>`}<b>${pct}</b></div>`;
+}
+function burst() {
+  return `<div class="burst" aria-hidden="true">${"<i></i>".repeat(6)}</div>`;
+}
+function qr() {
+  const n = 21;
+  let h = brand.key.length * 17;
+  const cells = [];
+  const finder = (x, y) => {
+    const boxes = [[0, 0], [n - 7, 0], [0, n - 7]];
+    return boxes.some(([ox, oy]) => x >= ox && x < ox + 7 && y >= oy && y < oy + 7);
+  };
+  const finderOn = (x, y) => {
+    const boxes = [[0, 0], [n - 7, 0], [0, n - 7]];
+    for (const [ox, oy] of boxes) {
+      if (x < ox || y < oy || x >= ox + 7 || y >= oy + 7) continue;
+      const lx = x - ox, ly = y - oy;
+      if (lx === 0 || ly === 0 || lx === 6 || ly === 6) return true;
+      if (lx >= 2 && lx <= 4 && ly >= 2 && ly <= 4) return true;
+      return false;
+    }
+    return false;
+  };
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      h = (h * 33 + x * 13 + y) % 97;
+      const on = finder(x, y) ? finderOn(x, y) : h > 46;
+      if (on) cells.push(`<rect x="${x}" y="${y}" width="1" height="1"/>`);
+    }
+  }
+  return `<svg class="qr" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges">${cells.join("")}</svg>`;
+}
+
+function kartu() {
+  const slides = brand.slides.map(([img, kicker, title, sub]) => `
+    <article class="slide" style="background-image:url('${img}')">
+      <div class="slide-copy"><div class="kicker">${kicker}</div><h2>${title}</h2><p>${sub}</p></div>
+    </article>`).join("");
+  return `
+    <header class="stage">
+      <div class="reel">${slides}</div>
+      <div class="dots"><i class="on"></i><i></i></div>
+    </header>
+    <section class="sheet">
+      <div class="who">
+        <div class="logo-slot">LOGO</div>
+        <div style="flex:1"><div class="eyebrow">${brand.short.toUpperCase()}</div><h1 class="display">${brand.hello}</h1></div>
+        ${coin("3")}
+      </div>
+      <section class="pass">
+        ${burst()}
+        <div class="pass-top"><span>Kartu stamp</span><b>${brand.stamps}/10</b></div>
+        ${stamps(brand.stamps)}
+        <p class="lead">${brand.pop}</p>
+        <p class="lead">${brand.lead}</p>
+        <p class="fine">${brand.rule}</p>
+      </section>
+    </section>
+    ${nav("kartu")}`;
+}
+
+function quest() {
+  const items = [
+    ["", "bowl", "Makan ayam pakai kuah gulai", "new", "Kasir cek nota dulu", 0, "1"],
+    ["done", "cam", "Foto & review Google", "", "Beress", 100, "0.5"],
+    ["", "thread", "Post Threads, tag kita", "", "Minggu ini belum", 0, "0.5"],
+    ["", "spark", "IG Story, tag kita", "lim", "Minggu ini belum", 35, "1"],
+  ].filter((item) => brand.key === "soto" || item[2] !== "Makan ayam pakai kuah gulai");
+  const cards = items.map(([cls, ico, title, tag, status, pct, pts]) => `
+    <article class="quest ${cls}">
+      <div class="qico">${ICO[ico]}</div>
+      <div style="flex:1;min-width:0">
+        <h3>${title}${tag === "new" ? `<span class="tag new">NEW</span>` : tag === "lim" ? `<span class="tag lim">LIMITED</span>` : ""}</h3>
+        <p class="fine">${pts} poin · ${status}</p>
+        <div class="qbar"><span style="width:${pct}%"></span></div>
+      </div>
+      ${cls === "done" ? `<span class="check">${CHECK}</span>` : ""}
+    </article>`).join("");
+  return `
+    <header class="hero-panel">
+      <div style="display:flex;align-items:center;gap:10px"><div class="logo-slot light">LOGO</div><div class="kicker" style="margin:0">SIDE QUEST</div></div>
+      <div class="who" style="align-items:center">
+        <h1 class="display" style="font-size:1.7rem">Kumpulin poin, yuk</h1>
+        ${coin("3")}
+      </div>
+      <div class="level">
+        ${ring(brand.pct)}
+        <div style="flex:1">
+          <b>${brand.level}</b>
+          <div class="qbar"><span style="width:${brand.pct}%"></span></div>
+          <p class="fine">2 poin lagi jadi ${brand.next}</p>
+        </div>
+      </div>
+      <div class="expiry">
+        <span class="soon-badge">BURUAN</span>
+        <p>Poin kamu mau hangus nih, buruan tukar</p>
+        <p class="fine">1.5 poin hangus 15 Nov · tahan 60 hari</p>
+      </div>
+    </header>
+    ${cards}
+    <article class="quest locked">
+      <div class="qico">?</div>
+      <div>
+        <h3>Quest rahasia</h3>
+        <p class="fine">Selesain quest dulu. Ada kejutan yang belum keliatan.</p>
+        <p class="lock">Kunci sampai 10 poin</p>
+      </div>
+    </article>
+    ${nav("quest")}`;
+}
+
+function hadiah() {
+  const cards = brand.gifts.map(([name, cost, ico]) => `
+    <article class="gift">
+      <div class="face">${ICO[ico]}</div>
+      <h3>${name}</h3>
+      <div class="price">${coin(cost)}</div>
+    </article>`).join("");
+  return `
+    <div class="shop-head">
+      <div><div class="eyebrow">HADIAH</div><h1 class="display">Tukar yang kamu mau</h1><p class="fine">${brand.short}</p></div>
+      ${coin("3")}
+    </div>
+    <div class="grid">${cards}</div>
+    ${nav("hadiah")}`;
+}
+
+function kode() {
+  return `
+    <div class="code-wrap">
+      <div class="eyebrow">KODE TUKAR</div>
+      ${brand.key === "loft25" ? `<div class="qico" style="margin:10px auto 0">${WHISK}</div>` : ""}
+      <div class="digits">${brand.code.split("").join(" ")}</div>
+      <p class="fine">${brand.reward} · ${brand.short}</p>
+      <section class="codebox">
+        ${qr()}
+        <div class="timer">Masih 08:42</div>
+        <div class="track"><span></span></div>
+        <p class="fine">Kasih ke kasir, ya. Atau minta di-scan.</p>
+      </section>
+    </div>
+    ${nav("hadiah")}`;
+}
+
+function profil() {
+  return `
+    <section class="idcard">
+      <div class="eyebrow" style="color:rgba(255,255,255,.8)">${brand.short.toUpperCase()}</div>
+      <h1>Rina Pratiwi</h1>
+      <p class="fine">Gabung dari Agu 2026</p>
+      <div class="level">
+        ${ring(brand.pct)}
+        <div><b>${brand.level}</b><p class="fine">3 poin · tahan 60 hari</p></div>
+      </div>
+    </section>
+    <section class="card rows" style="margin-top:12px;padding:4px 16px 8px">
+      <div class="row"><span>WhatsApp</span><b>0812 **** 4567</b></div>
+      <div class="row"><span>Ulang tahun</span><b>4 Nov</b></div>
+      <div class="row"><span>Poin mau hangus</span><b>1.5 · 15 Nov</b></div>
+    </section>
+    <a class="btn line" href="#">Keluar</a>
+    ${nav("profil")}`;
+}
+
+function detail() {
+  const photos = [
+    ["../public/banners/soto-2.jpg", "Ayam dengan kuah gulai"],
+    ["../public/banners/soto-1.jpg", "Contoh porsi di meja"],
+  ];
+  const slides = photos.map(([img, cap], i) => `
+    <article class="gslide" style="background-image:url('${img}')">
+      ${i === 0 ? `<span class="zoom">Ketuk buat zoom</span>` : ""}
+    </article>`).join("");
+  return `
+    <div class="eyebrow">SIDE QUEST · SOTO OSENG</div>
+    <h1 class="display" style="font-size:1.55rem;margin-top:4px">Makan ayam pakai kuah gulai <span class="tag new">NEW</span></h1>
+    <p class="fine">1 poin · sekali seminggu · kasir yang cek</p>
+    <div class="gallery-reel" style="margin-top:14px">${slides}</div>
+    <div class="dots" style="margin:8px 0 0"><i class="on"></i><i></i></div>
+    <p class="gcap">Ayam dengan kuah gulai</p>
+    <section class="card" style="padding:14px">
+      <h2 style="margin-bottom:10px">Gampang, kok</h2>
+      <div class="steps">
+        <div class="step"><span class="num">1</span><span>Pesan ayam kuah gulai.</span></div>
+        <div class="step"><span class="num">2</span><span>Kasih liat nota ke kasir.</span></div>
+        <div class="step"><span class="num">3</span><span>Kasir centang, poin kamu masuk.</span></div>
+      </div>
+      <a class="btn" href="#">Kasir, cek nota aku ya</a>
+      <p class="fine">Misi ini nggak perlu upload foto.</p>
+    </section>
+    ${nav("quest")}`;
+}
+
+function verif() {
+  return `
+    <div class="eyebrow">HABIS ISI PROFIL</div>
+    <h1 class="display" style="font-size:1.7rem;margin-top:6px">Verifikasi nomor kamu</h1>
+    <p class="fine">Nama, tanggal lahir, sama nomornya udah kesimpen. Tinggal kirim WA.</p>
+    <section class="card rows" style="margin-top:14px;padding:4px 16px">
+      <div class="row"><span>Nama</span><b>Rina Pratiwi</b></div>
+      <div class="row"><span>Lahir</span><b>4 Nov 1998</b></div>
+      <div class="row"><span>WhatsApp</span><b>0812 3456 4567</b></div>
+    </section>
+    <a class="wa-btn" href="https://wa.me/628111000222?text=VERIF-482913">Kirim WA-nya ya</a>
+    <p class="center" style="margin-top:12px"><span class="codechip">VERIF-482913</span></p>
+    <p class="fine center">Kirim WA-nya ya, biar nomor kamu ke-verif. Pesannya udah keisi, jangan diubah. 10 menit aja.</p>
+    <p class="fine center">Satu nomor, satu akun.</p>`;
+}
+
+function tunggu() {
+  return `
+    <div class="code-wrap">
+      <div class="spin"></div>
+      <h1 class="display" style="font-size:1.6rem">Nunggu pesan kamu…</h1>
+      <p class="fine">Kirim VERIF-482913 dari 0812 3456 4567. Nanti nomor pengirimnya kita cocokin.</p>
+      <a class="wa-btn" href="https://wa.me/628111000222?text=VERIF-482913">Buka WA lagi</a>
+      <p class="center" style="margin-top:16px"><a href="#" style="font-weight:800;text-decoration:underline">Kirim kode OTP ke WA aku</a></p>
+    </div>`;
+}
+
+function waok() {
+  return `
+    <div class="code-wrap celebrate">
+      ${burst()}
+      <div class="bigcheck">${CHECK}</div>
+      <h1 class="display" style="font-size:1.7rem">Nomor kamu ke-verif ✓</h1>
+      <p class="fine">0812 3456 4567 udah nyambung. Gas ke kartu.</p>
+      <a class="btn" href="screen.html?brand=${brand.key}&screen=kartu">Lanjut ke kartu</a>
+    </div>`;
+}
+
+const views = { kartu, quest, hadiah, kode, profil, detail, verif, tunggu, waok };
+document.getElementById("app").innerHTML = (views[screen] || kartu)();
+</script>
+</body>
+</html>
