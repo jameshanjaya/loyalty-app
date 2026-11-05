@@ -17,29 +17,31 @@
 }
 
 body[data-brand="soto"] {
-  --page: #f6efe6;
-  --ink: #2a1612;
-  --muted: #7a564c;
-  --accent: #9a3412;
-  --deep: #5c2116;
-  --soft: #f8e3d4;
-  --card: rgba(255, 248, 242, .8);
-  --line: rgba(90, 30, 20, .08);
-  --shadow: 0 18px 40px rgba(80, 30, 16, .08);
-  --nav: rgba(246, 239, 230, .92);
+  --page: #e7eef8;
+  --ink: #14324a;
+  --muted: #3d5f78;
+  --accent: #1e6a9a;
+  --deep: #154e72;
+  --cta: #c93a26;
+  --soft: #b3c9ee;
+  --card: rgba(255, 255, 255, .82);
+  --line: rgba(30, 106, 154, .14);
+  --shadow: 0 18px 40px rgba(20, 50, 80, .08);
+  --nav: rgba(231, 238, 248, .94);
 }
 
 body[data-brand="krispy"] {
-  --page: #100e0c;
-  --ink: #f7f1ea;
-  --muted: #cbb8a4;
-  --accent: #ff7a2a;
-  --deep: #e25e12;
-  --soft: #2a1c14;
-  --card: rgba(255, 244, 232, .07);
-  --line: rgba(255, 255, 255, .1);
-  --shadow: 0 18px 40px rgba(0, 0, 0, .28);
-  --nav: rgba(16, 14, 12, .94);
+  --page: #fff5f8;
+  --ink: #111111;
+  --muted: #5c4450;
+  --accent: #ff6fa8;
+  --deep: #111111;
+  --cta: #111111;
+  --soft: #ffd0e4;
+  --card: rgba(255, 255, 255, .9);
+  --line: rgba(17, 17, 17, .1);
+  --shadow: 0 18px 40px rgba(17, 17, 17, .08);
+  --nav: rgba(255, 245, 248, .94);
 }
 
 * { box-sizing: border-box; }
@@ -132,13 +134,13 @@ h1.display { font-size: 2rem; font-weight: 800; letter-spacing: -0.045em; line-h
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
 }
-body[data-brand="krispy"] .pass,
-body[data-brand="krispy"] .card,
-body[data-brand="krispy"] .quest,
-body[data-brand="krispy"] .gift,
-body[data-brand="krispy"] .codebox {
-  border-color: rgba(255,255,255,.12);
+.logo-slot {
+  width: 52px; height: 52px; border-radius: 50%; flex: none;
+  border: 1.5px dashed currentColor;
+  display: grid; place-items: center;
+  font-size: .62rem; font-weight: 800; letter-spacing: .08em;
 }
+.logo-slot.light { color: white; border-color: rgba(255,255,255,.75); background: rgba(255,255,255,.08); }
 .pass { padding: 16px 16px 14px; overflow: hidden; }
 .pass-top, .split { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .pass-top b, .count { font-size: 1.7rem; letter-spacing: -0.04em; color: var(--accent); }
@@ -182,13 +184,15 @@ body[data-brand="krispy"] .codebox {
   color: white;
   box-shadow: 0 16px 30px color-mix(in srgb, var(--deep) 35%, transparent);
 }
-body[data-brand="krispy"] .hero-panel {
-  background:
-    radial-gradient(70% 80% at 100% 0%, rgba(255, 122, 42, .45), transparent 55%),
-    linear-gradient(165deg, #24170f, #0c0a09);
-  box-shadow: none;
-  border-bottom: 1px solid rgba(255,122,42,.35);
+body[data-brand="soto"] .hero-panel {
+  background: linear-gradient(165deg, #3d8ec0, #1e6a9a 55%, #154e72);
 }
+body[data-brand="soto"] .soon-badge { background: #c93a26; color: white; }
+body[data-brand="krispy"] .hero-panel {
+  background: linear-gradient(165deg, #ff6fa8, #c43b78 42%, #111);
+  box-shadow: none;
+}
+body[data-brand="krispy"] .soon-badge { background: #111; color: #ff6fa8; }
 .level { display: flex; gap: 12px; align-items: center; margin-top: 14px; }
 .ring { width: 64px; height: 64px; flex: none; position: relative; }
 .ring svg { width: 100%; height: 100%; display: block; }
@@ -228,7 +232,6 @@ body[data-brand="krispy"] .hero-panel {
 .qico svg { width: 22px; height: 22px; }
 .quest .qbar { background: color-mix(in srgb, var(--accent) 15%, white); margin-top: 8px; }
 .quest .qbar > span { background: var(--accent); }
-body[data-brand="krispy"] .quest .qbar { background: rgba(255,255,255,.12); }
 .tag {
   display: inline-flex; margin-left: 6px; vertical-align: 1px;
   font-size: .62rem; letter-spacing: .06em; font-weight: 800;
@@ -242,7 +245,6 @@ body[data-brand="krispy"] .quest .qbar { background: rgba(255,255,255,.12); }
 }
 .check svg { width: 14px; height: 14px; }
 .quest.locked { background: color-mix(in srgb, var(--page) 70%, #d9d3c6); }
-body[data-brand="krispy"] .quest.locked { background: rgba(255,255,255,.04); }
 .lock { margin-top: 6px; font-weight: 800; font-size: .82rem; color: var(--muted); }
 
 .shop-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
@@ -255,11 +257,8 @@ body[data-brand="krispy"] .quest.locked { background: rgba(255,255,255,.04); }
     radial-gradient(circle at 30% 20%, rgba(255,255,255,.7), transparent 45%),
     linear-gradient(160deg, var(--soft), color-mix(in srgb, var(--accent) 35%, white));
 }
-body[data-brand="krispy"] .face {
-  background: linear-gradient(160deg, #3a2418, #1a120e);
-}
 .face svg { width: 42px; height: 42px; color: var(--deep); }
-body[data-brand="krispy"] .face svg { color: var(--accent); }
+body[data-brand="krispy"] .face svg { color: #111; }
 .gift h3 { font-size: 1rem; }
 .price { margin-top: 6px; display: inline-flex; }
 
@@ -290,10 +289,8 @@ body[data-brand="krispy"] .face svg { color: var(--accent); }
   border: 0;
 }
 body[data-brand="krispy"] .idcard {
-  background:
-    radial-gradient(80% 80% at 100% 0%, rgba(255,122,42,.5), transparent 50%),
-    linear-gradient(160deg, #2a1a12, #0e0c0a);
-  border: 1px solid rgba(255,122,42,.4);
+  background: linear-gradient(160deg, #ff6fa8, #111 70%);
+  border: 0;
 }
 .idcard h1 { font-size: 1.8rem; letter-spacing: -0.04em; }
 .rows { margin-top: 12px; }
@@ -305,9 +302,9 @@ body[data-brand="krispy"] .idcard {
 .btn {
   display: flex; align-items: center; justify-content: center;
   width: 100%; min-height: 52px; border-radius: 16px;
-  background: var(--deep); color: white; font-weight: 800; margin-top: 10px;
+  background: var(--cta, var(--deep)); color: white; font-weight: 800; margin-top: 10px;
 }
-body[data-brand="krispy"] .btn { background: var(--accent); color: #1a100c; }
+body[data-brand="krispy"] .stamp.on { background: #ff6fa8; color: #111; }
 .btn.line { background: transparent; color: var(--ink); border: 1.5px solid var(--line); }
 
 .tabbar {

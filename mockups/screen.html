@@ -178,7 +178,8 @@ function kartu() {
     </header>
     <section class="sheet">
       <div class="who">
-        <div><div class="eyebrow">${brand.short.toUpperCase()}</div><h1 class="display">${brand.hello}</h1></div>
+        <div class="logo-slot">LOGO</div>
+        <div style="flex:1"><div class="eyebrow">${brand.short.toUpperCase()}</div><h1 class="display">${brand.hello}</h1></div>
         ${coin("3")}
       </div>
       <section class="pass">
@@ -212,7 +213,7 @@ function quest() {
     </article>`).join("");
   return `
     <header class="hero-panel">
-      <div class="kicker">SIDE QUEST</div>
+      <div style="display:flex;align-items:center;gap:10px"><div class="logo-slot light">LOGO</div><div class="kicker" style="margin:0">SIDE QUEST</div></div>
       <div class="who" style="align-items:center">
         <h1 class="display" style="font-size:1.7rem">Kumpulin poin, yuk</h1>
         ${coin("3")}
