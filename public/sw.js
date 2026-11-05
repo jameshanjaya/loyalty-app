@@ -1,4 +1,4 @@
-const CACHE = "loyalty-bos-v11";
+const CACHE = "loyalty-bos-v13";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -17,6 +17,7 @@ function shellAsset(pathname: string): boolean {
   return (
     pathname === "/app.css" ||
     pathname === "/app.js" ||
+    pathname === "/brand.js" ||
     pathname === "/offline.html" ||
     pathname === "/favicon.svg" ||
     pathname.startsWith("/fonts/") ||

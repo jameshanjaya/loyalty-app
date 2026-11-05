@@ -32,11 +32,13 @@ export function orderPlatform(raw: string): "gofood" | "grabfood" | "shopeefood"
   return null;
 }
 
+export const RESERVASI_LABEL = "Reservasi / Order via WhatsApp";
+
 export function orderLabel(platform: string, custom: string): string {
   if (platform === "gofood") return "GoFood";
   if (platform === "grabfood") return "GrabFood";
   if (platform === "shopeefood") return "ShopeeFood";
-  if (platform === "booking") return "Order / Booking";
+  if (platform === "booking") return RESERVASI_LABEL;
   if (platform === "wa") return custom.trim() || "WhatsApp";
   return custom.trim() || "Pesan";
 }

@@ -138,6 +138,51 @@ export function birthdayClaimDecision(input: {
   return "ok";
 }
 
+export const ID_MONTHS = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+] as const;
+
+export function formatBirthdayId(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : iso;
+}
+
+export function birthdayParts(iso: string | null | undefined): { year: string; month: string; day: string } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso || "").trim());
+  return match ? { year: match[1], month: match[2], day: match[3] } : null;
+}
+
+/** Three selects win when they are filled. A lone ISO `lahir` field still works. */
+export function readBirthdayRaw(form: { get(name: string): unknown }): string {
+  const day = String(form.get("lahir_tgl") ?? "").trim();
+  const month = String(form.get("lahir_bln") ?? "").trim();
+  const year = String(form.get("lahir_thn") ?? "").trim();
+  if (/^\d{1,2}$/.test(day) && /^\d{1,2}$/.test(month) && /^\d{4}$/.test(year)) {
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  return String(form.get("lahir") ?? "").trim();
+}
+
+export function birthdayYears(now: number, selected?: string): number[] {
+  const current = new Date(now + 7 * 60 * 60 * 1000).getUTCFullYear();
+  const years: number[] = [];
+  for (let year = current; year >= 1920; year--) years.push(year);
+  const extra = Number(selected);
+  if (extra && !years.includes(extra)) years.unshift(extra);
+  return years;
+}
+
 export function birthdayWaitLine(birthday: string, now: number, rule: BirthdayRule, claimedYears: ReadonlySet<number>): string {
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthday);
   const stamp = parts ? `${parts[3]}/${parts[2]}` : birthday;
