@@ -19,7 +19,7 @@ import { expireCodes, expireDays, expiryNotes, memberPointState, reviewMission, 
 import { shortDate } from "../time";
 import { changeOwnerPassword, loginOwner, ownerDeleteMember, ownerSetBirthday, ownerSetPhone, setOutletPinHash } from "../service";
 import { clearCookie, COOKIE, loadOwner, setSessionCookie } from "../session";
-import { WIB_MS, feedTime, memberSince, parseWibDate, parseWibLocal, startOfWibDay, startOfWibMonth, wibDayIndex } from "../time";
+import { WIB_MS, clock, feedTime, memberSince, parseWibDate, parseWibLocal, startOfWibDay, startOfWibMonth, wibDayIndex } from "../time";
 import type { Banner } from "../types";
 import {
   activityPage,
@@ -155,6 +155,9 @@ export async function handleAdmin(app: App): Promise<Response | null> {
          ORDER BY r.created_at DESC LIMIT 100`,
       )
       .all<{ friend: string; referrer: string; brand: string; qualified: number; consumed: number; grant_id: string | null }>();
+    const events = await db
+      .prepare(`SELECT kind, detail, created_at FROM referral_events ORDER BY created_at DESC LIMIT 40`)
+      .all<{ kind: string; detail: string; created_at: number }>();
     return html(
       referralsAdminPage({
         rows: (rows.results || []).map((row) => ({
@@ -168,6 +171,11 @@ export async function handleAdmin(app: App): Promise<Response | null> {
         batch: referralBatchSize(await repo.getSetting(db, "referral_batch")),
         bonus: referralFriendBonus(await repo.getSetting(db, "referral_friend_bonus")),
         params: url.searchParams,
+        events: (events.results || []).map((event) => ({
+          when: clock(event.created_at),
+          kind: event.kind,
+          detail: event.detail,
+        })),
       }),
     );
   }

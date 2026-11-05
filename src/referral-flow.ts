@@ -1,6 +1,6 @@
 import { randomId } from "./crypto";
 import { profileComplete } from "./profile";
-import { friendQualifies, referralBatchSize, referralFriendBonus } from "./referral";
+import { attributeReferral, friendQualifies, hasQualifyingStamp, referralBatchSize, referralFriendBonus, type StampFact } from "./referral";
 import * as repo from "./repo";
 import type { Member } from "./types";
 
@@ -32,24 +32,80 @@ export async function findReferrerByCode(db: D1Database, code: string): Promise<
   return db.prepare(`SELECT * FROM members WHERE referral_code = ?`).bind(clean).first<Member>();
 }
 
+async function logReferral(
+  db: D1Database,
+  event: { kind: string; code?: string; referrerId?: string | null; friendId?: string | null; brandId?: string | null; detail?: string; now: number },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO referral_events (id, kind, code, referrer_id, friend_id, brand_id, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(randomId(), event.kind, event.code || "", event.referrerId || null, event.friendId || null, event.brandId || null, event.detail || "", event.now)
+    .run();
+}
+
+export async function logReferralOpen(db: D1Database, input: { code: string; brandId: string; now: number }): Promise<void> {
+  const referrer = await findReferrerByCode(db, input.code);
+  await logReferral(db, {
+    kind: "opened",
+    code: input.code,
+    referrerId: referrer?.id || null,
+    brandId: input.brandId,
+    now: input.now,
+  });
+}
+
+async function memberIsStaff(db: D1Database, memberId: string): Promise<boolean> {
+  const row = await db.prepare(`SELECT 1 AS n FROM outlet_staff WHERE member_id = ? LIMIT 1`).bind(memberId).first<{ n: number }>();
+  return Boolean(row);
+}
+
 export async function attachReferral(
   db: D1Database,
-  input: { friend: Member; code: string; brandId: string; now: number },
+  input: { friend: Member; code: string; brandId: string; openedAt: number | null; now: number },
 ): Promise<void> {
   const referrer = await findReferrerByCode(db, input.code);
-  if (!referrer || referrer.id === input.friend.id) return;
-  const samePhone = referrer.wa === input.friend.wa;
-  const sameGoogle = Boolean(referrer.google_sub && input.friend.google_sub && referrer.google_sub === input.friend.google_sub);
-  if (samePhone || sameGoogle) return;
+  const samePhone = Boolean(referrer && referrer.wa === input.friend.wa);
+  const sameGoogle = Boolean(referrer?.google_sub && input.friend.google_sub && referrer.google_sub === input.friend.google_sub);
+  const existing = await db.prepare(`SELECT friend_id FROM referrals WHERE friend_id = ?`).bind(input.friend.id).first();
+  const friendIsStaff = await memberIsStaff(db, input.friend.id);
+  const referrerIsStaff = referrer ? await memberIsStaff(db, referrer.id) : false;
+  const reason = attributeReferral({
+    atSignup: true,
+    openedAt: input.openedAt,
+    now: input.now,
+    sameGoogle: Boolean(referrer && (sameGoogle || referrer.id === input.friend.id)),
+    samePhone,
+    duplicate: Boolean(existing),
+    friendIsStaff,
+    referrerIsStaff,
+  });
+  if (reason !== "ok" || !referrer) {
+    await logReferral(db, {
+      kind: "rejected",
+      code: input.code,
+      referrerId: referrer?.id || null,
+      friendId: input.friend.id,
+      brandId: input.brandId,
+      detail: referrer ? reason : "unknown",
+      now: input.now,
+    });
+    return;
+  }
   const brand = await repo.getBrand(db, input.brandId);
   if (!brand) return;
-  await db
+  const inserted = await db
     .prepare(
       `INSERT OR IGNORE INTO referrals (friend_id, referrer_id, brand_id, code, profile_done, stamped, qualified, consumed, friend_paid, created_at)
        VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, ?)`,
     )
     .bind(input.friend.id, referrer.id, brand.id, referrer.referral_code, input.now)
     .run();
+  if (!inserted.meta.changes) {
+    await logReferral(db, { kind: "rejected", code: input.code, referrerId: referrer.id, friendId: input.friend.id, brandId: brand.id, detail: "duplicate", now: input.now });
+    return;
+  }
+  await logReferral(db, { kind: "signup", code: referrer.referral_code || input.code, referrerId: referrer.id, friendId: input.friend.id, brandId: brand.id, now: input.now });
   await refreshReferral(db, input.friend.id, input.now);
 }
 
@@ -62,14 +118,17 @@ async function referralSettings(db: D1Database): Promise<{ batch: number; bonus:
   return { batch: referralBatchSize(batch), bonus: referralFriendBonus(bonus), waLock: lock === "1" };
 }
 
-async function hasRealStamp(db: D1Database, memberId: string): Promise<boolean> {
-  const row = await db
-    .prepare(
-      `SELECT 1 AS n FROM activities WHERE member_id = ? AND type = 'stamp' AND voided = 0 AND note NOT IN ('ajak temen', 'bonus temen') LIMIT 1`,
-    )
+async function qualifyingStamps(db: D1Database, memberId: string): Promise<StampFact[]> {
+  const rows = await db
+    .prepare(`SELECT type, note, claim_id, voided FROM activities WHERE member_id = ? AND type = 'stamp'`)
     .bind(memberId)
-    .first<{ n: number }>();
-  return Boolean(row);
+    .all<{ type: string; note: string; claim_id: string | null; voided: number }>();
+  return (rows.results || []).map((row) => ({
+    type: row.type,
+    note: row.note,
+    claimId: row.claim_id,
+    voided: row.voided === 1,
+  }));
 }
 
 async function grantPlainStamp(db: D1Database, input: { memberId: string; brandId: string; note: string; now: number }): Promise<string> {
@@ -108,33 +167,35 @@ export async function refreshReferral(db: D1Database, friendId: string, now: num
       consumed: number;
       friend_paid: number;
     }>();
-  if (!row || row.qualified === 1) return;
+  if (!row) return;
   const friend = await repo.getMember(db, friendId);
   const referrer = await repo.getMember(db, row.referrer_id);
   if (!friend || !referrer) return;
   const settings = await referralSettings(db);
+  const liveStamp = hasQualifyingStamp(await qualifyingStamps(db, friendId));
+  const staff = (await memberIsStaff(db, friendId)) || (await memberIsStaff(db, referrer.id));
+  const profileDone = profileComplete({ name: friend.name, wa: friend.wa, birthday: friend.birthday, joinMethod: friend.join_method });
   const ok = friendQualifies(
     {
       isNewSignup: true,
-      profileComplete: profileComplete({ name: friend.name, wa: friend.wa, birthday: friend.birthday, joinMethod: friend.join_method }),
-      hasRealStamp: await hasRealStamp(db, friendId),
+      profileComplete: profileDone,
+      hasRealStamp: liveStamp,
       waVerified: friend.wa_verified === 1,
       sameGoogle: Boolean(referrer.google_sub && friend.google_sub && referrer.google_sub === friend.google_sub),
       samePhone: referrer.wa === friend.wa,
-      alreadyCounted: row.consumed === 1,
+      alreadyCounted: false,
+      isStaff: staff,
     },
     settings.waLock,
   );
-  await db
-    .prepare(`UPDATE referrals SET profile_done = ?, stamped = ? WHERE friend_id = ?`)
-    .bind(
-      profileComplete({ name: friend.name, wa: friend.wa, birthday: friend.birthday, joinMethod: friend.join_method }) ? 1 : 0,
-      (await hasRealStamp(db, friendId)) ? 1 : 0,
-      friendId,
-    )
-    .run();
-  if (!ok) return;
+  await db.prepare(`UPDATE referrals SET profile_done = ?, stamped = ? WHERE friend_id = ?`).bind(profileDone ? 1 : 0, liveStamp ? 1 : 0, friendId).run();
+  if (!ok) {
+    if (row.qualified === 1) await dropQualifiedFriend(db, row, now);
+    return;
+  }
+  if (row.qualified === 1) return;
   await db.prepare(`UPDATE referrals SET qualified = 1 WHERE friend_id = ?`).bind(friendId).run();
+  await logReferral(db, { kind: "qualified", code: "", referrerId: row.referrer_id, friendId, brandId: row.brand_id, now });
   if (settings.bonus > 0 && row.friend_paid !== 1) {
     for (let i = 0; i < settings.bonus; i++) {
       await grantPlainStamp(db, { memberId: friendId, brandId: row.brand_id, note: "bonus temen", now });
@@ -155,11 +216,19 @@ async function settleReferrer(db: D1Database, referrerId: string, brandId: strin
       .all<{ friend_id: string }>();
     const ids = waiting.results || [];
     if (ids.length < settings.batch) return;
+    if (await memberIsStaff(db, referrerId)) {
+      await logReferral(db, { kind: "rejected", referrerId, brandId, detail: "staff", now });
+      return;
+    }
     const activityId = await grantPlainStamp(db, { memberId: referrerId, brandId, note: "ajak temen", now });
+    const friendIds = ids.map((id) => id.friend_id).join(",");
     await db
-      .prepare(`INSERT INTO referral_grants (id, referrer_id, brand_id, activity_id, friends, revoked, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)`)
-      .bind(randomId(), referrerId, brandId, activityId, settings.batch, now)
+      .prepare(
+        `INSERT INTO referral_grants (id, referrer_id, brand_id, activity_id, friends, revoked, created_at, friend_ids) VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+      )
+      .bind(randomId(), referrerId, brandId, activityId, settings.batch, now, friendIds)
       .run();
+    await logReferral(db, { kind: "awarded", referrerId, brandId, detail: friendIds, now });
     for (const id of ids) {
       await db.prepare(`UPDATE referrals SET consumed = 1 WHERE friend_id = ?`).bind(id.friend_id).run();
     }
@@ -202,5 +271,26 @@ export async function clawReferralGrant(db: D1Database, grantId: string, now: nu
     now,
   });
   await db.prepare(`UPDATE referral_grants SET revoked = 1 WHERE id = ?`).bind(grantId).run();
+  await logReferral(db, { kind: "clawed", referrerId: grant.referrer_id, brandId: grant.brand_id, detail: "tarik", now });
   return true;
+}
+
+async function dropQualifiedFriend(
+  db: D1Database,
+  row: { friend_id: string; referrer_id: string; brand_id: string; consumed: number },
+  now: number,
+): Promise<void> {
+  await db.prepare(`UPDATE referrals SET qualified = 0, consumed = 0 WHERE friend_id = ?`).bind(row.friend_id).run();
+  await logReferral(db, { kind: "disqualified", referrerId: row.referrer_id, friendId: row.friend_id, brandId: row.brand_id, now });
+  if (row.consumed !== 1) return;
+  const grant = await db
+    .prepare(`SELECT id, friend_ids FROM referral_grants WHERE referrer_id = ? AND brand_id = ? AND revoked = 0 AND (',' || friend_ids || ',') LIKE ? ORDER BY created_at DESC LIMIT 1`)
+    .bind(row.referrer_id, row.brand_id, `%,${row.friend_id},%`)
+    .first<{ id: string; friend_ids: string }>();
+  if (!grant) return;
+  await clawReferralGrant(db, grant.id, now);
+  for (const id of grant.friend_ids.split(",").filter((id) => id && id !== row.friend_id)) {
+    await db.prepare(`UPDATE referrals SET consumed = 0 WHERE friend_id = ? AND qualified = 1`).bind(id).run();
+  }
+  await settleReferrer(db, row.referrer_id, row.brand_id, now);
 }

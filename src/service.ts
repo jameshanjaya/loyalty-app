@@ -653,6 +653,13 @@ export async function cancelOwn(
     throw error;
   }
   logEvent("cancel", { activity: last.id, outlet: last.outlet_id });
+  if (last.type === "stamp") {
+    try {
+      await refreshReferral(db, last.member_id, input.now);
+    } catch (error) {
+      logEvent("referral_fail", { member: last.member_id, message: error instanceof Error ? error.message : "error" });
+    }
+  }
   return { ok: true };
 }
 

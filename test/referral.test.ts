@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { batchProgress, friendQualifies, referralBatchSize, referralFriendBonus, stampsForQualified, type FriendCheck } from "../src/referral";
+import {
+  attributeReferral,
+  friendQualifies,
+  hasQualifyingStamp,
+  isCashierQrStamp,
+  stampsForQualified,
+  type FriendCheck,
+  type StampFact,
+} from "../src/referral";
 
+const day = 86_400_000;
 const ready: FriendCheck = {
   isNewSignup: true,
   profileComplete: true,
@@ -9,33 +18,57 @@ const ready: FriendCheck = {
   sameGoogle: false,
   samePhone: false,
   alreadyCounted: false,
+  isStaff: false,
 };
 
+const qr = (voided = false): StampFact => ({ type: "stamp", note: "qr", claimId: "claim1", voided });
+
 describe("ajak temen", () => {
-  it("empat temen yang lolos baru dapat 1 stamp, lalu 1 lagi tiap batch", () => {
+  it("3 teman dapat 0 stamp, 4 dapat +1, 8 dapat +2", () => {
     expect(stampsForQualified(3, 4)).toBe(0);
     expect(stampsForQualified(4, 4)).toBe(1);
     expect(stampsForQualified(8, 4)).toBe(2);
-    expect(batchProgress(2, 4)).toEqual({ have: 2, need: 4 });
-    expect(batchProgress(4, 4)).toEqual({ have: 0, need: 4 });
-    expect(referralBatchSize("0")).toBe(4);
-    expect(referralFriendBonus(null)).toBe(0);
-    expect(referralFriendBonus("2")).toBe(2);
   });
 
-  it("teman baru harus lengkap profil dan punya stamp asli", () => {
-    expect(friendQualifies(ready, false)).toBe(true);
-    expect(friendQualifies({ ...ready, isNewSignup: false }, false)).toBe(false);
-    expect(friendQualifies({ ...ready, profileComplete: false }, false)).toBe(false);
-    expect(friendQualifies({ ...ready, hasRealStamp: false }, false)).toBe(false);
+  it("teman yang belum lolos tidak dihitung", () => {
+    const friends = [
+      friendQualifies(ready, false),
+      friendQualifies({ ...ready, profileComplete: false }, false),
+      friendQualifies({ ...ready, hasRealStamp: false }, false),
+    ];
+    expect(friends.filter(Boolean)).toHaveLength(1);
+    expect(stampsForQualified(friends.filter(Boolean).length, 4)).toBe(0);
+  });
+
+  it("tolak referral diri sendiri lewat Google atau nomor yang sama", () => {
+    expect(attributeReferral({ atSignup: true, openedAt: 0, now: day, sameGoogle: true, samePhone: false, duplicate: false, friendIsStaff: false, referrerIsStaff: false })).toBe("self");
+    expect(attributeReferral({ atSignup: true, openedAt: 0, now: day, sameGoogle: false, samePhone: true, duplicate: false, friendIsStaff: false, referrerIsStaff: false })).toBe("self");
+    expect(friendQualifies({ ...ready, sameGoogle: true }, false)).toBe(false);
+    expect(friendQualifies({ ...ready, samePhone: true }, false)).toBe(false);
+  });
+
+  it("tolak teman yang sudah pernah dihitung", () => {
+    expect(attributeReferral({ atSignup: true, openedAt: 0, now: day, sameGoogle: false, samePhone: false, duplicate: true, friendIsStaff: false, referrerIsStaff: false })).toBe("duplicate");
     expect(friendQualifies({ ...ready, alreadyCounted: true }, false)).toBe(false);
   });
 
-  it("tolak referral diri sendiri, dan WA wajib kalau kunci nyala", () => {
-    expect(friendQualifies({ ...ready, samePhone: true }, false)).toBe(false);
-    expect(friendQualifies({ ...ready, sameGoogle: true }, false)).toBe(false);
-    expect(friendQualifies({ ...ready, waVerified: false }, false)).toBe(true);
-    expect(friendQualifies({ ...ready, waVerified: false }, true)).toBe(false);
-    expect(friendQualifies({ ...ready, waVerified: true }, true)).toBe(true);
+  it("stamp misi tidak lolos, stamp QR yang dibatalkan juga tidak", () => {
+    expect(isCashierQrStamp({ type: "stamp", note: "Review di Google", claimId: null, voided: false })).toBe(false);
+    expect(isCashierQrStamp({ type: "stamp", note: "ajak temen", claimId: null, voided: false })).toBe(false);
+    expect(isCashierQrStamp({ type: "stamp", note: "nomor WA", claimId: null, voided: false })).toBe(false);
+    expect(isCashierQrStamp({ type: "birthday", note: "qr", claimId: "claim1", voided: false })).toBe(false);
+    expect(isCashierQrStamp(qr(false))).toBe(true);
+    expect(isCashierQrStamp(qr(true))).toBe(false);
+    expect(hasQualifyingStamp([qr(true), { type: "stamp", note: "Review di Google", claimId: null, voided: false }])).toBe(false);
+    expect(hasQualifyingStamp([qr(true), qr(false)])).toBe(true);
+    expect(friendQualifies({ ...ready, hasRealStamp: false }, false)).toBe(false);
+  });
+
+  it("akun staf ditolak, dan link yang lewat 7 hari atau ditambah belakangan tidak nempel", () => {
+    expect(attributeReferral({ atSignup: true, openedAt: 0, now: day, sameGoogle: false, samePhone: false, duplicate: false, friendIsStaff: true, referrerIsStaff: false })).toBe("staff");
+    expect(attributeReferral({ atSignup: true, openedAt: 0, now: day, sameGoogle: false, samePhone: false, duplicate: false, friendIsStaff: false, referrerIsStaff: true })).toBe("staff");
+    expect(friendQualifies({ ...ready, isStaff: true }, false)).toBe(false);
+    expect(attributeReferral({ atSignup: true, openedAt: 0, now: 8 * day, sameGoogle: false, samePhone: false, duplicate: false, friendIsStaff: false, referrerIsStaff: false })).toBe("expired");
+    expect(attributeReferral({ atSignup: false, openedAt: 0, now: day, sameGoogle: false, samePhone: false, duplicate: false, friendIsStaff: false, referrerIsStaff: false })).toBe("late");
   });
 });

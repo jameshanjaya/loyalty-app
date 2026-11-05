@@ -859,6 +859,7 @@ export function referralsAdminPage(input: {
   batch: number;
   bonus: number;
   params: URLSearchParams;
+  events?: Array<{ when: string; kind: string; detail: string }>;
 }): string {
   const body = input.rows
     .map(
@@ -877,7 +878,8 @@ export function referralsAdminPage(input: {
        <label class="lbl">Bonus stamp buat temen (0 = tidak ada)</label><input name="bonus" type="number" min="0" max="20" value="${input.bonus}" required />
        <button class="btn btn-solid">Simpan</button>
      </form>
-     <article class="panel" style="margin-top:12px;overflow:auto"><table><thead><tr><th>Yang ngajak</th><th>Temen</th><th>Merek</th><th>Status</th><th></th></tr></thead><tbody>${body || `<tr><td colspan="5">Belum ada.</td></tr>`}</tbody></table></article>`,
+     <article class="panel" style="margin-top:12px;overflow:auto"><table><thead><tr><th>Yang ngajak</th><th>Temen</th><th>Merek</th><th>Status</th><th></th></tr></thead><tbody>${body || `<tr><td colspan="5">Belum ada.</td></tr>`}</tbody></table></article>
+     <article class="panel" style="margin-top:12px"><h2>Jejak</h2>${(input.events || []).map((event) => `<div class="row"><span>${esc(event.kind)} · ${esc(event.detail)}</span><b>${esc(event.when)}</b></div>`).join("") || `<p class="fine">Belum ada jejak.</p>`}</article>`,
   );
 }
 

@@ -1,6 +1,7 @@
 import { nextRewardLine } from "../brand-visual";
 import { randomId } from "../crypto";
-import { attachReferral, referralProgress, refreshReferral } from "../referral-flow";
+import { packReferralCookie, unpackReferralCookie } from "../referral";
+import { attachReferral, logReferralOpen, referralProgress, refreshReferral } from "../referral-flow";
 import { loadBirthdayNotice } from "../birthday-gate";
 import { brandOpen, pickLiveBrand } from "../brands";
 import { bookingTarget, bookingUrl, hiddenOrderPlatform, visibleOrderLinks } from "../orders";
@@ -141,7 +142,15 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const ajak = (url.searchParams.get("ajak") || "").trim().toLowerCase();
     const params = new URLSearchParams(url.searchParams);
     if (ajak) params.set("ajak", ajak);
-    const cookie = ajak ? `ajak=${encodeURIComponent(`${ajak}.${brand?.id || ""}`)}; Path=/; Max-Age=604800; SameSite=Lax; HttpOnly` : "";
+    const packed = ajak ? packReferralCookie(ajak, brand?.id || "", now) : "";
+    if (ajak && brand) {
+      try {
+        await logReferralOpen(db, { code: ajak, brandId: brand.id, now });
+      } catch {
+        /* audit menyusul */
+      }
+    }
+    const cookie = packed ? `ajak=${encodeURIComponent(packed)}; Path=/; Max-Age=604800; SameSite=Lax; HttpOnly` : "";
     return html(joinPage({ brands, brand, next, params }), 200, cookie ? { "set-cookie": cookie } : undefined);
   }
 
@@ -172,10 +181,8 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       return html(joinPage({ brands, brand, next, params: errQuery(result.error), values: { nama, wa } }), 400);
     }
     await repo.setPromoConsent(db, result.member.id, now);
-    const ajakCookie = readCookie(request.headers.get("cookie"), "ajak") || "";
-    const ajakCode = String(form.get("ajak") || ajakCookie.split(".")[0] || "");
-    const ajakBrand = merek || ajakCookie.split(".")[1] || "";
-    if (ajakCode && ajakBrand) await attachReferral(db, { friend: result.member, code: ajakCode, brandId: ajakBrand, now });
+    const opened = unpackReferralCookie(readCookie(request.headers.get("cookie"), "ajak") || "");
+    if (opened) await attachReferral(db, { friend: result.member, code: opened.code, brandId: opened.brandId, openedAt: opened.openedAt, now });
     const dest = merek ? `/kartu?merek=${encodeURIComponent(merek)}` : next;
     return redirect(safeNext(dest, "/kartu"), [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)]);
   }
@@ -270,9 +277,8 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         );
       }
       await repo.setPromoConsent(db, result.member.id, now);
-      const ajakCookie = readCookie(request.headers.get("cookie"), "ajak") || "";
-      const [ajakCode, ajakBrand] = ajakCookie.split(".");
-      if (ajakCode && ajakBrand) await attachReferral(db, { friend: result.member, code: ajakCode, brandId: ajakBrand, now });
+      const opened = unpackReferralCookie(readCookie(request.headers.get("cookie"), "ajak") || "");
+      if (opened) await attachReferral(db, { friend: result.member, code: opened.code, brandId: opened.brandId, openedAt: opened.openedAt, now });
       await repo.deleteSession(db, signup.sessionId);
       const cookies = [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)];
       if (waReady(env)) {
