@@ -95,6 +95,20 @@ export async function setSetting(db: D1Database, key: string, value: string): Pr
   await db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).bind(key, value).run();
 }
 
+export async function saveOwnerPassword(
+  db: D1Database,
+  input: { salt: string; hash: string; version: string; sessionId: string },
+): Promise<void> {
+  const upsert = `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
+  await db.batch([
+    db.prepare(upsert).bind("owner_pass_salt", input.salt),
+    db.prepare(upsert).bind("owner_pass_hash", input.hash),
+    db.prepare(upsert).bind("owner_session_version", input.version),
+    db.prepare(`UPDATE sessions SET subject_id = ? WHERE id = ? AND kind = 'owner'`).bind(`owner:${input.version}`, input.sessionId),
+    db.prepare(`DELETE FROM sessions WHERE kind = 'owner' AND id != ?`).bind(input.sessionId),
+  ]);
+}
+
 export async function listOutlets(db: D1Database): Promise<Outlet[]> {
   return rows<Outlet>(db.prepare(`SELECT * FROM outlets ORDER BY name`));
 }

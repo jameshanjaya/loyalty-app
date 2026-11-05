@@ -12,13 +12,14 @@ import { formatPoints, flagsForProof, parsePoints, parsePointsOrZero, proofKind 
 import * as pdb from "../points-db";
 import { expireCodes, expireDays, expiryNotes, memberPointState, reviewMission, revokeMission } from "../points-flow";
 import { shortDate } from "../time";
-import { loginOwner, ownerDeleteMember, ownerSetBirthday, ownerSetPhone, setOutletPinHash } from "../service";
+import { changeOwnerPassword, loginOwner, ownerDeleteMember, ownerSetBirthday, ownerSetPhone, setOutletPinHash } from "../service";
 import { clearCookie, COOKIE, loadOwner, setSessionCookie } from "../session";
 import { WIB_MS, feedTime, memberSince, parseWibDate, parseWibLocal, startOfWibDay, startOfWibMonth, wibDayIndex } from "../time";
 import type { Banner } from "../types";
 import {
   activityPage,
   adminLoginPage,
+  ownerPasswordPage,
   bannersPage,
   adminCatalogPage,
   adminMissionsPage,
@@ -71,6 +72,22 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (request.method === "POST" && !sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
+
+  if (path === "/admin/password" && request.method === "GET") return html(ownerPasswordPage(url.searchParams));
+
+  if (path === "/admin/password" && request.method === "POST") {
+    if (!owner) return redirect("/admin");
+    const form = await request.formData();
+    const result = await changeOwnerPassword(db, env, {
+      sessionId: owner,
+      current: String(form.get("password_lama") || ""),
+      next: String(form.get("password_baru") || ""),
+      confirm: String(form.get("password_ulang") || ""),
+      now,
+    });
+    if (!result.ok) return back("/admin/password", result.error);
+    return ok("/admin/password", "password");
+  }
 
   if (path === "/admin/dasbor" && request.method === "GET") {
     try {

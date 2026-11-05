@@ -1,5 +1,6 @@
 import { birthdayRedeemAllowed, birthdayStatus, parseBirthday } from "./birthday";
-import { bytesToHex, hashPin, passwordMatches, randomBytes, randomId, verifyPin } from "./crypto";
+import { bytesToHex, hashPin, randomBytes, randomId, verifyPin } from "./crypto";
+import { ownerPasswordOk, ownerSubject, planOwnerPasswordChange, type StoredOwnerPassword } from "./owner-password";
 import { maskName } from "./format";
 import {
   CASHIER_FLAG_AT,
@@ -323,32 +324,68 @@ export async function loginCashier(
   return { ok: true, sessionId, outlet };
 }
 
+async function storedOwnerPassword(db: D1Database): Promise<StoredOwnerPassword | null> {
+  const salt = await repo.getSetting(db, "owner_pass_salt");
+  const hash = await repo.getSetting(db, "owner_pass_hash");
+  if (!salt || !hash) return null;
+  return { salt, hash };
+}
+
 export async function loginOwner(
   db: D1Database,
   env: Env,
   input: { password: string; ip: string; now: number },
 ): Promise<{ ok: true; sessionId: string } | Fail> {
-  if (!env.OWNER_PASSWORD || env.OWNER_PASSWORD.length < 8 || !env.PIN_PEPPER || env.PIN_PEPPER.length < 16) {
-    return { ok: false, error: "secret" };
-  }
+  if (!env.PIN_PEPPER || env.PIN_PEPPER.length < 16) return { ok: false, error: "secret" };
+  const stored = await storedOwnerPassword(db);
+  if (!stored && (!env.OWNER_PASSWORD || env.OWNER_PASSWORD.length < 8)) return { ok: false, error: "secret" };
   const blocked = await failureBlocked(db, `owner:ip:${input.ip}`, input.now, LIMITS.ownerPin);
   if (!blocked.ok) return { ok: false, error: "pinwait" };
-  const ok = await passwordMatches(input.password, env.OWNER_PASSWORD, env.PIN_PEPPER);
+  const ok = await ownerPasswordOk({
+    password: input.password,
+    pepper: env.PIN_PEPPER,
+    envPassword: env.OWNER_PASSWORD || "",
+    stored,
+  });
   if (!ok) {
     await enforceLimit(db, `owner:ip:${input.ip}`, input.now, LIMITS.ownerPin);
     logEvent("owner_login_fail", { ip: input.ip });
     return { ok: false, error: "pin" };
   }
+  const version = await repo.getSetting(db, "owner_session_version");
   const sessionId = randomId();
   await repo.createSession(db, {
     id: sessionId,
     kind: "owner",
-    subjectId: "owner",
+    subjectId: ownerSubject(version),
     now: input.now,
     expiresAt: input.now + OWNER_SESSION_MS,
   });
   logEvent("owner_login", {});
   return { ok: true, sessionId };
+}
+
+export async function changeOwnerPassword(
+  db: D1Database,
+  env: Env,
+  input: { sessionId: string; current: string; next: string; confirm: string; now: number },
+): Promise<{ ok: true } | Fail> {
+  const stored = await storedOwnerPassword(db);
+  const plan = await planOwnerPasswordChange({
+    current: input.current,
+    next: input.next,
+    confirm: input.confirm,
+    pepper: env.PIN_PEPPER || "",
+    envPassword: env.OWNER_PASSWORD || "",
+    stored,
+  });
+  if (!plan.ok) return plan;
+  const previous = Number(await repo.getSetting(db, "owner_session_version")) || 0;
+  const version = String(previous + 1);
+  await repo.saveOwnerPassword(db, { salt: plan.salt, hash: plan.hash, version, sessionId: input.sessionId });
+  await repo.insertAdminLog(db, { id: randomId(), action: "ganti-password", detail: `versi ${version}`, now: input.now });
+  logEvent("owner_password", { version });
+  return { ok: true };
 }
 
 export async function openClaim(

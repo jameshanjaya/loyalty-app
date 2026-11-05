@@ -637,6 +637,7 @@ const NAV: Array<[string, string]> = [
   ["/admin/outlet", "Outlet & PIN"],
   ["/admin/aktivitas", "Aktivitas"],
   ["/admin/stan", "QR Stan"],
+  ["/admin/password", "Ganti Password"],
 ];
 
 function adminShell(active: string, body: string, accent = "#5c8f4b"): string {
@@ -650,6 +651,24 @@ function adminShell(active: string, body: string, accent = "#5c8f4b"): string {
       <div class="main">${body}</div>
     </div>`,
     accent,
+  );
+}
+
+export function ownerPasswordPage(params: URLSearchParams): string {
+  return adminShell(
+    "/admin/password",
+    `<h1>Ganti Password</h1>
+     ${flashes(params)}
+     <form class="panel" style="margin-top:12px" method="post" action="/admin/password">
+       <p class="fine">Minimal 8 karakter. Setelah disimpan, password di secret tidak bisa dipakai lagi. Sesi owner yang lain ikut keluar. Sesi kamu tetap masuk.</p>
+       <label class="lbl" for="password_lama">Password sekarang</label>
+       <input id="password_lama" name="password_lama" type="password" required autocomplete="current-password" />
+       <label class="lbl" for="password_baru">Password baru</label>
+       <input id="password_baru" name="password_baru" type="password" required minlength="8" maxlength="200" autocomplete="new-password" />
+       <label class="lbl" for="password_ulang">Ulangi password baru</label>
+       <input id="password_ulang" name="password_ulang" type="password" required minlength="8" maxlength="200" autocomplete="new-password" />
+       <button class="btn btn-solid">Simpan password</button>
+     </form>`,
   );
 }
 

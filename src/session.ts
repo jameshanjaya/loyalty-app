@@ -1,5 +1,6 @@
 import { cookieHeader, isSecure, readCookie } from "./http";
 import { MEMBER_SESSION_MS, MEMBER_SESSION_REFRESH_MS, memberSessionDue } from "./loyalty";
+import { ownerSessionCurrent } from "./owner-password";
 import * as repo from "./repo";
 import type { Brand, Member, Outlet } from "./types";
 
@@ -48,7 +49,13 @@ export async function loadCashier(
 export async function loadOwner(request: Request, db: D1Database, now: number): Promise<string | null> {
   const id = readCookie(request.headers.get("cookie"), COOKIE.owner);
   const session = await liveSession(db, id, "owner", now);
-  return session ? id : null;
+  if (!session || !id) return null;
+  const version = await repo.getSetting(db, "owner_session_version");
+  if (!ownerSessionCurrent(session.subject_id, version)) {
+    await repo.deleteSession(db, id);
+    return null;
+  }
+  return id;
 }
 
 /** Kalau sesi member sudah lebih dari sehari sejak diperpanjang, kembalikan cookie 365 hari yang baru. */

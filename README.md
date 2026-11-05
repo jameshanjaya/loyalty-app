@@ -204,6 +204,10 @@ Di **Setting Program**, tiap merek punya warna utama, warna lembut, warna tombol
 - Log aktivitas ada di menu **Aktivitas**. Bisa diunduh sebagai CSV.
 - Kalau kasir memberi stamp sangat banyak dalam waktu singkat, atau ada yang mentok batas harian, dashboard menampilkan **Yang perlu dicek**.
 
+## Ganti password owner
+
+Menu **Ganti Password** di dashboard. Isi password sekarang, password baru, dan ulangi password baru. Minimal 8 karakter. Hash-nya disimpan di D1. Setelah itu login memakai hash itu, dan password di `OWNER_PASSWORD` tidak berlaku lagi sampai hash-nya dihapus dari database. Sesi owner yang sedang dipakai tetap masuk. Sesi owner yang lain dikeluarkan. Login yang gagal di `/admin/masuk` tetap dikunci 5 kali per 15 menit per IP.
+
 ## Ganti PIN dan password
 
 - PIN outlet diganti di **Outlet & PIN**. PIN lama tidak ditampilkan, karena tidak disimpan mentah.
