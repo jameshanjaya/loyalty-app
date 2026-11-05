@@ -54,8 +54,9 @@ Ini hanya untuk latihan. Ganti PIN outlet sebelum pelanggan asli memakainya. Sem
 | Pelanggan Rina | 0812 3456 4567 | 2468 |
 | Pelanggan Sari (stamp Loft25 sudah penuh) | 0813 1111 0088 | 2468 |
 | Kasir Loft25 Senopati | pilih outlet itu di /kasir | 258025 |
-| Kasir Soto Oseng Tebet | pilih outlet itu | 369136 |
-| Kasir Krispyporkk Kemang | pilih outlet itu | 470247 |
+| Kasir Soto Oseng | pilih outlet itu | 369136 |
+| Kasir Krispyporkk Kembangan | pilih outlet itu | 470247 |
+| Kasir Krispyporkk Gading Serpong | pilih outlet itu | 470248 |
 | Owner | /admin | password di `.dev.vars` |
 
 Di browser yang sama kamu bisa login sebagai kasir dan sebagai pelanggan sekaligus. Mereka punya cookie berbeda.
@@ -209,7 +210,7 @@ Bonus Stamp tiap merek ada tiga, masing-masing 1 stamp dan sekali per pelanggan:
 - Satu pelanggan paling 2 stamp per merek per hari. Angka ini bisa diubah di Setting Program.
 - Stamp penuh: kasir tap **Tukar Reward**, pelanggan scan QR untuk setuju. Atau kasir cari nomor WA lalu tukar. Stamp yang lebih dari 10 tetap nyangkut.
 - Birthday Freebies diatur di **Setting Program**. Default-nya **Hari H aja** (tanggal lahir, WIB). Bisa diganti ke bulan ultah atau ± N hari. Hitung mundurnya menarget awal jendela itu, di kartu dan di Redeem. Di luar jendela tidak ada tombol klaim. Kasir dan pelanggan dicek di server: tanggal lahir ada, hari ini masuk jendela, sekali per merek per tahun, merek aktif, dan tanggal lahir tidak baru disimpan (30 hari), kecuali owner mencentang boleh klaim tahun ini. Stamp tidak berkurang.
-- Tombol **Booking / Order via WA** di kartu langsung membuka `https://wa.me/<nomor>?text=...` dengan nama merek dan outlet. Nomornya satu per outlet, di **Outlet & PIN**. Ketukan tetap tercatat lewat beacon, tanpa halaman perantara.
+- Tombol **Booking / Order via WA** di kartu langsung membuka `https://wa.me/<nomor>?text=...` dengan nama merek dan outlet. Nomornya satu per outlet, di **Outlet & PIN**. Kalau merek punya lebih dari satu outlet bernomor, pelanggan pilih outlet dulu. Nomor awal: Soto Oseng `0878-9014-3089`, Krispyporkk Kembangan `0857-7833-6066`, Krispyporkk Gading Serpong `0858-8090-3421`. Loft25 tetap nomor yang sudah ada. Ketukan tercatat lewat beacon, tanpa halaman perantara.
 - Side Quest menambah pecahan stamp ke kartu merek itu. Owner mengatur quest di **Kelola Side Quest**: judul, penjelasan, langkah, stamp 0,25 / 0,5 / 0,75 / 1, ikon, tag, urutan, merek (wajib), dan tanggal. Buktinya foto, dan tiap pelanggan cuma sekali. Foto instruksi boleh beberapa. Bukti yang dikirim langsung masuk. Owner bisa menarik quest yang sudah disetujui; stamp utuh dan pecahannya balik, tercatat di buku. Kalau stamp itu sudah dipakai, kartu tidak jadi minus.
 - Menu **Redeem** menukar stamp utuh. Owner mengaturnya di **Redeem**: nama, ikon atau foto, biaya stamp (pintasan 5 dan 10, atau angka lain), aktif, dan stok opsional. Pelanggan tap **Tukar**, stamp ditahan, lalu muncul kode 5 angka dan QR sekitar 10 menit. Kalau hangus, stamp kembali dan stok ikut kembali. Kasir mengetik kode itu, atau scan QR. Kode cuma sekali, cuma untuk merek outlet itu, dan tebakan dibatasi.
 - Daftar pelanggan ada di **Member**: cari, filter merek, urutkan, buka detail, ganti nomor, hapus (dengan halaman konfirmasi, dan tercatat). Unduh CSV atau Excel.

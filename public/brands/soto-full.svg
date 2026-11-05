@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 140" role="img" aria-label="Soto Oseng Babi Bang Jem">
+  <rect width="240" height="140" fill="#111"/>
+  <circle cx="120" cy="48" r="34" fill="#d6e4f5"/>
+  <circle cx="120" cy="48" r="30" fill="none" stroke="#1F3A8A" stroke-width="3"/>
+  <path fill="#1F3A8A" d="M100 38c3-10 10-16 20-16s17 6 20 16c-6-3-12-4-20-4s-14 1-20 4z"/>
+  <path fill="#fff" d="M104 44c3 12 8 20 16 20s13-8 16-20c-5 5-10 7-16 7s-11-2-16-7z"/>
+  <text x="36" y="58" fill="#D7262E" font-family="Arial Black, sans-serif" font-size="16">25</text>
+  <text x="184" y="58" fill="#D7262E" font-family="Arial Black, sans-serif" font-size="16">25</text>
+  <rect x="28" y="78" width="184" height="18" rx="2" fill="#1F3A8A"/>
+  <text x="120" y="92" text-anchor="middle" fill="#fff" font-family="Arial, sans-serif" font-size="12" font-weight="700">SOTO OSENG BABI</text>
+  <text x="120" y="124" text-anchor="middle" fill="#D7262E" font-family="Arial Black, sans-serif" font-size="26">BANG JEM</text>
+</svg>

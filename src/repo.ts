@@ -1,6 +1,6 @@
 import type { OrderLink } from "./orders";
 import { applyQuestQuarters } from "./quest-stamp";
-import type { ActivityRow, Banner, Brand, Card, FlagRow, Member, Outlet, SessionRow } from "./types";
+import type { ActivityRow, Banner, Brand, Card, FlagRow, Member, NewsCard, Outlet, SessionRow } from "./types";
 import type { StoredClaim } from "./tokens";
 
 async function rows<T>(stmt: D1PreparedStatement): Promise<T[]> {
@@ -124,6 +124,104 @@ export async function listOutlets(db: D1Database): Promise<Outlet[]> {
 
 export async function getOutlet(db: D1Database, id: string): Promise<Outlet | null> {
   return db.prepare(`SELECT * FROM outlets WHERE id = ?`).bind(id).first<Outlet>();
+}
+
+export async function getOutletBySlug(db: D1Database, slug: string): Promise<Outlet | null> {
+  return db.prepare(`SELECT * FROM outlets WHERE slug = ? AND active = 1`).bind(slug).first<Outlet>();
+}
+
+export async function setOutletSlug(db: D1Database, id: string, slug: string): Promise<void> {
+  await db.prepare(`UPDATE outlets SET slug = ? WHERE id = ?`).bind(slug, id).run();
+}
+
+export async function setPromoConsent(db: D1Database, id: string, at: number): Promise<void> {
+  await db.prepare(`UPDATE members SET promo_consent = 1, promo_consent_at = ? WHERE id = ?`).bind(at, id).run();
+}
+
+export async function setBannerDelay(db: D1Database, brandId: string, ms: number): Promise<void> {
+  await db.prepare(`UPDATE brands SET banner_ms = ? WHERE id = ?`).bind(ms, brandId).run();
+}
+
+export async function listNews(db: D1Database, brandId: string): Promise<NewsCard[]> {
+  return rows<NewsCard>(db.prepare(`SELECT * FROM news_cards WHERE brand_id = ? ORDER BY slot`).bind(brandId));
+}
+
+export async function upsertNews(
+  db: D1Database,
+  card: { id: string; brandId: string; slot: number; kind: string; title: string; subtitle: string; imageUrl: string | null; r2Key: string | null; active: number },
+): Promise<void> {
+  const existing = await db
+    .prepare(`SELECT id, r2_key FROM news_cards WHERE brand_id = ? AND slot = ?`)
+    .bind(card.brandId, card.slot)
+    .first<{ id: string; r2_key: string | null }>();
+  if (existing) {
+    await db
+      .prepare(
+        `UPDATE news_cards SET kind=?, title=?, subtitle=?, image_url=?, r2_key=COALESCE(?, r2_key), active=? WHERE id=?`,
+      )
+      .bind(card.kind, card.title, card.subtitle, card.imageUrl, card.r2Key, card.active, existing.id)
+      .run();
+    return;
+  }
+  await db
+    .prepare(
+      `INSERT INTO news_cards (id, brand_id, slot, kind, title, subtitle, image_url, r2_key, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(card.id, card.brandId, card.slot, card.kind, card.title, card.subtitle, card.imageUrl, card.r2Key, card.active)
+    .run();
+}
+
+export async function upsertBannerSlot(
+  db: D1Database,
+  banner: { id: string; brandId: string; slot: number; title: string; subtitle: string; imageUrl: string | null; r2Key: string | null; now: number },
+): Promise<void> {
+  const existing = await db
+    .prepare(`SELECT id FROM banners WHERE brand_id = ? AND slot = ?`)
+    .bind(banner.brandId, banner.slot)
+    .first<{ id: string }>();
+  if (existing) {
+    await db
+      .prepare(`UPDATE banners SET title=?, subtitle=?, image_url=?, r2_key=COALESCE(?, r2_key), active=1, sort_order=? WHERE id=?`)
+      .bind(banner.title, banner.subtitle, banner.imageUrl, banner.r2Key, banner.slot, existing.id)
+      .run();
+    return;
+  }
+  await db
+    .prepare(
+      `INSERT INTO banners (id, brand_id, title, subtitle, image_url, r2_key, link_url, starts_at, ends_at, sort_order, active, created_at, cta, slot)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, 1, ?, '', ?)`,
+    )
+    .bind(banner.id, banner.brandId, banner.title, banner.subtitle, banner.imageUrl, banner.r2Key, banner.slot, banner.now, banner.slot)
+    .run();
+}
+
+export async function insertVerifySession(
+  db: D1Database,
+  row: { id: string; memberId: string; phone: string; token: string; deepLink: string; now: number },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO wa_verify_sessions (id, member_id, phone, token, deep_link, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+    )
+    .bind(row.id, row.memberId, row.phone, row.token, row.deepLink, row.now)
+    .run();
+}
+
+export async function latestVerifySession(db: D1Database, memberId: string): Promise<{ token: string; deep_link: string; phone: string; status: string } | null> {
+  return db
+    .prepare(`SELECT token, deep_link, phone, status FROM wa_verify_sessions WHERE member_id = ? ORDER BY created_at DESC LIMIT 1`)
+    .bind(memberId)
+    .first();
+}
+
+export async function markVerifyToken(db: D1Database, token: string, now: number): Promise<string | null> {
+  const row = await db.prepare(`SELECT member_id FROM wa_verify_sessions WHERE token = ?`).bind(token).first<{ member_id: string }>();
+  if (!row) return null;
+  await db.batch([
+    db.prepare(`UPDATE wa_verify_sessions SET status = 'verified', verified_at = ? WHERE token = ?`).bind(now, token),
+    db.prepare(`UPDATE members SET wa_verified = 1 WHERE id = ?`).bind(row.member_id),
+  ]);
+  return row.member_id;
 }
 
 export async function insertOutlet(

@@ -9,9 +9,11 @@ export type ExportRow = {
   rewards: string;
   lastVisit: string;
   pointsExpiry: string;
+  waVerified: string;
+  promoConsent: string;
 };
 
-const HEADER = ["nama", "wa", "email", "ulang_tahun", "gabung", "cara_gabung", "stamp", "reward_ditukar", "terakhir_datang", "poin_hangus"];
+const HEADER = ["nama", "wa", "email", "ulang_tahun", "gabung", "cara_gabung", "stamp", "reward_ditukar", "terakhir_datang", "poin_hangus", "wa_terverifikasi", "persetujuan_promo"];
 
 function cell(value: string): string {
   if (/[",\n\r]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
@@ -21,7 +23,9 @@ function cell(value: string): string {
 export function membersCsv(rows: ExportRow[]): string {
   const lines = [HEADER.join(",")];
   for (const row of rows) {
-    lines.push([row.name, row.wa, row.email, row.birthday, row.joined, row.method, row.stamps, row.rewards, row.lastVisit, row.pointsExpiry].map(cell).join(","));
+    lines.push(
+      [row.name, row.wa, row.email, row.birthday, row.joined, row.method, row.stamps, row.rewards, row.lastVisit, row.pointsExpiry, row.waVerified, row.promoConsent].map(cell).join(","),
+    );
   }
   return lines.join("\n");
 }
@@ -106,7 +110,7 @@ export function membersXlsx(rows: ExportRow[]): Uint8Array {
   const head = HEADER.map((item) => `<c t="inlineStr"><is><t>${xml(item)}</t></is></c>`).join("");
   const body = rows
     .map((row, index) => {
-      const values = [row.name, row.wa, row.email, row.birthday, row.joined, row.method, row.stamps, row.rewards, row.lastVisit, row.pointsExpiry];
+      const values = [row.name, row.wa, row.email, row.birthday, row.joined, row.method, row.stamps, row.rewards, row.lastVisit, row.pointsExpiry, row.waVerified, row.promoConsent];
       const cells = values.map((value) => `<c t="inlineStr"><is><t>${xml(value)}</t></is></c>`).join("");
       return `<row r="${index + 2}">${cells}</row>`;
     })

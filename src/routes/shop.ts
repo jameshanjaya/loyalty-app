@@ -13,6 +13,7 @@ import { mustVerify } from "../wa";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { loadMember, loadSignup } from "../session";
+import { fallbackNewsPhoto } from "../brand-visual";
 import { catalogPage, codePage, messagePage, missionDetailPage } from "../view";
 import type { App } from "./customer";
 
@@ -133,6 +134,16 @@ export async function handleShop(app: App): Promise<Response | null> {
     const stamps = card?.stamps || 0;
     const rewards = await pdb.listTiers(db, brand.id);
     const birthday = await loadBirthdayNotice(db, member, brand, now);
+    const storedNews = await repo.listNews(db, brand.id);
+    const news = [1, 2, 3].map((slot) => {
+      const row = storedNews.find((item) => item.slot === slot && item.active);
+      return {
+        title: row?.title || "Menu andalan",
+        subtitle: row?.subtitle || brand.short_name,
+        kind: row?.kind || "MENU",
+        image: row?.r2_key ? `/media/news/${row.id}` : row?.image_url || fallbackNewsPhoto(brand.id, slot),
+      };
+    });
     return html(
       catalogPage({
         stamps,
@@ -153,6 +164,7 @@ export async function handleShop(app: App): Promise<Response | null> {
         birthday,
         birthdayReward: brand.birthday_reward,
         now,
+        news,
       }),
     );
   }

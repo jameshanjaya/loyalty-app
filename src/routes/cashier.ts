@@ -1,3 +1,4 @@
+import { RESERVED_KASIR } from "../brand-visual";
 import { birthdayWaitLine, toBirthdayRule } from "../birthday";
 import { birthdayError, birthdayGate } from "../birthday-gate";
 import { brandOpen } from "../brands";
@@ -21,6 +22,7 @@ import {
   cashierCodePage,
   cashierDeskPage,
   cashierLoginPage,
+  cashierPinPage,
   cashierQrPage,
   confirmBirthdayPage,
   confirmRedeemPage,
@@ -57,6 +59,14 @@ export async function handleCashier(app: App): Promise<Response | null> {
       return html(messagePage("Belum ada outlet", "Owner perlu menambah outlet dan PIN dulu, lewat dashboard.", "/admin", "Ke dashboard"));
     }
     return html(cashierLoginPage(view, url.searchParams));
+  }
+
+  const direct = path.match(/^\/kasir\/([a-z0-9-]{2,60})$/);
+  if (direct && request.method === "GET" && !RESERVED_KASIR.has(direct[1] || "")) {
+    const outlet = await repo.getOutletBySlug(db, direct[1] || "");
+    const brand = outlet ? await repo.getBrand(db, outlet.brand_id) : null;
+    if (!outlet || !brandOpen(brand) || !brand) return redirect("/kasir");
+    return html(cashierPinPage(outlet, brand, url.searchParams));
   }
 
   if (path === "/kasir/masuk" && request.method === "POST") {

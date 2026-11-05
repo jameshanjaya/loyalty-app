@@ -1,3 +1,4 @@
+import { RESERVED_KASIR, slugifyOutlet } from "../brand-visual";
 import { bytesToHex, hashPin, randomBytes, randomId } from "../crypto";
 import { membersCsv, membersXlsx, type ExportRow } from "../export";
 import { clip, httpsUrl, prettyWa } from "../format";
@@ -343,6 +344,19 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     if (!made.ok) return back("/admin/outlet", made.error);
     await repo.insertOutlet(db, { id: randomId(), brandId: brand.id, name, pinHash: made.hash, pinSalt: made.salt, now });
     return ok("/admin/outlet", "outlet");
+  }
+
+  if (path.startsWith("/admin/outlet/") && path.endsWith("/slug") && request.method === "POST") {
+    const id = decodeURIComponent(path.slice("/admin/outlet/".length, -"/slug".length));
+    const outlet = await repo.getOutlet(db, id);
+    if (!outlet) return back("/admin/outlet", "aturan");
+    const form = await request.formData();
+    const slug = slugifyOutlet(String(form.get("slug") || ""));
+    if (slug && (RESERVED_KASIR.has(slug) || !/^[a-z0-9-]{2,60}$/.test(slug))) return back("/admin/outlet", "aturan");
+    const taken = slug ? await repo.getOutletBySlug(db, slug) : null;
+    if (taken && taken.id !== outlet.id) return back("/admin/outlet", "ada");
+    await repo.setOutletSlug(db, outlet.id, slug);
+    return ok("/admin/outlet", "simpan");
   }
 
   if (path.startsWith("/admin/outlet/") && path.endsWith("/pesan") && request.method === "POST") {
@@ -797,7 +811,7 @@ function readBrand(form: FormData) {
   const page_bg = hexOrEmpty(String(form.get("page_bg") || ""));
   const stamp_icon = String(form.get("stamp_icon") || "whisk");
   if (cta == null || page_bg == null) return null;
-  if (!["whisk", "bowl", "plate", "custom"].includes(stamp_icon)) return null;
+  if (!["whisk", "bowl", "plate", "custom", "logo"].includes(stamp_icon)) return null;
   return {
     name,
     short_name,
@@ -892,7 +906,7 @@ function memberQuery(url: URL) {
 }
 
 function toExport(
-  m: { id: string; name: string; wa: string; email: string | null; birthday: string | null; created_at: number; join_method: string; stamps_label: string; rewards: number; last_seen_at: number },
+  m: { id: string; name: string; wa: string; email: string | null; birthday: string | null; created_at: number; join_method: string; stamps_label: string; rewards: number; last_seen_at: number; wa_verified?: number; promo_consent?: number },
   now: number,
   note?: { tenths: number; expiresAt: number },
 ): ExportRow {
@@ -906,6 +920,8 @@ function toExport(
     stamps: m.stamps_label,
     rewards: String(m.rewards),
     lastVisit: feedTime(m.last_seen_at, now),
-    pointsExpiry: note ? `${formatPoints(note.tenths)} poin · ${shortDate(note.expiresAt)}` : "",
+    pointsExpiry: note ? `${Math.floor(note.tenths / 10)} stamp · ${shortDate(note.expiresAt)}` : "",
+    waVerified: m.wa_verified === 1 ? "ya" : "belum",
+    promoConsent: m.promo_consent === 1 ? "ya" : "belum",
   };
 }

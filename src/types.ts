@@ -24,6 +24,8 @@ export type Brand = {
   icon_key?: string | null;
   stamp_icon?: string;
   stamp_key?: string | null;
+  banner_ms?: number;
+  non_halal?: number;
 };
 
 export type Outlet = {
@@ -35,6 +37,7 @@ export type Outlet = {
   wa: string;
   active: number;
   created_at: number;
+  slug?: string | null;
 };
 
 export type Member = {
@@ -52,6 +55,8 @@ export type Member = {
   google_sub: string | null;
   join_method: string;
   wa_verified?: number;
+  promo_consent?: number;
+  promo_consent_at?: number | null;
 };
 
 export type Card = {
@@ -89,6 +94,19 @@ export type Banner = {
   sort_order: number;
   active: number;
   created_at: number;
+  slot?: number | null;
+};
+
+export type NewsCard = {
+  id: string;
+  brand_id: string;
+  slot: number;
+  kind: string;
+  title: string;
+  subtitle: string;
+  image_url: string | null;
+  r2_key: string | null;
+  active: number;
 };
 
 export type ActivityRow = {

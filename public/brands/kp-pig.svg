@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Krispy Pork">
+  <path fill="#F27BA6" d="M18 10c-6 8-8 16-6 26 2 12 10 22 22 24 14 2 26-6 28-18 1-8-2-14-8-18 4-6 4-14-2-18-4-2-8 0-10 4-4-6-10-8-16-4-4 2-6 6-8 4z"/>
+  <path fill="#111" d="M22 28c8-2 20-1 26 4 1 1 2 3 0 4-8 2-18 1-26-3-2-1-2-4 0-5z"/>
+  <path fill="#111" d="M24 30h10v8H24zM38 29h12v9H38z"/>
+  <circle cx="48" cy="40" r="2.2" fill="#111"/>
+  <circle cx="52" cy="40" r="2.2" fill="#111"/>
+  <path fill="#F27BA6" d="M46 38c6 1 8 4 7 7"/>
+</svg>

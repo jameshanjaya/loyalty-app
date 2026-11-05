@@ -4,6 +4,7 @@ import { errText } from "../messages";
 import * as repo from "../repo";
 import { enforceLimit, LIMITS } from "../ratelimit";
 import { loadMember } from "../session";
+import { initiateWhatsappVerify } from "../verify-provider";
 import { decideWaVerify, extractVerifyCode, inboundTexts, makeVerifyCode, mustVerify, otpStubOn, waChatLink, waReady, businessNumber, WA_CODE_TTL_MS } from "../wa";
 import { messagePage, waPage } from "../view";
 import type { App } from "./customer";
@@ -27,6 +28,36 @@ async function openCode(db: D1Database, memberId: string, wa: string, now: numbe
 export async function handleWa(app: App): Promise<Response | null> {
   const { request, env, url, now, ip } = app;
   const path = url.pathname;
+  const db = env.DB;
+
+  if (path === "/webhook/convia" && request.method === "POST") {
+    let token = "";
+    try {
+      const body = (await request.json()) as { token?: string };
+      token = String(body.token || "");
+    } catch {
+      token = "";
+    }
+    if (!/^[a-f0-9]{16,64}$/i.test(token)) return json({ ok: false }, 400);
+    const memberId = await repo.markVerifyToken(db, token, now);
+    return json({ ok: Boolean(memberId) }, memberId ? 200 : 404);
+  }
+
+  if (path === "/verifikasi/wa" && request.method === "POST") {
+    const member = await loadMember(request, db, now);
+    if (!member) return json({ error: "masuk" }, 401);
+    const start = initiateWhatsappVerify({ CONVIA_ONETAP_API_KEY: (env as { CONVIA_ONETAP_API_KEY?: string }).CONVIA_ONETAP_API_KEY }, member.wa);
+    if (!start) return json({ error: "wa" }, 400);
+    await repo.insertVerifySession(db, {
+      id: randomId(),
+      memberId: member.id,
+      phone: start.phone,
+      token: start.token,
+      deepLink: start.deepLink,
+      now,
+    });
+    return json({ deepLink: start.deepLink, phone: start.phone, token: start.token });
+  }
 
   if (path === "/webhook/whatsapp" && request.method === "GET") {
     if (!waReady(env)) return new Response("Not found", { status: 404 });

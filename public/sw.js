@@ -1,4 +1,4 @@
-const CACHE = "loyalty-bos-v7";
+const CACHE = "loyalty-bos-v8";
 
 self.addEventListener("install", () => {
   self.skipWaiting();

@@ -133,11 +133,29 @@ function bootScan() {
   });
 }
 
+function paintFlip(root, left) {
+  const parts = {
+    dd: Math.floor(left / 86400000),
+    hh: Math.floor((left % 86400000) / 3600000),
+    mm: Math.floor((left % 3600000) / 60000),
+    ss: Math.floor((left % 60000) / 1000),
+  };
+  for (const key of Object.keys(parts)) {
+    const box = root.querySelector(`[data-${key}]`);
+    if (!box) continue;
+    const text = String(Math.max(0, parts[key])).padStart(2, "0");
+    box.innerHTML = text
+      .split("")
+      .map((digit) => `<span class="d">${digit}</span>`)
+      .join("");
+  }
+}
+
 function bootBirthday() {
   document.querySelectorAll("[data-bday]").forEach((el) => {
     const target = Number(el.getAttribute("data-bday"));
+    if (!Number.isFinite(target)) return;
     const label = el.querySelector("[data-bday-label]");
-    if (!label || !Number.isFinite(target)) return;
     let reloaded = false;
     const tick = () => {
       const left = target - Date.now();
@@ -148,14 +166,84 @@ function bootBirthday() {
         }
         return;
       }
-      const total = Math.floor(left / 60000);
-      const days = Math.floor(total / 1440);
-      const hours = Math.floor((total % 1440) / 60);
-      const minutes = total % 60;
-      label.textContent = `Claim your birthday freebies in ${days} days ${hours} hours ${minutes} minutes`;
+      if (el.querySelector("[data-dd]")) paintFlip(el, left);
+      if (label) {
+        const total = Math.floor(left / 60000);
+        const days = Math.floor(total / 1440);
+        const hours = Math.floor((total % 1440) / 60);
+        const minutes = total % 60;
+        label.textContent = `Claim your birthday gift in ${days} days ${hours} hours ${minutes} minutes`;
+      }
     };
     tick();
-    setInterval(tick, 60000);
+    setInterval(tick, el.querySelector("[data-dd]") ? 1000 : 60000);
+  });
+}
+
+function bootRail() {
+  const rail = document.querySelector("[data-rail]");
+  if (!rail) return;
+  const cards = [...rail.querySelectorAll(".stampcard")];
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const mark = () => {
+    const mid = rail.scrollLeft + rail.clientWidth / 2;
+    let best = cards[0];
+    let bestDist = Infinity;
+    for (const card of cards) {
+      const center = card.offsetLeft + card.offsetWidth / 2;
+      const dist = Math.abs(center - mid);
+      if (dist < bestDist) {
+        best = card;
+        bestDist = dist;
+      }
+    }
+    cards.forEach((card) => card.classList.toggle("on", card === best));
+    document.querySelectorAll("[data-dot-brand]").forEach((dot) => {
+      dot.classList.toggle("on", dot.getAttribute("data-dot-brand") === (best && best.getAttribute("data-brand")));
+    });
+    return best;
+  };
+  rail.addEventListener("scroll", () => mark(), { passive: true });
+  let timer = 0;
+  rail.addEventListener("scrollend", () => {
+    const card = mark();
+    if (!card || card.getAttribute("data-brand") === document.querySelector(".stampcard.on")?.getAttribute("data-brand")) {
+      const href = card && card.getAttribute("data-href");
+      const here = new URL(location.href);
+      if (href && here.searchParams.get("merek") !== new URL(href, location.origin).searchParams.get("merek") && cards.length > 1) {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          location.href = href;
+        }, reduced ? 0 : 180);
+      }
+    }
+  });
+  mark();
+}
+
+function bootVerify() {
+  const sheet = document.querySelector("[data-verify-sheet]");
+  const dim = document.querySelector("[data-verify-dim]");
+  if (!sheet) return;
+  const open = async () => {
+    sheet.hidden = false;
+    if (dim) dim.hidden = false;
+    const go = sheet.querySelector("[data-verify-go]");
+    if (!go || go.getAttribute("href") !== "#") return;
+    try {
+      const res = await fetch("/verifikasi/wa", { method: "POST", headers: { accept: "application/json" } });
+      const data = await res.json();
+      if (data.deepLink) go.setAttribute("href", data.deepLink);
+    } catch {
+      /* stub stays */
+    }
+  };
+  document.querySelectorAll("[data-open-verify]").forEach((button) => {
+    button.addEventListener("click", () => open());
+  });
+  if (dim) dim.addEventListener("click", () => {
+    sheet.hidden = true;
+    dim.hidden = true;
   });
 }
 
@@ -174,6 +262,8 @@ function boot() {
   bootScan();
   bootBirthday();
   bootWa();
+  bootRail();
+  bootVerify();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {

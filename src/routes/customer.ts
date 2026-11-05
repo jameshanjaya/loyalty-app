@@ -88,6 +88,11 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const wa = String(form.get("wa") || "");
     const next = safeNext(String(form.get("next") || ""), "/kartu");
     const merek = String(form.get("merek") || "") || null;
+    if (form.get("setuju") !== "on") {
+      const brands = await repo.listBrands(db, true);
+      const brand = brands.find((b) => b.id === merek) || null;
+      return html(joinPage({ brands, brand, next, params: errQuery("setuju"), values: { nama, wa } }), 400);
+    }
     const result = await joinMember(db, env, {
       name: nama,
       waRaw: wa,
@@ -102,6 +107,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       const brand = brands.find((b) => b.id === merek) || null;
       return html(joinPage({ brands, brand, next, params: errQuery(result.error), values: { nama, wa } }), 400);
     }
+    await repo.setPromoConsent(db, result.member.id, now);
     const dest = merek ? `/kartu?merek=${encodeURIComponent(merek)}` : next;
     return redirect(safeNext(dest, "/kartu"), [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)]);
   }
@@ -143,6 +149,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         brand,
         wa: member.wa,
         since: member.created_at,
+        consent: member.promo_consent === 1,
       }),
     );
   }
@@ -151,6 +158,19 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     if (!sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
     const form = await request.formData();
     if (signup) {
+      if (form.get("setuju") !== "on") {
+        return html(
+          profilePage({
+            mode: "google",
+            name: signup.pending.name,
+            email: signup.pending.email,
+            params: errQuery("setuju"),
+            wa: String(form.get("wa") || ""),
+            birthday: String(form.get("lahir") || ""),
+          }),
+          400,
+        );
+      }
       const result = await completeGoogleProfile(db, env, {
         pendingId: signup.pending.id,
         sub: signup.pending.sub,
@@ -177,6 +197,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
           400,
         );
       }
+      await repo.setPromoConsent(db, result.member.id, now);
       await repo.deleteSession(db, signup.sessionId);
       const cookies = [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)];
       if (waReady(env)) {
@@ -186,6 +207,8 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       return redirect("/kartu", cookies);
     }
     if (!member) return redirect("/masuk");
+    if (form.get("setuju") === "on") await repo.setPromoConsent(db, member.id, now);
+    if (member.birthday && !form.get("lahir")) return redirect("/profil?ok=setuju");
     const saved = await setOwnBirthday(db, { member, birthdayRaw: String(form.get("lahir") || ""), now });
     if (!saved.ok) return redirect(`/profil?err=${saved.error}`);
     return redirect("/kartu?ok=lahirsimpan");
@@ -271,8 +294,10 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       id: tier.id,
       stamps: tier.stamps,
       reward: tier.reward_text,
+      icon: tier.icon || "🎁",
       ready: choice.available.some((item) => item.stamps === tier.stamps && item.reward === tier.reward_text),
     }));
+    const waLock = (await repo.getSetting(db, "wa_verify_lock")) === "1" && member.wa_verified !== 1;
     return html(
       cardPage({
         member,
@@ -291,6 +316,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         booking: target,
         pickBooking: bookable.length > 1 && !target,
         missions,
+        waLock,
       }),
     );
   }

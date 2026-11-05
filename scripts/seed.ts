@@ -179,8 +179,9 @@ async function pinPair(plain: string): Promise<{ hash: string; salt: string }> {
 const outlets = [
   ["o_loft", "loft25", "Loft25 Senopati", "258025"],
   ["o_loft_kemang", "loft25", "Loft25 Kemang", "258026"],
-  ["o_soto", "soto-oseng", "Soto Oseng Tebet", "369136"],
-  ["o_kris", "krispyporkk", "Krispyporkk Kemang", "470247"],
+  ["o_soto", "soto-oseng", "Soto Oseng", "369136"],
+  ["o_kris", "krispyporkk", "Krispyporkk Kembangan", "470247"],
+  ["o_kris_gading", "krispyporkk", "Krispyporkk Gading Serpong", "470248"],
 ] as const;
 
 for (const [id, brand, name, plain] of outlets) {
@@ -190,10 +191,11 @@ for (const [id, brand, name, plain] of outlets) {
   );
 }
 lines.push(
-  `UPDATE outlets SET wa = '6281211112580' WHERE id = 'o_loft';
-   UPDATE outlets SET wa = '6281233332586' WHERE id = 'o_loft_kemang';
-   UPDATE outlets SET wa = '6281322223691' WHERE id = 'o_soto';
-   UPDATE outlets SET wa = '6281344447024' WHERE id = 'o_kris';`,
+  `UPDATE outlets SET wa = '6281211112580', slug = 'loft25-senopati' WHERE id = 'o_loft';
+   UPDATE outlets SET wa = '6281233332586', slug = 'loft25-kemang' WHERE id = 'o_loft_kemang';
+   UPDATE outlets SET wa = '6287890143089', slug = 'soto-oseng' WHERE id = 'o_soto';
+   UPDATE outlets SET wa = '6285778336066', slug = 'krispyporkk-kembangan' WHERE id = 'o_kris';
+   UPDATE outlets SET wa = '6285880903421', slug = 'krispyporkk-gading-serpong' WHERE id = 'o_kris_gading';`,
 );
 
 const counter = { i: 1 };
