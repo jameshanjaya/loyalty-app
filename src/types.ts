@@ -46,6 +46,8 @@ export type Member = {
   last_seen_at: number;
   email: string | null;
   birthday: string | null;
+  birthday_set_at?: number | null;
+  birthday_override_year?: number | null;
   google_sub: string | null;
   join_method: string;
   wa_verified?: number;

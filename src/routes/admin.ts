@@ -192,7 +192,12 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const member = await repo.getMember(db, id);
     if (!member) return back("/admin/member", "belum");
     const form = await request.formData();
-    const result = await ownerSetBirthday(db, { member, birthdayRaw: String(form.get("lahir") || ""), now });
+    const result = await ownerSetBirthday(db, {
+      member,
+      birthdayRaw: String(form.get("lahir") || ""),
+      now,
+      allowThisYear: form.get("boleh") === "on",
+    });
     if (!result.ok) return back(`/admin/member/${id}`, result.error);
     return ok(`/admin/member/${id}`, "lahirsimpan");
   }
@@ -783,7 +788,8 @@ function readBrand(form: FormData) {
   if (!Number.isInteger(stamps_required) || stamps_required < 1 || stamps_required > 30) return null;
   if (!Number.isInteger(max_stamps_per_day) || max_stamps_per_day < 1 || max_stamps_per_day > 10) return null;
   if (min_amount != null && (!Number.isFinite(min_amount) || min_amount < 0 || min_amount > 10_000_000)) return null;
-  const birthday_window = String(form.get("birthday_window") || "") === "around" ? "around" : "month";
+  const windowRaw = String(form.get("birthday_window") || "day");
+  const birthday_window = windowRaw === "month" || windowRaw === "around" || windowRaw === "day" ? windowRaw : "day";
   const birthday_days = Number(form.get("birthday_days") || 7);
   if (!Number.isInteger(birthday_days) || birthday_days < 0 || birthday_days > 30) return null;
   const cta = hexOrEmpty(String(form.get("cta") || ""));

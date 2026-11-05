@@ -1,4 +1,5 @@
-import { birthdayRedeemAllowed, birthdayStatus, parseBirthday } from "./birthday";
+import { birthdayGate, birthdayError } from "./birthday-gate";
+import { birthdayStatus, parseBirthday, toBirthdayRule } from "./birthday";
 import { brandOpen } from "./brands";
 import { bytesToHex, hashPin, randomBytes, randomId, verifyPin } from "./crypto";
 import { ownerPasswordOk, ownerSubject, planOwnerPasswordChange, type StoredOwnerPassword } from "./owner-password";
@@ -466,15 +467,8 @@ export async function finishClaim(
       return { ok: false, error: "cap" };
     }
   } else if (seen.payload.kind === "birthday") {
-    const offer = birthdayStatus(input.member.birthday, input.now, {
-      active: brand.birthday_active === 1,
-      window: brand.birthday_window === "around" ? "around" : "month",
-      days: brand.birthday_days,
-    });
-    if (birthdayRedeemAllowed(offer.open, false) !== "ok") return { ok: false, error: "ultah" };
-    if (offer.open && (await repo.birthdayTaken(db, input.member.id, brand.id, offer.rewardYear))) {
-      return { ok: false, error: "ultah-sudah" };
-    }
+    const blocked = birthdayError(await birthdayGate(db, input.member, brand, input.now));
+    if (blocked) return { ok: false, error: blocked };
   } else {
     const card = await repo.ensureCard(db, input.member.id, brand.id, input.now);
     if (card.stamps < brand.stamps_required) return { ok: false, error: "kurang" };
@@ -671,11 +665,10 @@ export async function giveBirthday(
   const staff = await blockIfStaff(db, input);
   if (staff) return staff;
   if (!brandOpen(input.brand)) return { ok: false, error: "merek" };
-  const offer = birthdayStatus(input.member.birthday, input.now, {
-    active: input.brand.birthday_active === 1,
-    window: input.brand.birthday_window === "around" ? "around" : "month",
-    days: input.brand.birthday_days,
-  });
+  const gate = await birthdayGate(db, input.member, input.brand, input.now);
+  const blocked = birthdayError(gate);
+  if (blocked) return { ok: false, error: blocked };
+  const offer = birthdayStatus(input.member.birthday, input.now, toBirthdayRule(input.brand));
   if (!offer.open) return { ok: false, error: "ultah" };
   const card = await repo.ensureCard(db, input.member.id, input.brand.id, input.now);
   const activityId = randomId();
@@ -746,7 +739,7 @@ export async function completeGoogleProfile(
   };
   await repo.insertMember(db, { id: member.id, name: member.name, wa, pinHash, pinSalt: salt, now: input.now });
   await repo.setMemberGoogle(db, member.id, input.sub, input.email, "google");
-  await repo.setMemberBirthday(db, member.id, birthday);
+  await repo.setMemberBirthday(db, member.id, birthday, input.now);
   const brands = await repo.listBrands(db, true);
   for (const brand of brands) await repo.ensureCard(db, member.id, brand.id, input.now);
   if (brands[0]) {
@@ -794,7 +787,7 @@ export async function linkGoogleWithPin(
   await repo.setMemberGoogle(db, member.id, input.sub, input.email, "link");
   if (!member.birthday) {
     const birthday = parseBirthday(input.birthdayRaw, input.now);
-    if (birthday && birthdayEditAllowed(member.birthday, false)) await repo.setMemberBirthday(db, member.id, birthday);
+    if (birthday && birthdayEditAllowed(member.birthday, false)) await repo.setMemberBirthday(db, member.id, birthday, input.now);
   }
   await repo.deletePending(db, input.pendingId);
   await repo.insertAdminLog(db, {
@@ -816,7 +809,7 @@ export async function setOwnBirthday(
   if (!birthdayEditAllowed(input.member.birthday, false)) return { ok: false, error: "lahir" };
   const birthday = parseBirthday(input.birthdayRaw, input.now);
   if (!birthday) return { ok: false, error: "lahir" };
-  await repo.setMemberBirthday(db, input.member.id, birthday);
+  await repo.setMemberBirthday(db, input.member.id, birthday, input.now);
   return { ok: true };
 }
 
@@ -840,15 +833,19 @@ export async function ownerSetPhone(
 
 export async function ownerSetBirthday(
   db: D1Database,
-  input: { member: Member; birthdayRaw: string; now: number },
+  input: { member: Member; birthdayRaw: string; now: number; allowThisYear: boolean },
 ): Promise<Fail | { ok: true }> {
   const birthday = parseBirthday(input.birthdayRaw, input.now);
   if (!birthday) return { ok: false, error: "lahir" };
-  await repo.setMemberBirthday(db, input.member.id, birthday);
+  const changed = input.member.birthday !== birthday;
+  if (changed) await repo.setMemberBirthday(db, input.member.id, birthday, input.now);
+  const year = new Date(input.now + 7 * 60 * 60 * 1000).getUTCFullYear();
+  const override = input.allowThisYear ? year : changed ? null : input.member.birthday_override_year ?? null;
+  await repo.setBirthdayOverride(db, input.member.id, override);
   await repo.insertAdminLog(db, {
     id: randomId(),
     action: "edit_birthday",
-    detail: `${input.member.name}: ${input.member.birthday || "-"} -> ${birthday}`,
+    detail: `${input.member.name}: ${input.member.birthday || "-"} -> ${birthday}${input.allowThisYear ? ` · boleh ${year}` : ""}`,
     now: input.now,
   });
   return { ok: true };

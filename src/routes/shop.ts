@@ -6,6 +6,7 @@ import { formatPoints, missionInWindow, missionOpen, proofKind, questLocked, que
 import * as pdb from "../points-db";
 import { expireCodes, redeemBirthdayCode, redeemPointsReward, redeemTier, submitMission } from "../points-flow";
 import { formatAward, missionQuarters, questProgressLabel } from "../quest-stamp";
+import { loadBirthdayNotice } from "../birthday-gate";
 import { brandOpen, pickLiveBrand } from "../brands";
 import { mustVerify } from "../wa";
 import { qrSvg } from "../qr";
@@ -156,6 +157,7 @@ export async function handleShop(app: App): Promise<Response | null> {
     const card = await repo.getCard(db, member.id, brand.id);
     const stamps = card?.stamps || 0;
     const rewards = await pdb.listTiers(db, brand.id);
+    const birthday = await loadBirthdayNotice(db, member, brand, now);
     return html(
       catalogPage({
         stamps,
@@ -173,6 +175,9 @@ export async function handleShop(app: App): Promise<Response | null> {
           soldOut: r.stock === 0,
         })),
         params: url.searchParams,
+        birthday,
+        birthdayReward: brand.birthday_reward,
+        now,
       }),
     );
   }

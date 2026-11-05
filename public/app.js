@@ -152,10 +152,19 @@ function bootBirthday() {
       const days = Math.floor(total / 1440);
       const hours = Math.floor((total % 1440) / 60);
       const minutes = total % 60;
-      label.textContent = `Claim your gift in ${days} days ${hours} hours ${minutes} minutes`;
+      label.textContent = `Claim your birthday freebies in ${days} days ${hours} hours ${minutes} minutes`;
     };
     tick();
     setInterval(tick, 60000);
+  });
+}
+
+function bootWa() {
+  document.querySelectorAll("[data-track]").forEach((link) => {
+    link.addEventListener("click", () => {
+      const track = link.getAttribute("data-track");
+      if (track && navigator.sendBeacon) navigator.sendBeacon(track);
+    });
   });
 }
 
@@ -164,6 +173,7 @@ function boot() {
   bootReel();
   bootScan();
   bootBirthday();
+  bootWa();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {

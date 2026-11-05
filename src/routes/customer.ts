@@ -1,5 +1,5 @@
 import { randomId } from "../crypto";
-import { birthdayNotice, type BirthdayNotice } from "../birthday";
+import { loadBirthdayNotice } from "../birthday-gate";
 import { brandOpen, pickLiveBrand } from "../brands";
 import { bookingTarget, bookingUrl, hiddenOrderPlatform, visibleOrderLinks } from "../orders";
 import { tierChoices } from "../points";
@@ -227,24 +227,15 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const cards = new Map((await repo.listCards(db, member.id)).map((c) => [c.brand_id, c]));
     const banners = await repo.listBanners(db, brand.id);
     const history = await repo.memberHistory(db, member.id, brand.id);
-    const birthdayRule = {
-      active: brand.birthday_active === 1,
-      window: brand.birthday_window === "around" ? ("around" as const) : ("month" as const),
-      days: brand.birthday_days,
-    };
-    let claimedYears = new Set<number>();
-    if (member.birthday && birthdayRule.active) {
-      const wibYear = new Date(now + 7 * 60 * 60 * 1000).getUTCFullYear();
-      claimedYears = new Set(await repo.birthdayClaimedYears(db, member.id, brand.id, wibYear - 1, wibYear + 2));
-    }
-    const birthday: BirthdayNotice = birthdayNotice(member.birthday, now, birthdayRule, claimedYears);
+    const birthday = await loadBirthdayNotice(db, member, brand, now);
     const links = await repo.listOrderLinks(db, brand.id);
     const named = (await repo.listOutlets(db)).filter((outlet) => outlet.brand_id === brand.id && outlet.active);
     const outletParam = url.searchParams.get("outlet") || "";
     const selected = named.some((outlet) => outlet.id === outletParam) ? outletParam : "";
     const orders = visibleOrderLinks(links, selected || null);
-    const bookable = named.filter((outlet) => bookingUrl(outlet.name, outlet.wa || ""));
+    const bookable = named.filter((outlet) => bookingUrl(brand.name, outlet.name, outlet.wa || ""));
     const target = bookingTarget(
+      brand.name,
       named.map((outlet) => ({ id: outlet.id, name: outlet.name, wa: outlet.wa || "" })),
       selected || null,
     );
@@ -281,10 +272,31 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         tiers: tierView,
         orders,
         orderOutlets,
-        booking: target ? { id: target.id, name: target.name } : null,
+        booking: target,
         pickBooking: bookable.length > 1 && !target,
       }),
     );
+  }
+
+  if (path.startsWith("/pesan/outlet/") && request.method === "POST") {
+    const outletId = decodeURIComponent(path.slice("/pesan/outlet/".length));
+    const outlet = await repo.getOutlet(db, outletId);
+    const outletBrand = outlet ? await repo.getBrand(db, outlet.brand_id) : null;
+    if (outlet && outlet.active && brandOpen(outletBrand) && bookingUrl(outletBrand?.name || "", outlet.name, outlet.wa || "")) {
+      const gate = await enforceLimit(db, `order:${ip}`, now, LIMITS.orderClick);
+      if (gate.ok) {
+        await repo.logOrderClick(db, {
+          id: randomId(),
+          brandId: outlet.brand_id,
+          outletId: outlet.id,
+          platform: "booking",
+          linkId: outlet.id,
+          memberId: member?.id || null,
+          now,
+        });
+      }
+    }
+    return new Response(null, { status: 204 });
   }
 
   if (path.startsWith("/pesan/") && request.method === "GET") {
@@ -292,8 +304,8 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     if (path.startsWith("/pesan/outlet/")) {
       const outletId = decodeURIComponent(path.slice("/pesan/outlet/".length));
       const outlet = await repo.getOutlet(db, outletId);
-      const dest = outlet && outlet.active ? bookingUrl(outlet.name, outlet.wa || "") : null;
       const outletBrand = outlet ? await repo.getBrand(db, outlet.brand_id) : null;
+      const dest = outlet && outlet.active && outletBrand ? bookingUrl(outletBrand.name, outlet.name, outlet.wa || "") : null;
       if (!outlet || !dest || !brandOpen(outletBrand)) return redirect("/kartu");
       const gate = await enforceLimit(db, `order:${ip}`, now, LIMITS.orderClick);
       if (gate.ok) {

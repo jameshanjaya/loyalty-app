@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { birthdayNotice, birthdayRedeemAllowed, birthdayStatus, countdownText, parseBirthday } from "../src/birthday";
+import { BIRTHDAY_LOCK_MS, birthdayClaimDecision, birthdayNotice, birthdayRedeemAllowed, birthdayStatus, countdownText, parseBirthday } from "../src/birthday";
 
 const nov4 = Date.UTC(2026, 10, 4, 5, 0, 0);
 
@@ -57,7 +57,42 @@ describe("hadiah ulang tahun", () => {
     expect(claimed).toEqual({ show: true, phase: "claimed", target: jakarta(2027, 12, 26) });
     expect(birthdayNotice(null, dec20, yearEnd, new Set())).toEqual({ show: false });
     expect(birthdayNotice("1990-01-02", dec20, { ...yearEnd, active: false }, new Set())).toEqual({ show: false });
-    expect(countdownText(dec20 + 90 * 60_000, dec20)).toBe("Claim your gift in 0 days 1 hours 30 minutes");
+    expect(countdownText(dec20 + 90 * 60_000, dec20)).toBe("Claim your birthday freebies in 0 days 1 hours 30 minutes");
+  });
+
+  it("Hari H: hitung mundur, terbuka di tanggalnya, tutup besoknya, sekali, dan tanggal baru diblokir", () => {
+    const jakarta = (year: number, month: number, day: number, hour = 0, minute = 0) =>
+      Date.UTC(year, month - 1, day, hour, minute) - 7 * 60 * 60 * 1000;
+    const day = { active: true, window: "day" as const, days: 0 };
+    const before = jakarta(2026, 11, 9, 15);
+    expect(birthdayNotice("1998-11-10", before, day, new Set())).toEqual({
+      show: true,
+      phase: "wait",
+      target: jakarta(2026, 11, 10),
+    });
+    const onDay = jakarta(2026, 11, 10, 9);
+    expect(birthdayStatus("1998-11-10", onDay, day)).toEqual({ open: true, rewardYear: 2026 });
+    expect(birthdayNotice("1998-11-10", onDay, day, new Set())).toEqual({ show: true, phase: "open", rewardYear: 2026 });
+    const after = jakarta(2026, 11, 11, 0, 30);
+    expect(birthdayStatus("1998-11-10", after, day).open).toBe(false);
+    expect(birthdayClaimDecision({ birthday: "1998-11-10", now: after, rule: day, alreadyRedeemed: false, setAt: null, overrideYear: null })).toBe("closed");
+    expect(birthdayClaimDecision({ birthday: "1998-11-10", now: onDay, rule: day, alreadyRedeemed: true, setAt: null, overrideYear: null })).toBe("used");
+    expect(
+      birthdayClaimDecision({ birthday: "1998-11-10", now: onDay, rule: day, alreadyRedeemed: false, setAt: onDay - 60_000, overrideYear: null }),
+    ).toBe("fresh");
+    expect(
+      birthdayClaimDecision({
+        birthday: "1998-11-10",
+        now: onDay,
+        rule: day,
+        alreadyRedeemed: false,
+        setAt: onDay - BIRTHDAY_LOCK_MS - 1,
+        overrideYear: null,
+      }),
+    ).toBe("ok");
+    expect(
+      birthdayClaimDecision({ birthday: "1998-11-10", now: onDay, rule: day, alreadyRedeemed: false, setAt: onDay, overrideYear: 2026 }),
+    ).toBe("ok");
   });
 
   it("tanggal lahir tidak boleh di masa depan", () => {

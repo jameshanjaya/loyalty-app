@@ -871,8 +871,12 @@ export async function setMemberPhone(db: D1Database, id: string, wa: string): Pr
   await db.prepare(`UPDATE members SET wa = ? WHERE id = ?`).bind(wa, id).run();
 }
 
-export async function setMemberBirthday(db: D1Database, id: string, birthday: string): Promise<void> {
-  await db.prepare(`UPDATE members SET birthday = ? WHERE id = ?`).bind(birthday, id).run();
+export async function setMemberBirthday(db: D1Database, id: string, birthday: string, now: number): Promise<void> {
+  await db.prepare(`UPDATE members SET birthday = ?, birthday_set_at = ? WHERE id = ?`).bind(birthday, now, id).run();
+}
+
+export async function setBirthdayOverride(db: D1Database, id: string, year: number | null): Promise<void> {
+  await db.prepare(`UPDATE members SET birthday_override_year = ? WHERE id = ?`).bind(year, id).run();
 }
 
 export async function insertAdminLog(db: D1Database, row: { id: string; action: string; detail: string; now: number }): Promise<void> {

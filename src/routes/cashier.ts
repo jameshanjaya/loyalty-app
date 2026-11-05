@@ -1,7 +1,8 @@
-import { birthdayRedeemAllowed, birthdayStatus } from "../birthday";
+import { birthdayWaitLine, toBirthdayRule } from "../birthday";
+import { birthdayError, birthdayGate } from "../birthday-gate";
 import { brandOpen } from "../brands";
 import { maskName } from "../format";
-import type { Member } from "../types";
+import type { Brand, Member } from "../types";
 import { html, json, readCookie, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
 import { normalizeWa } from "../phone";
@@ -93,7 +94,7 @@ export async function handleCashier(app: App): Promise<Response | null> {
     const last = await repo.latestOpenActivity(db, cashier.sessionId);
     const cancelId =
       last && canCancel({ createdAt: last.created_at, now, sameSession: true, voided: false, isLast: true }) ? last.id : null;
-    let found: { member: Member; stamps: number; birthday: string | null; quests: Array<{ id: string; title: string; points: string }> } | null = null;
+    let found: { member: Member; stamps: number; birthdayOpen: boolean; birthdayLine: string | null; quests: Array<{ id: string; title: string; points: string }> } | null = null;
     const waRaw = url.searchParams.get("wa") || "";
     const wa = waRaw ? normalizeWa(waRaw) : null;
     if (wa) {
@@ -102,12 +103,7 @@ export async function handleCashier(app: App): Promise<Response | null> {
       const member = await repo.getMemberByWa(db, wa);
       if (!member) return redirect("/kasir/meja?err=belum");
       const card = await repo.ensureCard(db, member.id, cashier.brand.id, now);
-      const offer = birthdayStatus(member.birthday, now, {
-        active: cashier.brand.birthday_active === 1,
-        window: cashier.brand.birthday_window === "around" ? "around" : "month",
-        days: cashier.brand.birthday_days,
-      });
-      const used = offer.open ? await repo.birthdayTaken(db, member.id, cashier.brand.id, offer.rewardYear) : true;
+      const desk = await birthdayDesk(db, member, cashier.brand, now);
       const quests = [];
       const earned = await pdb.lifetimeEarned(db, member.id);
       for (const mission of await pdb.listMissions(db, true)) {
@@ -120,7 +116,7 @@ export async function handleCashier(app: App): Promise<Response | null> {
         if (!missionOpen({ limit, hasPending: state.pending, lastApprovedAt: state.lastApprovedAt, now })) continue;
         quests.push({ id: mission.id, title: mission.title, points: formatPoints(mission.points_tenths) });
       }
-      found = { member, stamps: card.stamps, birthday: offer.open && !used ? cashier.brand.birthday_reward : null, quests };
+      found = { member, stamps: card.stamps, birthdayOpen: desk.open, birthdayLine: desk.line, quests };
     }
     return html(
       cashierDeskPage({
@@ -162,6 +158,11 @@ export async function handleCashier(app: App): Promise<Response | null> {
   }
 
   if (path === "/kasir/ulangtahun" && request.method === "POST") {
+    const form = await request.formData();
+    const member = await repo.getMember(db, String(form.get("member_id") || ""));
+    if (!member) return go("/kasir/meja", "ultah");
+    const blocked = birthdayError(await birthdayGate(db, member, cashier.brand, now));
+    if (blocked) return go("/kasir/meja", blocked);
     const opened = await openClaim(db, env, {
       outlet: cashier.outlet,
       sessionId: cashier.sessionId,
@@ -176,13 +177,8 @@ export async function handleCashier(app: App): Promise<Response | null> {
   if (path === "/kasir/ulangtahun" && request.method === "GET") {
     const member = await repo.getMember(db, url.searchParams.get("member") || "");
     if (!member) return go("/kasir/meja", "belum");
-    const offer = birthdayStatus(member.birthday, now, {
-      active: cashier.brand.birthday_active === 1,
-      window: cashier.brand.birthday_window === "around" ? "around" : "month",
-      days: cashier.brand.birthday_days,
-    });
-    const used = offer.open ? await repo.birthdayTaken(db, member.id, cashier.brand.id, offer.rewardYear) : true;
-    if (birthdayRedeemAllowed(offer.open, used) !== "ok") return go("/kasir/meja", used ? "ultah-sudah" : "ultah");
+    const blocked = birthdayError(await birthdayGate(db, member, cashier.brand, now));
+    if (blocked) return go("/kasir/meja", blocked);
     return html(confirmBirthdayPage({ brand: cashier.brand, member, reward: cashier.brand.birthday_reward }));
   }
 
@@ -331,6 +327,22 @@ export async function handleCashier(app: App): Promise<Response | null> {
   }
 
   return html(messagePage("Tidak ketemu", "Halaman kasir itu tidak ada.", "/kasir/meja"), 404);
+}
+
+async function birthdayDesk(
+  db: D1Database,
+  member: Member,
+  brand: Brand,
+  now: number,
+): Promise<{ open: boolean; line: string | null }> {
+  const rule = toBirthdayRule(brand);
+  if (!member.birthday || !rule.active) return { open: false, line: null };
+  const decision = await birthdayGate(db, member, brand, now);
+  if (decision === "ok") return { open: true, line: null };
+  if (decision === "fresh") return { open: false, line: "Birthday Freebies: tanggal lahir baru, klaim 30 hari lagi" };
+  const wibYear = new Date(now + 7 * 60 * 60 * 1000).getUTCFullYear();
+  const claimed = new Set(await repo.birthdayClaimedYears(db, member.id, brand.id, wibYear - 1, wibYear + 2));
+  return { open: false, line: birthdayWaitLine(member.birthday, now, rule, claimed) };
 }
 
 async function hiddenCashierBrand(db: D1Database, sessionId: string): Promise<boolean> {

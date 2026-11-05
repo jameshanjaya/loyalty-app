@@ -41,20 +41,23 @@ export function orderLabel(platform: string, custom: string): string {
   return custom.trim() || "Pesan";
 }
 
-/** wa.me dengan pesan siap kirim. Nomor kosong atau tidak valid mengembalikan null. */
-export function bookingUrl(outletName: string, wa: string): string | null {
+/** Direct wa.me link. wa.me opens the app on a phone and api.whatsapp.com on desktop. */
+export function bookingUrl(brandName: string, outletName: string, wa: string): string | null {
   const digits = normalizeWa(wa);
-  const name = outletName.trim();
-  if (!digits || !name) return null;
-  return `https://wa.me/${digits}?text=${encodeURIComponent(`Halo, mau order/booking di ${name}`)}`;
+  const outlet = outletName.trim();
+  const brand = brandName.trim();
+  if (!digits || !outlet) return null;
+  const place = brand && brand.toLowerCase() !== outlet.toLowerCase() ? `${brand}, ${outlet}` : outlet;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(`Halo, mau booking / order di ${place}`)}`;
 }
 
 export function bookingTarget(
+  brandName: string,
   outlets: Array<{ id: string; name: string; wa: string }>,
   selectedId: string | null,
 ): { id: string; name: string; url: string } | null {
   const ready = outlets.flatMap((outlet) => {
-    const url = bookingUrl(outlet.name, outlet.wa || "");
+    const url = bookingUrl(brandName, outlet.name, outlet.wa || "");
     return url ? [{ id: outlet.id, name: outlet.name, url }] : [];
   });
   if (ready.length === 0) return null;
