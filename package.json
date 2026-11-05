@@ -9,6 +9,7 @@
     "setup": "wrangler d1 migrations apply loyalty-bos --local && node --experimental-strip-types scripts/seed.ts",
     "db:migrate": "wrangler d1 migrations apply loyalty-bos --local",
     "db:seed": "node --experimental-strip-types scripts/seed.ts",
+    "clone-loft-program": "node --experimental-strip-types scripts/clone-loft-program.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types"

@@ -188,6 +188,17 @@ Di **Setting Program**, tiap merek punya warna utama, warna lembut, warna tombol
 
 Merek dengan `active = 0` disembunyikan dari pelanggan, kasir, dan dashboard. Datanya tidak dihapus. Di **Setting Program**, bagian **Merek disembunyiin** punya tombol **Merek aktif** untuk menyalakan satu merek lagi. Kasir merek yang mati melihat “Merek ini lagi belum aktif”.
 
+Kartu Soto Oseng dan Krispyporkk memakai template yang sama dengan Loft25. Warna, logo, dan ikon stamp tetap milik masing-masing, dan keduanya tetap nonaktif sampai dinyalakan di dashboard. Isi program (jumlah stamp, teks reward, syarat transaksi, Birthday Freebies, Redeem, dan misi Bonus Stamp) disalin dari data Loft25 yang sedang hidup, bukan dari file seed:
+
+```
+npm run clone-loft-program -- --remote
+npm run clone-loft-program -- --remote --apply
+```
+
+Perintah pertama hanya menampilkan rencana. `--apply` menulis ke D1. Menjalankan lagi memperbarui baris salinan yang sama, tidak membuat duplikat, dan tidak mengubah `active`. Kata `matcha` di teks yang disalin menjadi `free menu`, dan `Loft25` menjadi nama singkat merek tujuan, supaya kelihatan dan bisa diedit di dashboard. Bonus Stamp tidak ikut tersalin: tiga misi yang sama diisi migrasi `0014_bonus_missions.sql` untuk ketiga merek.
+
+Bonus Stamp tiap merek ada tiga, masing-masing 1 stamp dan sekali per pelanggan: Review di Google, Posting Threads, dan Story Instagram. Foto dicek Workers AI (`@cf/meta/llama-3.2-11b-vision-instruct`, paket gratis). Lolos langsung dapat stamp. Tidak lolos bisa upload ulang. Kalau AI ragu atau kuotanya habis, bukti masuk antrian **Menunggu dicek**. Akun IG diisi per merek di Setting Program.
+
 ## Cara pakai sehari-hari
 
 - Pelanggan scan QR stan, isi nama, nomor WA, dan PIN. Login di HP itu bertahan 365 hari. Kalau mereka membuka aplikasi lagi setelah sekitar sehari, cookie diperpanjang 365 hari dari kunjungan itu. Keluar tetap menghapus cookie. Di HP lain, mereka masuk dengan nomor WA + PIN.

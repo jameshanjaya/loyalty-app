@@ -17,6 +17,7 @@ export type Brand = {
   birthday_active: number;
   birthday_window: string;
   birthday_days: number;
+  ig_handle?: string;
   cta?: string;
   page_bg?: string;
   logo_key?: string | null;

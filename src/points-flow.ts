@@ -10,6 +10,7 @@ import * as repo from "./repo";
 import type { Brand, Member } from "./types";
 import { maskName } from "./format";
 import { logEvent } from "./log";
+import { isCheckKind } from "./mission-check";
 import { missionQuarters } from "./quest-stamp";
 import { STAFF_FLAG_REASON, staffFlagDetail } from "./staff";
 
@@ -261,10 +262,56 @@ async function dbBumpRedeems(db: D1Database, memberId: string, brandId: string) 
   await db.prepare(`UPDATE cards SET lifetime_redeems = lifetime_redeems + 1 WHERE member_id = ? AND brand_id = ?`).bind(memberId, brandId).run();
 }
 
+async function grantQuestStamp(
+  db: D1Database,
+  input: { memberId: string; brandId: string; quarters: number; title: string; submissionId: string; now: number },
+): Promise<number> {
+  const moved = await repo.adjustQuestProgress(db, {
+    memberId: input.memberId,
+    brandId: input.brandId,
+    quarterDelta: input.quarters,
+    now: input.now,
+  });
+  await pdb.addLedger(db, {
+    id: randomId(),
+    memberId: input.memberId,
+    brandId: input.brandId,
+    delta: input.quarters,
+    reason: "quest",
+    refId: input.submissionId,
+    now: input.now,
+    earnedAt: input.now,
+    expiresAt: null,
+  });
+  await logMission(db, input.memberId, input.brandId, input.title, input.now);
+  if (moved.stampDelta > 0) {
+    await logActivity(db, {
+      type: "stamp",
+      memberId: input.memberId,
+      brandId: input.brandId,
+      outletId: null,
+      sessionId: null,
+      delta: moved.stampDelta,
+      after: moved.stamps,
+      note: input.title,
+      now: input.now,
+    });
+  }
+  return moved.stampDelta;
+}
+
 export async function submitMission(
   db: D1Database,
-  input: { member: Member; missionId: string; link: string | null; r2Key: string | null; now: number },
-): Promise<Fail | { ok: true; stampsAdded: number }> {
+  input: {
+    member: Member;
+    missionId: string;
+    link: string | null;
+    r2Key: string | null;
+    now: number;
+    verdict?: "pass" | "fail" | "unsure";
+    failCode?: "" | "namafoto" | "struk" | "produk" | "tag";
+  },
+): Promise<Fail | { ok: true; stampsAdded: number; status: "approved" | "pending" }> {
   const mission = await pdb.getMission(db, input.missionId);
   if (!mission || !mission.active || !mission.brand_id) return { ok: false, error: "umum" };
   if (!brandOpen(await repo.getBrand(db, mission.brand_id))) return { ok: false, error: "merek" };
@@ -278,8 +325,24 @@ export async function submitMission(
   if (!missionOpen({ limit: "once", hasPending: state.pending, lastApprovedAt: state.lastApprovedAt, now: input.now })) {
     return { ok: false, error: "misi" };
   }
-  const quarters = missionQuarters(mission);
+  const quarters = isCheckKind(mission.check_kind) ? 4 : missionQuarters(mission);
   if (!quarters) return { ok: false, error: "umum" };
+  const verdict = isCheckKind(mission.check_kind) ? input.verdict || "unsure" : "pass";
+  if (verdict === "fail") {
+    await pdb.insertSubmission(db, {
+      id: randomId(),
+      missionId: mission.id,
+      memberId: input.member.id,
+      link: null,
+      r2Key: input.r2Key,
+      points: quarters,
+      now: input.now,
+      status: "rejected",
+      note: input.failCode || "cek",
+    });
+    return { ok: false, error: input.failCode || "bukti" };
+  }
+  const pending = verdict === "unsure";
   const id = randomId();
   await pdb.insertSubmission(db, {
     id,
@@ -289,41 +352,23 @@ export async function submitMission(
     r2Key: input.r2Key,
     points: quarters,
     now: input.now,
-    status: "approved",
+    status: pending ? "pending" : "approved",
+    note: pending ? "menunggu dicek" : "",
   });
-  const moved = await repo.adjustQuestProgress(db, {
-    memberId: input.member.id,
-    brandId: mission.brand_id,
-    quarterDelta: quarters,
-    now: input.now,
-  });
-  await pdb.addLedger(db, {
-    id: randomId(),
-    memberId: input.member.id,
-    brandId: mission.brand_id,
-    delta: quarters,
-    reason: "quest",
-    refId: id,
-    now: input.now,
-    earnedAt: input.now,
-    expiresAt: null,
-  });
-  await logMission(db, input.member.id, mission.brand_id, mission.title, input.now);
-  if (moved.stampDelta > 0) {
-    await logActivity(db, {
-      type: "stamp",
-      memberId: input.member.id,
-      brandId: mission.brand_id,
-      outletId: null,
-      sessionId: null,
-      delta: moved.stampDelta,
-      after: moved.stamps,
-      note: mission.title,
-      now: input.now,
-    });
+  if (pending) {
+    logEvent("mission_wait", { mission: mission.id, member: input.member.id });
+    return { ok: true, stampsAdded: 0, status: "pending" };
   }
-  logEvent("mission_ok", { mission: mission.id, member: input.member.id, stamps: moved.stampDelta });
-  return { ok: true, stampsAdded: moved.stampDelta };
+  const stampsAdded = await grantQuestStamp(db, {
+    memberId: input.member.id,
+    brandId: mission.brand_id,
+    quarters,
+    title: mission.title,
+    submissionId: id,
+    now: input.now,
+  });
+  logEvent("mission_ok", { mission: mission.id, member: input.member.id, stamps: stampsAdded });
+  return { ok: true, stampsAdded, status: "approved" };
 }
 
 export async function grantCashierMission(
@@ -413,31 +458,20 @@ export async function reviewMission(db: D1Database, input: { id: string; approve
   const row = await pdb.getSubmission(db, input.id);
   if (!row || row.status !== "pending") return { ok: false, error: "umum" };
   const mission = await pdb.getMission(db, row.mission_id);
-  const won = await pdb.markSubmission(db, row.id, input.approve ? "approved" : "rejected", "", input.now);
+  const won = await pdb.markSubmission(db, row.id, input.approve ? "approved" : "rejected", input.approve ? "" : "ditolak", input.now);
   if (!won) return { ok: false, error: "umum" };
-  if (input.approve) {
-    await grantEarned(db, {
+  if (input.approve && mission?.brand_id) {
+    const quarters = isCheckKind(mission.check_kind) ? 4 : row.points_tenths > 0 && row.points_tenths <= 4 ? row.points_tenths : missionQuarters(mission);
+    await grantQuestStamp(db, {
       memberId: row.member_id,
-      brandId: mission?.brand_id ?? null,
-      delta: row.points_tenths,
-      reason: "mission",
-      refId: row.id,
+      brandId: mission.brand_id,
+      quarters,
+      title: mission.title,
+      submissionId: row.id,
       now: input.now,
     });
-    const brandId = mission?.brand_id || (await repo.listBrands(db, true))[0]?.id;
-    if (brandId) {
-      await logActivity(db, {
-        type: "mission",
-        memberId: row.member_id,
-        brandId,
-        outletId: null,
-        sessionId: null,
-        delta: 0,
-        after: (await repo.getCard(db, row.member_id, brandId))?.stamps ?? 0,
-        note: mission?.title || "misi",
-        now: input.now,
-      });
-    }
+    logEvent("mission_ok", { id: row.id });
+  } else if (input.approve) {
     logEvent("mission_ok", { id: row.id });
   } else {
     logEvent("mission_no", { id: row.id });

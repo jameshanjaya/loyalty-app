@@ -4,6 +4,7 @@
 interface __BaseEnv_Env {
 	BANNERS: R2Bucket;
 	DB: D1Database;
+	AI: Ai;
 	ASSETS: Fetcher;
 	OWNER_PASSWORD: string;
 	TOKEN_SECRET: string;

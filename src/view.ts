@@ -19,9 +19,8 @@ const PLATE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 
 function stampMark(brand: Brand): string {
   if (brand.stamp_key) return `<img class="stampimg" src="/media/stamp/${esc(brand.id)}" alt="" />`;
-  if (brand.stamp_icon === "bowl" || (!brand.stamp_icon && brand.id === "soto-oseng")) return BOWL;
-  if (brand.stamp_icon === "plate" || (!brand.stamp_icon && brand.id === "krispyporkk")) return PLATE;
-  if (brand.stamp_icon === "whisk" || !brand.stamp_icon) return WHISK;
+  if (brand.stamp_icon === "bowl") return BOWL;
+  if (brand.stamp_icon === "plate") return PLATE;
   return WHISK;
 }
 
@@ -87,6 +86,7 @@ type Skin = {
   heroA: string;
   heroB: string;
   dark: boolean;
+  onInk: string;
 };
 
 const SKINS: Record<string, Skin> = {
@@ -103,6 +103,7 @@ const SKINS: Record<string, Skin> = {
     heroA: "#1c5a3c",
     heroB: "#0c2418",
     dark: false,
+    onInk: "#ffffff",
   },
   "soto-oseng": {
     page: "#e7eef8",
@@ -117,6 +118,7 @@ const SKINS: Record<string, Skin> = {
     heroA: "#1e6a9a",
     heroB: "#16324a",
     dark: false,
+    onInk: "#ffffff",
   },
   krispyporkk: {
     page: "#fff5f8",
@@ -131,6 +133,7 @@ const SKINS: Record<string, Skin> = {
     heroA: "#ff6fa8",
     heroB: "#111111",
     dark: false,
+    onInk: "#111111",
   },
 };
 
@@ -150,12 +153,13 @@ export function customerSkin(brand: Brand | null): { style: string; dark: boolea
       heroA: brand?.accent || "#143d28",
       heroB: "#102018",
       dark: false,
+      onInk: "#ffffff",
     } satisfies Skin);
   const accent = brand?.accent || base.accent;
   const soft = brand?.accent_soft || base.soft;
   const page = brand?.page_bg || base.page;
   const cta = brand?.cta || base.cta;
-  const onInk = brand?.id === "krispyporkk" ? "#111111" : "#ffffff";
+  const onInk = base.onInk;
   const divider = base.dark ? "rgba(255,255,255,.12)" : "#efe4d4";
   const style = `--page:${page};--ink:${base.ink};--muted:${base.muted};--accent:${accent};--accent-soft:${soft};--deep:${cta};--cta:${cta};--on-ink:${onInk};--glass:${base.glass};--glass-line:${base.line};--card:${base.glass};--line:${divider};--hero-a:${base.heroA};--hero-b:${base.heroB};background:var(--page);color:var(--ink)`;
   return { style, dark: base.dark, accent };
@@ -184,7 +188,6 @@ function orderBlock(
       : "";
   return `<section class="card order">
     <div class="eyebrow">Order</div>
-    <h2>Booking / Order via WA</h2>
     ${chips}
     ${book}
     ${extras.length ? `<div class="order-extra">${extras.map(badge).join("")}</div>` : ""}
@@ -410,8 +413,8 @@ export function cardPage(input: {
           )
           .join("")}
       </section>
-      ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id, input.booking || null, Boolean(input.pickBooking))}
       ${birthdayBlock(input.birthday, input.birthdayReward, input.brand.id, input.now)}
+      ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id, input.booking || null, Boolean(input.pickBooking))}
       ${bonusStamp(input.missions || [], input.brand.id)}
       <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
       <div class="scan-sheet" data-scanner hidden>
@@ -1106,6 +1109,7 @@ export function rulesPage(brands: Brand[], hidden: Brand[], links: OrderLink[], 
           <option value="around" ${b.birthday_window === "around" ? "selected" : ""}>± N hari</option>
         </select>
         <label class="lbl">N hari (kalau pilih ± N hari)</label><input name="birthday_days" type="number" min="0" max="30" value="${b.birthday_days ?? 7}" />
+        <label class="lbl">Akun Instagram untuk Story</label><input name="ig_handle" value="${esc(b.ig_handle || "")}" maxlength="80" placeholder="@akun" />
         <label class="checkline"><input type="checkbox" name="birthday_active" value="on" ${b.birthday_active ? "checked" : ""} /> Birthday Freebies aktif</label>
         <label class="checkline"><input type="checkbox" name="active" value="on" ${b.active ? "checked" : ""} /> Merek aktif</label>
         <h3 style="margin-top:14px">Tautan lain</h3>
@@ -1425,7 +1429,7 @@ export function adminMissionsPage(input: {
     "/admin/misi",
     `<h1>Kelola Side Quest</h1>${flashes(input.params)}
      <p class="fine">Foto bukti langsung dapat pecahan stamp. Satu quest sekali per pelanggan. Kalau perlu, stamp quest bisa ditarik.</p>
-     <h2 style="margin-top:16px">Antrian lama</h2>
+     <h2 style="margin-top:16px">Menunggu dicek</h2>
      ${queue || `<p class="fine">Tidak ada yang menunggu.</p>`}
      <h2 style="margin-top:16px">Quest yang sudah masuk</h2>
      ${approved || `<p class="fine">Belum ada.</p>`}
@@ -1441,7 +1445,9 @@ export function adminMissionsPage(input: {
        <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
        <label class="lbl">Mulai</label><input name="starts" type="date" />
        <label class="lbl">Selesai</label><input name="ends" type="date" />
-       <p class="fine">Sekali per pelanggan. Buktinya foto.</p>
+       <p class="fine">Sekali per pelanggan. Buktinya foto. Misi Google, Threads, dan Story tetap 1 stamp.</p>
+       <label class="lbl">Pengecekan otomatis</label>
+       <select name="check_kind"><option value="">Langsung masuk</option><option value="google">Review Google</option><option value="threads">Struk + produk</option><option value="story">Tag Instagram</option></select>
        <label class="checkline"><input type="checkbox" name="mystery" value="on" /> Quest rahasia, judul disembunyikan</label>
        <label class="lbl">Teks godaan saat terkunci</label><input name="tease" maxlength="140" placeholder="Selesaikan side quest dulu" />
        <label class="lbl">Terbuka setelah poin quest (0 = langsung)</label><input name="unlock" placeholder="0" />
@@ -1506,6 +1512,7 @@ export function missionDetailPage(input: {
   tease: string;
   photos: Array<{ src: string; caption: string }>;
   params: URLSearchParams;
+  multi?: boolean;
 }): string {
   const skin = customerSkin(input.brand);
   const slides = input.photos
@@ -1526,7 +1533,8 @@ export function missionDetailPage(input: {
     ? `<p class="fine">${esc(input.tease || "Belum kebuka nih.")}</p>`
     : input.open
       ? `<form method="post" action="/misi/${esc(input.id)}" enctype="multipart/form-data">
-          <label class="lbl">Foto bukti</label><input name="gambar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required />
+          <label class="lbl">Foto bukti</label><input name="gambar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" ${input.multi ? "multiple" : ""} required />
+          ${input.multi ? `<p class="fine">Boleh lebih dari satu foto: struk dan produk.</p>` : ""}
           <button class="btn btn-solid">Kirim bukti</button>
         </form>`
       : `<p class="fine">Quest ini sudah kamu selesaikan.</p>`;
@@ -1591,6 +1599,7 @@ export function adminMissionEditPage(input: {
     sort_order: number;
     limit_kind: string;
     proof_kind?: string;
+    check_kind?: string;
     proof_screenshot: number;
     proof_link: number;
     starts_at?: number | null;
@@ -1629,7 +1638,14 @@ export function adminMissionEditPage(input: {
        <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
        <label class="lbl">Mulai</label><input name="starts" type="date" value="${m.starts_at ? esc(toWibDateInput(m.starts_at)) : ""}" />
        <label class="lbl">Selesai</label><input name="ends" type="date" value="${m.ends_at ? esc(toWibDateInput(m.ends_at)) : ""}" />
-       <p class="fine">Sekali per pelanggan. Buktinya foto.</p>
+       <p class="fine">Sekali per pelanggan. Buktinya foto. Misi Google, Threads, dan Story tetap 1 stamp.</p>
+       <label class="lbl">Pengecekan otomatis</label>
+       <select name="check_kind">
+         <option value="" ${m.check_kind ? "" : "selected"}>Langsung masuk</option>
+         <option value="google" ${m.check_kind === "google" ? "selected" : ""}>Review Google</option>
+         <option value="threads" ${m.check_kind === "threads" ? "selected" : ""}>Struk + produk</option>
+         <option value="story" ${m.check_kind === "story" ? "selected" : ""}>Tag Instagram</option>
+       </select>
        <label class="checkline"><input type="checkbox" name="mystery" ${m.mystery ? "checked" : ""} /> Quest rahasia</label>
        <label class="checkline"><input type="checkbox" name="active" ${m.active ? "checked" : ""} /> Aktif</label>
        <label class="lbl">Teks godaan</label><input name="tease" maxlength="140" value="${esc(m.tease)}" />

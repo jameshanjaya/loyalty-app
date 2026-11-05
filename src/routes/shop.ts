@@ -6,6 +6,7 @@ import { missionInWindow, missionOpen, questLocked } from "../points";
 import * as pdb from "../points-db";
 import { expireCodes, redeemBirthdayCode, redeemPointsReward, redeemTier, submitMission } from "../points-flow";
 import { formatAward, missionQuarters } from "../quest-stamp";
+import { checkProof } from "../vision";
 import { loadBirthdayNotice } from "../birthday-gate";
 import { brandOpen, pickLiveBrand } from "../brands";
 import { mustVerify } from "../wa";
@@ -85,6 +86,7 @@ export async function handleShop(app: App): Promise<Response | null> {
           caption: photo.caption,
         })),
         params: url.searchParams,
+        multi: mission.check_kind === "threads",
       }),
     );
   }
@@ -96,18 +98,31 @@ export async function handleShop(app: App): Promise<Response | null> {
     const mission = await pdb.getMission(db, id);
     if (!mission) return redirect(kartuBonus(null, { err: "umum" }));
     let link = httpsUrl(String(form.get("link") || ""));
-    let r2Key: string | null = null;
-    const file = form.get("gambar");
-    if (file instanceof File && file.size > 0) {
-      const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+    const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+    const files = form.getAll("gambar").filter((item): item is File => item instanceof File && item.size > 0).slice(0, 3);
+    const images: Array<{ bytes: Uint8Array; type: string }> = [];
+    const keys: string[] = [];
+    for (const file of files) {
       if (file.size > 2_000_000 || !allowed.has(file.type)) return redirect(kartuBonus(mission.brand_id, { err: "gambar" }));
-      const keyId = randomId();
-      r2Key = `missions/${keyId}`;
-      await env.BANNERS.put(r2Key, file.stream(), { httpMetadata: { contentType: file.type } });
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const key = `missions/${randomId()}`;
+      await env.BANNERS.put(key, bytes, { httpMetadata: { contentType: file.type } });
+      keys.push(key);
+      images.push({ bytes, type: file.type });
     }
-    const result = await submitMission(db, { member, missionId: id, link, r2Key, now });
+    const r2Key = keys.join(",") || null;
+    const brand = mission.brand_id ? await repo.getBrand(db, mission.brand_id) : null;
+    const proof = await checkProof(env.AI, {
+      kind: mission.check_kind,
+      images,
+      name: member.name,
+      email: member.email,
+      handle: brand?.ig_handle || "",
+    });
+    const result = await submitMission(db, { member, missionId: id, link, r2Key, now, verdict: proof.verdict, failCode: proof.code });
     if (!result.ok) return redirect(kartuBonus(mission.brand_id, { err: result.error }));
-    return redirect(kartuBonus(mission.brand_id, { ok: result.stampsAdded > 0 ? "stampquest" : "misi" }));
+    const ok = result.status === "pending" ? "tunggu" : result.stampsAdded > 0 ? "stampquest" : "misi";
+    return redirect(kartuBonus(mission.brand_id, { ok }));
   }
 
   if (path === "/hadiah" && request.method === "GET") {

@@ -18,6 +18,7 @@ export type Mission = {
   unlock_points_tenths: number;
   sort_order: number;
   points_quarters?: number;
+  check_kind?: string;
   proof_kind?: string;
   starts_at?: number | null;
   ends_at?: number | null;
@@ -107,8 +108,8 @@ export async function insertMission(db: D1Database, row: Mission): Promise<void>
     .prepare(
       `INSERT INTO missions (
          id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at,
-         icon, tag, mystery, tease, unlock_points_tenths, sort_order, proof_kind, starts_at, ends_at, steps, points_quarters
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         icon, tag, mystery, tease, unlock_points_tenths, sort_order, proof_kind, starts_at, ends_at, steps, points_quarters, check_kind
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       row.id,
@@ -132,6 +133,7 @@ export async function insertMission(db: D1Database, row: Mission): Promise<void>
       row.ends_at ?? null,
       row.steps || "",
       row.points_quarters || 0,
+      row.check_kind || "",
     )
     .run();
 }
@@ -141,7 +143,7 @@ export async function updateMission(db: D1Database, row: Mission): Promise<void>
     .prepare(
       `UPDATE missions SET brand_id=?, title=?, description=?, points_tenths=?, proof_screenshot=?, proof_link=?,
         limit_kind=?, active=?, icon=?, tag=?, mystery=?, tease=?, unlock_points_tenths=?, sort_order=?,
-        proof_kind=?, starts_at=?, ends_at=?, steps=?, points_quarters=? WHERE id=?`,
+        proof_kind=?, starts_at=?, ends_at=?, steps=?, points_quarters=?, check_kind=? WHERE id=?`,
     )
     .bind(
       row.brand_id,
@@ -163,6 +165,7 @@ export async function updateMission(db: D1Database, row: Mission): Promise<void>
       row.ends_at ?? null,
       row.steps || "",
       row.points_quarters || 0,
+      row.check_kind || "",
       row.id,
     )
     .run();
@@ -188,15 +191,15 @@ export async function memberMissionState(db: D1Database, memberId: string, missi
 
 export async function insertSubmission(
   db: D1Database,
-  row: { id: string; missionId: string; memberId: string; link: string | null; r2Key: string | null; points: number; now: number; status?: "pending" | "approved" },
+  row: { id: string; missionId: string; memberId: string; link: string | null; r2Key: string | null; points: number; now: number; status?: "pending" | "approved" | "rejected"; note?: string },
 ): Promise<void> {
   const status = row.status || "approved";
   await db
     .prepare(
       `INSERT INTO mission_submissions (id, mission_id, member_id, status, link_url, r2_key, points_tenths, reviewer_note, created_at, reviewed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(row.id, row.missionId, row.memberId, status, row.link, row.r2Key, row.points, row.now, status === "approved" ? row.now : null)
+    .bind(row.id, row.missionId, row.memberId, status, row.link, row.r2Key, row.points, row.note || "", row.now, status === "pending" ? null : row.now)
     .run();
 }
 
