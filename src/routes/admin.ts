@@ -8,7 +8,8 @@ import { normalizeWa, validOutletPin, weakPin } from "../phone";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { OWNER_SESSION_MS } from "../loyalty";
-import { formatPoints, flagsForProof, parsePoints, parsePointsOrZero, proofKind } from "../points";
+import { formatPoints, parsePointsOrZero, proofKind } from "../points";
+import { formatAward, missionQuarters, questQuarters } from "../quest-stamp";
 import * as pdb from "../points-db";
 import { expireCodes, expireDays, expiryNotes, memberPointState, reviewMission, revokeMission } from "../points-flow";
 import { shortDate } from "../time";
@@ -21,7 +22,6 @@ import {
   adminLoginPage,
   ownerPasswordPage,
   bannersPage,
-  adminCatalogPage,
   adminMissionsPage,
   adminMissionEditPage,
   adminTiersPage,
@@ -133,11 +133,6 @@ export async function handleAdmin(app: App): Promise<Response | null> {
         pointsRedeemed: formatPoints(points.redeemed),
         pendingMissions,
         expireDays: await expireDays(db),
-        orderClicks: (await repo.orderClickCounts(db, startOfWibMonth(now), brandId)).map((row) => ({
-          brand: brands.find((b) => b.id === row.brand_id)?.short_name || row.brand_id,
-          platform: orderLabel(row.platform, row.platform),
-          n: row.n,
-        })),
       }),
     );
   }
@@ -285,15 +280,13 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const patch = readBrand(form);
     if (!patch) return back("/admin/aturan", "aturan");
     await repo.saveBrand(db, id, patch);
-    const stores = await readStorePair(form);
-    if (!stores) return back("/admin/aturan", "aturan");
-    await repo.upsertOrderLink(db, { id: randomId(), brandId: id, outletId: null, platform: "gofood", label: "GoFood", url: stores.gofood, sort: 1 });
-    await repo.upsertOrderLink(db, { id: randomId(), brandId: id, outletId: null, platform: "grabfood", label: "GrabFood", url: stores.grabfood, sort: 2 });
     const extraRaw = String(form.get("extra_url") || "").trim();
     if (extraRaw) {
       const extraUrl = httpsUrl(extraRaw);
       const platform = orderPlatform(String(form.get("extra_platform") || ""));
-      if (!extraUrl || !platform || platform === "gofood" || platform === "grabfood") return back("/admin/aturan", "aturan");
+      if (!extraUrl || !platform || platform === "gofood" || platform === "grabfood" || platform === "shopeefood") {
+        return back("/admin/aturan", "aturan");
+      }
       await repo.insertOrderLink(db, {
         id: randomId(),
         brandId: id,
@@ -311,7 +304,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const outlets = await repo.listOutlets(db);
     const brands = await repo.listBrands(db, false);
     const view = outlets.map((o) => ({ ...o, brand_name: brands.find((b) => b.id === o.brand_id)?.name || o.brand_id }));
-    return html(outletsPage(view, brands, await repo.listOrderLinks(db, null), url.searchParams, await repo.listOutletStaff(db)));
+    return html(outletsPage(view, brands, url.searchParams, await repo.listOutletStaff(db)));
   }
 
   if (path === "/admin/outlet" && request.method === "POST") {
@@ -331,10 +324,6 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const outlet = await repo.getOutlet(db, id);
     if (!outlet) return back("/admin/outlet", "aturan");
     const form = await request.formData();
-    const stores = await readStorePair(form);
-    if (!stores) return back("/admin/outlet", "aturan");
-    await repo.upsertOrderLink(db, { id: randomId(), brandId: outlet.brand_id, outletId: outlet.id, platform: "gofood", label: "GoFood", url: stores.gofood, sort: 1 });
-    await repo.upsertOrderLink(db, { id: randomId(), brandId: outlet.brand_id, outletId: outlet.id, platform: "grabfood", label: "GrabFood", url: stores.grabfood, sort: 2 });
     const waRaw = String(form.get("wa") || "").trim();
     const wa = waRaw ? normalizeWa(waRaw) : "";
     if (waRaw && !wa) return back("/admin/outlet", "wa");
@@ -454,7 +443,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
         missions: missions.map((m) => ({
           id: m.id,
           title: m.title,
-          points: formatPoints(m.points_tenths),
+          points: formatAward(missionQuarters(m)),
           limit: m.limit_kind === "week" ? "seminggu" : "sekali",
           active: m.active === 1,
           proof: proofKind(m) === "cashier" ? "kasir" : proofKind(m) === "link" ? "tautan" : "foto",
@@ -484,7 +473,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
           id: row.id,
           title: row.title || "",
           member: row.member_name || "",
-          points: formatPoints(row.points_tenths),
+          points: row.points_tenths > 0 && row.points_tenths <= 4 ? formatAward(row.points_tenths) : formatPoints(row.points_tenths),
         })),
         params: url.searchParams,
       }),
@@ -637,56 +626,22 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     return ok("/admin/aturan", "simpan");
   }
 
-  if (path === "/admin/katalog" && request.method === "GET") {
-    const rewards = await pdb.listRewards(db, null, false);
-    const brands = await repo.listBrands(db, false);
-    return html(
-      adminCatalogPage({
-        rewards: rewards.map((r) => ({
-          id: r.id,
-          brand: brands.find((b) => b.id === r.brand_id)?.short_name || r.brand_id,
-          title: r.title,
-          cost: formatPoints(r.points_tenths),
-          stock: r.stock == null ? "bebas" : String(r.stock),
-          active: r.active === 1,
-          icon: r.icon || "🍵",
-        })),
-        brands: brands.map((b) => ({ id: b.id, name: b.short_name })),
-        params: url.searchParams,
-      }),
-    );
-  }
-
-  if (path === "/admin/katalog" && request.method === "POST") {
-    const form = await request.formData();
-    const points = parsePoints(String(form.get("points") || ""));
-    const title = clip(String(form.get("title") || ""), 60);
-    const brand = await repo.getBrand(db, String(form.get("brand_id") || ""));
-    if (!brand || !title || points == null) return back("/admin/katalog", "aturan");
-    const stockRaw = String(form.get("stock") || "").trim();
-    const stock = stockRaw === "" ? null : Number(stockRaw);
-    if (stock != null && (!Number.isInteger(stock) || stock < 0)) return back("/admin/katalog", "aturan");
-    await pdb.insertReward(db, {
-      id: randomId(),
-      brand_id: brand.id,
-      title,
-      points_tenths: points,
-      stock,
-      image_url: null,
-      r2_key: null,
-      active: form.get("active") === "on" ? 1 : 0,
-      created_at: now,
-      icon: markIcon(String(form.get("icon") || ""), "🍵"),
-    });
-    return ok("/admin/katalog", "simpan");
-  }
+  if (path === "/admin/katalog") return redirect("/admin/tingkat");
 
   if (path === "/admin/tingkat" && request.method === "GET") {
     const tiers = await pdb.listAllTiers(db);
     const brands = await repo.listBrands(db, false);
     return html(
       adminTiersPage({
-        tiers: tiers.map((t) => ({ brand: brands.find((b) => b.id === t.brand_id)?.short_name || t.brand_id, stamps: t.stamps, reward: t.reward_text })),
+        tiers: tiers.map((t) => ({
+          id: t.id,
+          brand: brands.find((b) => b.id === t.brand_id)?.short_name || t.brand_id,
+          stamps: t.stamps,
+          reward: t.reward_text,
+          icon: t.icon || "🎁",
+          stock: t.stock == null ? "tak terbatas" : String(t.stock),
+          active: t.active === 1,
+        })),
         brands: brands.map((b) => ({ id: b.id, name: b.short_name })),
         params: url.searchParams,
       }),
@@ -696,10 +651,37 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   if (path === "/admin/tingkat" && request.method === "POST") {
     const form = await request.formData();
     const brand = await repo.getBrand(db, String(form.get("brand_id") || ""));
-    const stamps = Number(form.get("stamps") || 0);
+    const typed = Number(form.get("stamps") || 0);
+    const preset = Number(form.get("preset") || 0);
+    const stamps = Number.isInteger(typed) && typed >= 1 ? typed : preset;
     const reward = clip(String(form.get("reward_text") || ""), 80);
-    if (!brand || !reward || !Number.isInteger(stamps) || stamps < 1 || stamps > 50) return back("/admin/tingkat", "aturan");
-    await pdb.insertTier(db, { id: randomId(), brand_id: brand.id, stamps, reward_text: reward, sort_order: stamps, active: 1 });
+    const stockRaw = String(form.get("stock") || "").trim();
+    const stock = stockRaw === "" ? null : Number(stockRaw);
+    if (!brand || !reward || !Number.isInteger(stamps) || stamps < 1 || stamps > 999) return back("/admin/tingkat", "aturan");
+    if (stock != null && (!Number.isInteger(stock) || stock < 0)) return back("/admin/tingkat", "aturan");
+    const id = randomId();
+    const image = await storeImage(env, form.get("gambar"), `redeem/${id}`);
+    if (form.get("gambar") instanceof File && (form.get("gambar") as File).size > 0 && !image) return back("/admin/tingkat", "gambar");
+    await pdb.insertTier(db, {
+      id,
+      brand_id: brand.id,
+      stamps,
+      reward_text: reward,
+      sort_order: stamps,
+      active: form.get("active") === "on" ? 1 : 0,
+      icon: markIcon(String(form.get("icon") || ""), "🎁"),
+      stock,
+      image_url: null,
+      r2_key: image?.key || null,
+    });
+    return ok("/admin/tingkat", "simpan");
+  }
+
+  const tierToggle = path.match(/^\/admin\/tingkat\/([A-Za-z0-9_-]+)\/aktif$/);
+  if (tierToggle && request.method === "POST") {
+    const tier = await pdb.getTier(db, tierToggle[1] || "");
+    if (!tier) return back("/admin/tingkat", "umum");
+    await pdb.setTierActive(db, tier.id, tier.active ? 0 : 1);
     return ok("/admin/tingkat", "simpan");
   }
 
@@ -746,16 +728,6 @@ function activityFilter(url: URL) {
     from: dari || undefined,
     to: sampaiHari ? sampaiHari + 86_400_000 - 1 : undefined,
   };
-}
-
-function readStorePair(form: FormData): { gofood: string; grabfood: string } | null {
-  const goRaw = String(form.get("gofood") || "").trim();
-  const grabRaw = String(form.get("grabfood") || "").trim();
-  const gofood = goRaw ? httpsUrl(goRaw) : "";
-  const grabfood = grabRaw ? httpsUrl(grabRaw) : "";
-  if (goRaw && !gofood) return null;
-  if (grabRaw && !grabfood) return null;
-  return { gofood: gofood || "", grabfood: grabfood || "" };
 }
 
 function readBrand(form: FormData) {
@@ -817,11 +789,9 @@ function hexOrEmpty(raw: string): string | null {
 
 function readMission(form: FormData) {
   const title = clip(String(form.get("title") || ""), 80);
-  const points = parsePoints(String(form.get("points") || ""));
-  const kindRaw = String(form.get("proof") || "");
-  const kind = kindRaw === "link" || kindRaw === "cashier" ? kindRaw : kindRaw === "upload" ? "upload" : "";
-  if (!title || points == null || !kind) return null;
-  const brandId = String(form.get("brand_id") || "") || null;
+  const quarters = questQuarters(String(form.get("points") || ""));
+  const brandId = String(form.get("brand_id") || "");
+  if (!title || !quarters || !brandId) return null;
   const tagRaw = String(form.get("tag") || "");
   const tag = tagRaw === "new" || tagRaw === "limited" ? tagRaw : "";
   const unlock = parsePointsOrZero(String(form.get("unlock") || "0"));
@@ -833,16 +803,16 @@ function readMission(form: FormData) {
   const ends = endRaw ? parseWibDate(endRaw) : null;
   if (startRaw && starts == null) return null;
   if (endRaw && ends == null) return null;
-  const flags = flagsForProof(kind);
   return {
     brand_id: brandId,
     title,
     description: clip(String(form.get("description") || ""), 240),
-    points_tenths: points,
-    proof_screenshot: flags.shot,
-    proof_link: flags.link,
-    proof_kind: kind,
-    limit_kind: String(form.get("limit_kind") || "") === "week" ? "week" : "once",
+    points_tenths: quarters,
+    points_quarters: quarters,
+    proof_screenshot: 1,
+    proof_link: 0,
+    proof_kind: "upload",
+    limit_kind: "once" as const,
     icon: markIcon(String(form.get("icon") || ""), "🍃"),
     tag,
     mystery: form.get("mystery") === "on" ? 1 : 0,

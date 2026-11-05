@@ -86,9 +86,68 @@ function bootReel() {
   });
 }
 
+function bootScan() {
+  let loading = false;
+  document.querySelectorAll("[data-scan]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (window.__loyaltyScan) {
+        window.__loyaltyScan();
+        return;
+      }
+      if (loading) return;
+      loading = true;
+      const tag = document.createElement("script");
+      tag.type = "module";
+      tag.src = "/scan.js";
+      tag.onerror = () => {
+        loading = false;
+        const root = document.querySelector("[data-scanner]");
+        const fallback = root && root.querySelector("[data-scan-fallback]");
+        if (root) root.hidden = false;
+        if (fallback) fallback.hidden = false;
+      };
+      document.body.appendChild(tag);
+    });
+  });
+  document.querySelectorAll("[data-scan-cancel]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const root = document.querySelector("[data-scanner]");
+      if (root) root.hidden = true;
+    });
+  });
+}
+
+function bootBirthday() {
+  document.querySelectorAll("[data-bday]").forEach((el) => {
+    const target = Number(el.getAttribute("data-bday"));
+    const label = el.querySelector("[data-bday-label]");
+    if (!label || !Number.isFinite(target)) return;
+    let reloaded = false;
+    const tick = () => {
+      const left = target - Date.now();
+      if (left <= 0) {
+        if (!reloaded) {
+          reloaded = true;
+          location.reload();
+        }
+        return;
+      }
+      const total = Math.floor(left / 60000);
+      const days = Math.floor(total / 1440);
+      const hours = Math.floor((total % 1440) / 60);
+      const minutes = total % 60;
+      label.textContent = `Claim your gift in ${days} days ${hours} hours ${minutes} minutes`;
+    };
+    tick();
+    setInterval(tick, 60000);
+  });
+}
+
 function boot() {
   bootPoll();
   bootReel();
+  bootScan();
+  bootBirthday();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {

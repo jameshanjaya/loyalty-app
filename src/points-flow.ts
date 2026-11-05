@@ -8,6 +8,7 @@ import * as repo from "./repo";
 import type { Brand, Member } from "./types";
 import { maskName } from "./format";
 import { logEvent } from "./log";
+import { missionQuarters } from "./quest-stamp";
 import { STAFF_FLAG_REASON, staffFlagDetail } from "./staff";
 
 export type Fail = { ok: false; error: string };
@@ -41,7 +42,10 @@ export async function expireCodes(db: D1Database, now: number): Promise<void> {
     if (!won) continue;
     if (plan.points > 0) await restoreRedeem(db, row, now);
     if (plan.stamps > 0) await pdb.refundStamps(db, row.member_id, row.brand_id, plan.stamps, now);
-    if (row.stock_held && row.reward_ref) await pdb.returnStock(db, row.reward_ref);
+    if (row.stock_held && row.reward_ref) {
+      if (row.kind === "stamp") await pdb.returnTierStock(db, row.reward_ref);
+      else await pdb.returnStock(db, row.reward_ref);
+    }
     logEvent("code_expired", { code: row.id, kind: row.kind });
   }
 }
@@ -130,8 +134,13 @@ export async function redeemTier(db: D1Database, member: Member, tierId: string,
   if (!tier || !tier.active) return { ok: false, error: "umum" };
   const card = await repo.ensureCard(db, member.id, tier.brand_id, now);
   if (!tierRedeem(card.stamps, tier.stamps).ok) return { ok: false, error: "kurang" };
+  const stock = await pdb.takeTierStock(db, tier.id);
+  if (stock === "empty") return { ok: false, error: "stok" };
   const left = await pdb.holdStamps(db, member.id, tier.brand_id, tier.stamps, now);
-  if (left == null) return { ok: false, error: "kurang" };
+  if (left == null) {
+    if (stock === "taken") await pdb.returnTierStock(db, tier.id);
+    return { ok: false, error: "kurang" };
+  }
   const code = await saveCode(db, {
     memberId: member.id,
     brandId: tier.brand_id,
@@ -140,7 +149,7 @@ export async function redeemTier(db: D1Database, member: Member, tierId: string,
     ref: tier.id,
     points: 0,
     stamps: tier.stamps,
-    stockHeld: 0,
+    stockHeld: stock === "taken" ? 1 : 0,
     now,
   });
   logEvent("code_stamp", { member: member.id, tier: tier.id });
@@ -248,45 +257,65 @@ async function dbBumpRedeems(db: D1Database, memberId: string, brandId: string) 
 export async function submitMission(
   db: D1Database,
   input: { member: Member; missionId: string; link: string | null; r2Key: string | null; now: number },
-): Promise<Fail | { ok: true }> {
+): Promise<Fail | { ok: true; stampsAdded: number }> {
   const mission = await pdb.getMission(db, input.missionId);
-  if (!mission || !mission.active) return { ok: false, error: "umum" };
+  if (!mission || !mission.active || !mission.brand_id) return { ok: false, error: "umum" };
   if (!missionInWindow(mission.starts_at, mission.ends_at, input.now)) return { ok: false, error: "misi" };
-  const kind = proofKind(mission);
-  if (kind === "cashier") return { ok: false, error: "misi" };
   const earned = await pdb.lifetimeEarned(db, input.member.id);
   if (questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned })) {
     return { ok: false, error: "misi" };
   }
-  if (kind === "link" && !input.link) return { ok: false, error: "bukti" };
-  if (kind === "upload" && !input.r2Key) return { ok: false, error: "bukti" };
+  if (!input.r2Key) return { ok: false, error: "bukti" };
   const state = await pdb.memberMissionState(db, input.member.id, mission.id);
-  const limit = mission.limit_kind === "week" ? "week" : "once";
-  if (!missionOpen({ limit, hasPending: state.pending, lastApprovedAt: state.lastApprovedAt, now: input.now })) {
+  if (!missionOpen({ limit: "once", hasPending: state.pending, lastApprovedAt: state.lastApprovedAt, now: input.now })) {
     return { ok: false, error: "misi" };
   }
+  const quarters = missionQuarters(mission);
+  if (!quarters) return { ok: false, error: "umum" };
   const id = randomId();
   await pdb.insertSubmission(db, {
     id,
     missionId: mission.id,
     memberId: input.member.id,
-    link: input.link,
+    link: null,
     r2Key: input.r2Key,
-    points: mission.points_tenths,
+    points: quarters,
     now: input.now,
     status: "approved",
   });
-  await grantEarned(db, {
+  const moved = await repo.adjustQuestProgress(db, {
     memberId: input.member.id,
     brandId: mission.brand_id,
-    delta: mission.points_tenths,
-    reason: "mission",
-    refId: id,
+    quarterDelta: quarters,
     now: input.now,
   });
+  await pdb.addLedger(db, {
+    id: randomId(),
+    memberId: input.member.id,
+    brandId: mission.brand_id,
+    delta: quarters,
+    reason: "quest",
+    refId: id,
+    now: input.now,
+    earnedAt: input.now,
+    expiresAt: null,
+  });
   await logMission(db, input.member.id, mission.brand_id, mission.title, input.now);
-  logEvent("mission_ok", { mission: mission.id, member: input.member.id });
-  return { ok: true };
+  if (moved.stampDelta > 0) {
+    await logActivity(db, {
+      type: "stamp",
+      memberId: input.member.id,
+      brandId: mission.brand_id,
+      outletId: null,
+      sessionId: null,
+      delta: moved.stampDelta,
+      after: moved.stamps,
+      note: mission.title,
+      now: input.now,
+    });
+  }
+  logEvent("mission_ok", { mission: mission.id, member: input.member.id, stamps: moved.stampDelta });
+  return { ok: true, stampsAdded: moved.stampDelta };
 }
 
 export async function grantCashierMission(
@@ -330,33 +359,46 @@ export async function grantCashierMission(
   return { ok: true };
 }
 
-export async function revokeMission(db: D1Database, id: string, now: number): Promise<Fail | { ok: true; taken: number }> {
+export async function revokeMission(db: D1Database, id: string, now: number): Promise<Fail | { ok: true; taken: number; stampDelta: number }> {
   const row = await pdb.getSubmission(db, id);
   if (!row || row.status !== "approved") return { ok: false, error: "umum" };
-  await refreshMember(db, row.member_id, now);
-  const ledger = asLots(await pdb.listMemberLedger(db, row.member_id));
-  const { open } = splitLots(ledger, now, await expireDays(db));
-  const grants = await pdb.listRefLedger(db, row.id, "mission");
-  const plan = allocateUpTo(open, row.points_tenths, grants[0]?.id || null);
-  for (const take of plan.takes) {
+  const mission = await pdb.getMission(db, row.mission_id);
+  const brandId = mission?.brand_id;
+  const quarters = row.points_tenths > 0 && row.points_tenths <= 4 ? row.points_tenths : missionQuarters(mission || { points_tenths: row.points_tenths });
+  let stampDelta = 0;
+  if (brandId && quarters > 0) {
+    const moved = await repo.adjustQuestProgress(db, { memberId: row.member_id, brandId, quarterDelta: -quarters, now });
+    stampDelta = moved.stampDelta;
     await pdb.addLedger(db, {
-      id: `rv_${row.id}_${take.id}`,
+      id: `rv_${row.id}`,
       memberId: row.member_id,
-      brandId: null,
-      delta: -take.amount,
-      reason: "revoke",
+      brandId,
+      delta: -quarters,
+      reason: "quest_revoke",
       refId: row.id,
       now,
-      earnedAt: take.earnedAt,
-      expiresAt: take.expiresAt,
-      sourceId: take.id,
+      earnedAt: now,
+      expiresAt: null,
     });
+    if (stampDelta !== 0) {
+      await logActivity(db, {
+        type: "cancel",
+        memberId: row.member_id,
+        brandId,
+        outletId: null,
+        sessionId: null,
+        delta: stampDelta,
+        after: moved.stamps,
+        note: "tarik quest",
+        now,
+      });
+    }
   }
-  const won = await pdb.markRevoked(db, row.id, "poin ditarik", now);
+  const won = await pdb.markRevoked(db, row.id, "stamp ditarik", now);
   if (!won) return { ok: false, error: "umum" };
-  await repo.insertAdminLog(db, { id: randomId(), action: "tarik-poin", detail: `${row.id} ${plan.taken}`, now });
-  logEvent("mission_revoke", { id: row.id, taken: plan.taken });
-  return { ok: true, taken: plan.taken };
+  await repo.insertAdminLog(db, { id: randomId(), action: "tarik-poin", detail: `${row.id} q=${quarters} stamp=${stampDelta}`, now });
+  logEvent("mission_revoke", { id: row.id, quarters, stampDelta });
+  return { ok: true, taken: quarters, stampDelta };
 }
 
 export async function reviewMission(db: D1Database, input: { id: string; approve: boolean; now: number }): Promise<Fail | { ok: true }> {

@@ -2,11 +2,10 @@ import { randomId } from "../crypto";
 import { httpsUrl } from "../format";
 import { html, json, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
-import { expiryCopy } from "../expiry";
-import { formatPoints, missionInWindow, missionOpen, pickLevel, proofKind, questLocked, questProgress, weekStreak } from "../points";
+import { formatPoints, missionInWindow, missionOpen, proofKind, questLocked, questProgress, weekStreak } from "../points";
 import * as pdb from "../points-db";
-import { expireCodes, memberPointState, redeemBirthdayCode, redeemPointsReward, redeemTier, submitMission } from "../points-flow";
-import { shortDate } from "../time";
+import { expireCodes, redeemBirthdayCode, redeemPointsReward, redeemTier, submitMission } from "../points-flow";
+import { formatAward, missionQuarters, questProgressLabel } from "../quest-stamp";
 import { mustVerify } from "../wa";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
@@ -40,51 +39,33 @@ export async function handleShop(app: App): Promise<Response | null> {
   }
   if (mustVerify(env, member)) return redirect("/verifikasi");
 
-  const pointNote = async () => {
-    const state = await memberPointState(db, member.id, now);
-    return {
-      points: formatPoints(state.balance),
-      balance: state.balance,
-      expiry: state.batch
-        ? expiryCopy({ points: formatPoints(state.batch.tenths), date: shortDate(state.batch.expiresAt), days: state.days, soon: state.batch.soon })
-        : null,
-    };
-  };
-
   if (path === "/misi" && request.method === "GET") {
     const missions = (await pdb.listMissions(db, true)).filter((mission) => missionInWindow(mission.starts_at, mission.ends_at, now));
     const brands = await repo.listBrands(db, false);
-    const noted = await pointNote();
     const earned = await pdb.lifetimeEarned(db, member.id);
-    const allLevels = await pdb.listLevels(db);
-    const globals = allLevels.filter((level) => !level.brand_id);
-    const ladder = globals.length ? globals : allLevels;
-    const level = pickLevel(
-      earned,
-      ladder.map((row) => ({ name: row.name, minTenths: row.min_points_tenths, icon: row.icon })),
-    );
     const streak = weekStreak(await pdb.visitMarks(db, member.id), now);
-    const celebrate = await pdb.recentApproval(db, member.id, now - 3 * 60 * 1000);
+    const celebrate = url.searchParams.get("ok") === "stampquest";
+    const picked = brands.find((b) => b.id === url.searchParams.get("merek")) || brands[0] || null;
+    const card = picked ? await repo.getCard(db, member.id, picked.id) : null;
     const view = [];
     for (const mission of missions) {
       const state = await pdb.memberMissionState(db, member.id, mission.id);
-      const limit = mission.limit_kind === "week" ? "week" : "once";
       const locked = questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned });
       const open =
         !locked &&
         missionOpen({
-          limit,
+          limit: "once",
           hasPending: state.pending,
           lastApprovedAt: state.lastApprovedAt,
           now,
         });
-      const progress = questProgress({ limit, pending: state.pending, lastApprovedAt: state.lastApprovedAt, now });
+      const progress = questProgress({ limit: "once", pending: state.pending, lastApprovedAt: state.lastApprovedAt, now });
       view.push({
         id: mission.id,
         title: mission.title,
         description: mission.description,
-        points: formatPoints(mission.points_tenths),
-        limit: limit === "week" ? "Sekali seminggu" : "Sekali saja",
+        points: formatAward(missionQuarters(mission)),
+        limit: "Sekali saja",
         needShot: proofKind(mission) === "upload",
         needLink: proofKind(mission) === "link",
         cashier: proofKind(mission) === "cashier",
@@ -100,17 +81,11 @@ export async function handleShop(app: App): Promise<Response | null> {
         statusLabel: progress.label,
       });
     }
-    const hint = level.next ? `${formatPoints(level.remaining)} poin lagi buat ${level.next.name}` : "Level tertinggi. Kamu keren!";
-    const picked = brands.find((b) => b.id === url.searchParams.get("merek")) || brands[0] || null;
     return html(
       missionsPage({
-        points: noted.points,
-        expiry: noted.expiry,
+        stamps: card?.stamps || 0,
+        progress: questProgressLabel(card?.remainder_quarters || 0),
         streak,
-        levelName: level.current.name,
-        levelIcon: level.current.icon,
-        levelPct: Math.round(level.progress * 100),
-        levelHint: hint,
         celebrate,
         brand: picked,
         missions: view,
@@ -126,11 +101,9 @@ export async function handleShop(app: App): Promise<Response | null> {
     const brands = await repo.listBrands(db, false);
     const earned = await pdb.lifetimeEarned(db, member.id);
     const state = await pdb.memberMissionState(db, member.id, mission.id);
-    const limit = mission.limit_kind === "week" ? "week" : "once";
     const locked = questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned });
-    const open = !locked && missionOpen({ limit, hasPending: state.pending, lastApprovedAt: state.lastApprovedAt, now });
+    const open = !locked && missionOpen({ limit: "once", hasPending: state.pending, lastApprovedAt: state.lastApprovedAt, now });
     const photos = await pdb.listMissionPhotos(db, mission.id);
-    const noted = await pointNote();
     const picked = brands.find((b) => b.id === (url.searchParams.get("merek") || mission.brand_id)) || brands[0] || null;
     return html(
       missionDetailPage({
@@ -139,8 +112,7 @@ export async function handleShop(app: App): Promise<Response | null> {
         title: mission.title,
         description: mission.description,
         steps: mission.steps || "",
-        points: formatPoints(mission.points_tenths),
-        kind: proofKind(mission),
+        points: formatAward(missionQuarters(mission)),
         open,
         locked,
         tease: mission.tease || "",
@@ -148,7 +120,6 @@ export async function handleShop(app: App): Promise<Response | null> {
           src: photo.r2_key ? `/media/panduan/${photo.id}` : photo.image_url || "",
           caption: photo.caption,
         })),
-        expiry: noted.expiry,
         params: url.searchParams,
       }),
     );
@@ -172,30 +143,31 @@ export async function handleShop(app: App): Promise<Response | null> {
     }
     const result = await submitMission(db, { member, missionId: id, link, r2Key, now });
     if (!result.ok) return go("/misi", result.error);
-    return redirect("/misi?ok=misi");
+    const merek = mission.brand_id ? `&merek=${encodeURIComponent(mission.brand_id)}` : "";
+    return redirect(result.stampsAdded > 0 ? `/misi?ok=stampquest${merek}` : `/misi?ok=misi${merek}`);
   }
 
   if (path === "/hadiah" && request.method === "GET") {
     const brands = await repo.listBrands(db, true);
     const brand = brands.find((b) => b.id === url.searchParams.get("merek")) || brands[0];
     if (!brand) return html(messagePage("Kosong", "Belum ada merek."));
-    const noted = await pointNote();
-    const balance = noted.balance;
-    const rewards = await pdb.listRewards(db, brand.id, true);
+    const card = await repo.getCard(db, member.id, brand.id);
+    const stamps = card?.stamps || 0;
+    const rewards = await pdb.listTiers(db, brand.id);
     return html(
       catalogPage({
-        points: noted.points,
-        expiry: noted.expiry,
+        stamps,
         brandName: brand.short_name,
         brand,
         brands: brands.map((b) => ({ id: b.id, name: b.short_name, on: b.id === brand.id })),
         rewards: rewards.map((r) => ({
           id: r.id,
-          title: r.title,
-          cost: formatPoints(r.points_tenths),
+          title: r.reward_text,
+          cost: `${r.stamps} stamp`,
           note: r.stock == null ? "" : r.stock === 0 ? "Habis" : `Sisa ${r.stock}`,
-          ready: balance >= r.points_tenths && (r.stock == null || r.stock > 0),
-          icon: r.icon || "🍵",
+          ready: stamps >= r.stamps && (r.stock == null || r.stock > 0),
+          icon: r.icon || "🎁",
+          image: r.r2_key ? `/media/redeem/${r.id}` : r.image_url || "",
           soldOut: r.stock === 0,
         })),
         params: url.searchParams,
@@ -215,7 +187,7 @@ export async function handleShop(app: App): Promise<Response | null> {
     if (!sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
     const form = await request.formData();
     const result = await redeemTier(db, member, String(form.get("tier") || ""), now);
-    if (!result.ok) return go("/kartu", result.error);
+    if (!result.ok) return go(form.get("dari") === "hadiah" ? "/hadiah" : "/kartu", result.error);
     return redirect(`/kode/${result.code.id}`);
   }
 

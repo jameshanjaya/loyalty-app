@@ -1,6 +1,8 @@
 import { esc, formatInt, maskName, maskWa, prettyWa } from "./format";
-import { orderLabel, type OrderLink } from "./orders";
+import { hiddenOrderPlatform, orderLabel, type OrderLink } from "./orders";
+import { countdownText, type BirthdayNotice } from "./birthday";
 import { progressCopy } from "./loyalty";
+import { missionQuarters, questProgressLabel } from "./quest-stamp";
 import { errText, okText } from "./messages";
 import { bannerLive } from "./repo";
 import { clock, feedTime, memberSince, toWibDateInput } from "./time";
@@ -15,15 +17,6 @@ const WHISK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 const BOWL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4.2 10.2h15.6c-.7 5.4-3.5 8.2-7.8 8.2s-7.1-2.8-7.8-8.2z"/><path d="M8 10.2c.4-2.8 1.7-4.4 4-4.4s3.6 1.6 4 4.4"/><path d="M9.2 8.2h.01M12 7.6h.01M14.6 8.4h.01"/></svg>`;
 const PLATE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><ellipse cx="12" cy="15.2" rx="8" ry="3.3"/><ellipse cx="12" cy="14.4" rx="5.2" ry="1.7"/><path d="M8 13.6c.7-2.6 2.2-4 4-4s3.3 1.4 4 4"/><path d="M10.2 12.4h3.6"/></svg>`;
 
-export type ExpiryNote = { line: string; soon: boolean; reminder: string } | null;
-
-function expiryBlock(note: ExpiryNote | undefined): string {
-  if (!note) return "";
-  const badge = note.soon ? `<span class="soon">Segera hangus</span>` : "";
-  const reminder = note.reminder ? `<p class="hangus">${badge}${esc(note.reminder)}</p>` : "";
-  return `${reminder}<p class="fine">${esc(note.line)}</p>`;
-}
-
 function stampMark(brand: Brand): string {
   if (brand.stamp_key) return `<img class="stampimg" src="/media/stamp/${esc(brand.id)}" alt="" />`;
   if (brand.stamp_icon === "bowl" || (!brand.stamp_icon && brand.id === "soto-oseng")) return BOWL;
@@ -35,10 +28,6 @@ function stampMark(brand: Brand): string {
 function logoSlot(brand: Brand): string {
   if (brand.logo_key) return `<div class="logo-slot"><img src="/media/logo/${esc(brand.id)}" alt="${esc(brand.short_name)}" /></div>`;
   return `<div class="logo-slot" aria-label="Logo ${esc(brand.short_name)}">LOGO</div>`;
-}
-
-function coin(points: string): string {
-  return `<span class="poinbadge"><span class="coin" aria-hidden="true">🍃</span><b>${esc(points)}</b><span>Poin</span></span>`;
 }
 
 function confetti(): string {
@@ -180,13 +169,10 @@ function orderBlock(
   booking: { id: string; name: string } | null,
   pickBooking: boolean,
 ): string {
-  if (!links.length && !booking && !pickBooking) return "";
-  const primary = links.filter((link) => link.platform === "gofood" || link.platform === "grabfood");
-  const extras = links.filter((link) => link.platform !== "gofood" && link.platform !== "grabfood");
-  const badge = (link: OrderLink) => {
-    const kind = link.platform === "gofood" || link.platform === "grabfood" ? link.platform : "extra";
-    return `<a class="obadge ${kind}" href="/pesan/${esc(link.id)}" target="_blank" rel="noopener noreferrer">${esc(orderLabel(link.platform, link.label))}</a>`;
-  };
+  const extras = links.filter((link) => !hiddenOrderPlatform(link.platform));
+  if (!extras.length && !booking && !pickBooking) return "";
+  const badge = (link: OrderLink) =>
+    `<a class="obadge extra" href="/pesan/${esc(link.id)}" target="_blank" rel="noopener noreferrer">${esc(orderLabel(link.platform, link.label))}</a>`;
   const chips = outlets.length
     ? `<div class="pills">${[`<a class="pill${!outlets.some((o) => o.on) ? " on" : ""}" href="/kartu?merek=${esc(brandId)}">Semua outlet</a>`]
         .concat(outlets.map((o) => `<a class="pill${o.on ? " on" : ""}" href="/kartu?merek=${esc(brandId)}&outlet=${esc(o.id)}">${esc(o.name)}</a>`))
@@ -198,13 +184,21 @@ function orderBlock(
       ? `<p class="fine">Pilih outlet dulu buat order / booking.</p>`
       : "";
   return `<section class="card order">
-    <div class="eyebrow">Pesan online</div>
-    <h2>Pesan sekarang</h2>
+    <div class="eyebrow">Order</div>
+    <h2>Order / Booking</h2>
     ${chips}
     ${book}
-    ${primary.length ? `<div class="order-row">${primary.map(badge).join("")}</div>` : ""}
     ${extras.length ? `<div class="order-extra">${extras.map(badge).join("")}</div>` : ""}
   </section>`;
+}
+
+function birthdayBlock(notice: BirthdayNotice, reward: string, brandId: string, now: number): string {
+  if (!notice.show) return "";
+  if (notice.phase === "open") {
+    return `<section class="bday"><div class="kicker">ULANG TAHUN</div><h3>Hadiah: ${esc(reward)}</h3><p>Sekali setahun. Tukar di sini, kasir masukkan kodenya.</p><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(brandId)}" /><button class="btn btn-solid">Tukar hadiah ultah</button></form></section>`;
+  }
+  const note = notice.phase === "claimed" ? `<p class="bday-note">Udah diklaim, see you next year</p>` : "";
+  return `<section class="bday" data-bday="${notice.target}"><div class="kicker">ULANG TAHUN</div>${note}<p data-bday-label>${esc(countdownText(notice.target, now))}</p></section>`;
 }
 
 function tabbar(on: "kartu" | "quest" | "hadiah" | "profil", brandId: string): string {
@@ -212,7 +206,7 @@ function tabbar(on: "kartu" | "quest" | "hadiah" | "profil", brandId: string): s
   const links: Array<["kartu" | "quest" | "hadiah" | "profil", string, string, string]> = [
     ["kartu", `/kartu${q}`, "Kartu", ICO_CARD],
     ["quest", `/misi${q}`, "Side Quest", ICO_QUEST],
-    ["hadiah", `/hadiah${q}`, "Hadiah", GIFT],
+    ["hadiah", `/hadiah${q}`, "Redeem", GIFT],
     ["profil", `/profil${q}`, "Profil", ICO_USER],
   ];
   return `<nav class="tabbar" aria-label="Menu">${links
@@ -332,14 +326,13 @@ export function cardPage(input: {
   history: ActivityRow[];
   now: number;
   params: URLSearchParams;
-  birthday?: string | null;
-  points?: string;
+  birthday: BirthdayNotice;
+  birthdayReward: string;
   tiers?: Array<{ id: string; stamps: number; reward: string; ready: boolean }>;
   orders?: OrderLink[];
   orderOutlets?: Array<{ id: string; name: string; on: boolean }>;
   booking?: { id: string; name: string } | null;
   pickBooking?: boolean;
-  expiry?: ExpiryNote;
 }): string {
   const card = input.cards.get(input.brand.id);
   const stamps = card?.stamps ?? 0;
@@ -373,14 +366,15 @@ export function cardPage(input: {
             <p class="fine">Member sejak ${esc(memberSince(input.member.created_at))}</p>
           </div>
         </div>
-        <div class="poincol">${coin(input.points || "0")}</div>
       </section>
-      ${input.expiry ? `<section class="card hangus-card">${expiryBlock(input.expiry)}</section>` : ""}
       <nav class="switch" aria-label="Merek">${pills}</nav>
       ${flashes(input.params)}
       <section class="card">
         <div class="split"><h2>Kartu stamp</h2><b class="count">${stamps}/${input.brand.stamps_required}</b></div>
         ${stampGrid(stamps, input.brand.stamps_required, stampMark(input.brand))}
+        <p class="fine">${esc(questProgressLabel(card?.remainder_quarters || 0))}</p>
+        <button type="button" class="btn btn-solid" data-scan>Collect Stamps</button>
+        <p class="fine">Arahin kamera ke QR di kasir ya</p>
         <p class="lead">${esc(copy.headline)}</p>
         <p class="fine">${esc(ruleLine(input.brand))}</p>
         ${(input.tiers || [])
@@ -394,8 +388,25 @@ export function cardPage(input: {
           .join("")}
       </section>
       ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id, input.booking || null, Boolean(input.pickBooking))}
-      ${input.birthday ? `<section class="bday"><div class="kicker">ULANG TAHUN</div><h3>Hadiah: ${esc(input.birthday)}</h3><p>Sekali setahun. Tukar di sini, kasir masukkan kodenya.</p><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(input.brand.id)}" /><button class="btn btn-solid">Tukar hadiah ultah</button></form></section>` : ""}
+      ${birthdayBlock(input.birthday, input.birthdayReward, input.brand.id, input.now)}
       <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
+      <div class="scan-sheet" data-scanner hidden>
+        <div class="scan-top">
+          <p>Arahin kamera ke QR di kasir ya</p>
+          <button type="button" class="textlink" data-scan-cancel>Batal</button>
+        </div>
+        <div class="scan-stage" data-scan-stage>
+          <video data-scan-video playsinline muted autoplay></video>
+          <div class="scan-frame" aria-hidden="true"></div>
+        </div>
+        <p class="scan-msg" data-scan-msg></p>
+        <button type="button" class="btn btn-line" data-scan-torch hidden>Senter</button>
+        <div class="scan-fallback" data-scan-fallback hidden>
+          <h2>Minta kasir ketik nomor WA kamu</h2>
+          <p class="fine">Kamera tidak bisa dipakai. Kasir bisa ketik nomor WA kamu di tablet. Atau buka kamera HP dan scan QR di kasir dari situ.</p>
+          <button type="button" class="btn btn-solid" data-scan-cancel>Tutup</button>
+        </div>
+      </div>
       ${tabbar("kartu", input.brand.id)}
     </main>`,
     skin.accent,
@@ -632,8 +643,7 @@ const NAV: Array<[string, string]> = [
   ["/admin/banner", "Banner Promo"],
   ["/admin/aturan", "Setting Program"],
   ["/admin/misi", "Side Quest"],
-  ["/admin/katalog", "Hadiah"],
-  ["/admin/tingkat", "Tingkat stamp"],
+  ["/admin/tingkat", "Redeem"],
   ["/admin/outlet", "Outlet & PIN"],
   ["/admin/aktivitas", "Aktivitas"],
   ["/admin/stan", "QR Stan"],
@@ -703,7 +713,6 @@ export function dashboardPage(input: {
   pointsRedeemed: string;
   pendingMissions: number;
   expireDays?: number;
-  orderClicks: Array<{ brand: string; platform: string; n: number }>;
 }): string {
   const chips = [`<a class="chip${input.brand ? "" : " on"}" href="/admin/dasbor">Semua</a>`]
     .concat(input.brands.map((b) => `<a class="chip${input.brand?.id === b.id ? " on" : ""}" href="/admin/dasbor?merek=${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`))
@@ -741,14 +750,7 @@ export function dashboardPage(input: {
       <article class="kpi"><span>Poin masuk bulan ini</span><b>${input.pointsIssued}</b><span>poin disetujui</span></article>
       <article class="kpi"><span>Poin ditukar bulan ini</span><b>${input.pointsRedeemed}</b><span>dari katalog</span></article>
       <article class="kpi"><span>Side Quest menunggu</span><b>${input.pendingMissions}</b><span><a href="/admin/misi">Kelola Side Quest</a></span></article>
-      <article class="kpi"><span>Klik pesan bulan ini</span><b>${input.orderClicks.reduce((sum, row) => sum + row.n, 0)}</b><span>GoFood, GrabFood, dan lain</span></article>
     </section>
-    <article class="panel" style="margin-top:12px"><h2>Pesan online</h2>
-      <table><thead><tr><th>Merek</th><th>Platform</th><th>Klik</th></tr></thead><tbody>${
-        input.orderClicks.map((row) => `<tr><td>${esc(row.brand)}</td><td>${esc(row.platform)}</td><td>${row.n}</td></tr>`).join("") ||
-        `<tr><td colspan="3">Belum ada klik bulan ini.</td></tr>`
-      }</tbody></table>
-    </article>
     <section class="grid-2">
       <article class="panel"><h2>Stamp per hari (14 hari)</h2><div class="bars">${bars}</div></article>
       <article class="panel"><h2>Member paling loyal</h2>
@@ -776,7 +778,7 @@ export function dashboardPage(input: {
         <form method="post" action="/admin/poin" style="margin-top:12px">
           <label class="lbl">Poin hangus setelah (hari)</label>
           <div class="actions"><input name="days" type="number" min="1" max="3650" value="${input.expireDays ?? 60}" required /><button class="btn btn-solid">Simpan</button></div>
-          <p class="fine">Default 60 hari. Poin yang paling lama hangus duluan. Poin yang balik dari kode hangus tetap pakai tanggal asalnya.</p>
+          <p class="fine">Sisa pengaturan lama. Stamp Side Quest tidak hangus. Pelanggan tidak melihat saldo poin.</p>
         </form>
       </article>
     </section>
@@ -1080,12 +1082,10 @@ export function rulesPage(brands: Brand[], links: OrderLink[], params: URLSearch
         <label class="lbl">N hari (kalau pilih hari di sekitar)</label><input name="birthday_days" type="number" min="0" max="30" value="${b.birthday_days ?? 7}" />
         <label class="checkline"><input type="checkbox" name="birthday_active" value="on" ${b.birthday_active ? "checked" : ""} /> Hadiah ulang tahun aktif</label>
         <label class="checkline"><input type="checkbox" name="active" value="on" ${b.active ? "checked" : ""} /> Merek aktif</label>
-        <h3 style="margin-top:14px">Pesan online</h3>
-        <p class="fine">Kosongkan kalau tombolnya tidak dipakai. Tautan outlet di halaman Outlet menimpa tautan merek.</p>
-        <label class="lbl">GoFood (https)</label><input name="gofood" type="url" placeholder="https://gofood.co.id/..." value="${esc(storeUrl(links, b.id, "gofood"))}" />
-        <label class="lbl">GrabFood (https)</label><input name="grabfood" type="url" placeholder="https://food.grab.com/..." value="${esc(storeUrl(links, b.id, "grabfood"))}" />
+        <h3 style="margin-top:14px">Tautan lain</h3>
+        <p class="fine">Order / Booking diatur per outlet. GoFood, GrabFood, dan ShopeeFood tidak ditampilkan.</p>
         <label class="lbl">Tautan tambahan</label>
-        <select name="extra_platform"><option value="">Tidak tambah</option><option value="wa">WhatsApp</option><option value="shopeefood">ShopeeFood</option><option value="other">Lainnya</option></select>
+        <select name="extra_platform"><option value="">Tidak tambah</option><option value="wa">WhatsApp</option><option value="other">Lainnya</option></select>
         <label class="lbl">Nama tombol tambahan</label><input name="extra_label" maxlength="24" placeholder="WhatsApp" />
         <label class="lbl">URL tambahan (https)</label><input name="extra_url" type="url" placeholder="https://wa.me/62..." />
         <button class="btn btn-solid">Simpan</button>
@@ -1104,12 +1104,10 @@ export function rulesPage(brands: Brand[], links: OrderLink[], params: URLSearch
   return adminShell("/admin/aturan", `<h1>Setting program</h1>${flashes(params)}<p class="fine">Teks centang inilah yang dilihat kasir sebelum kasih stamp.</p>${forms}`);
 }
 
-function storeUrl(links: OrderLink[], brandId: string, platform: string, outletId: string | null = null): string {
-  return links.find((link) => link.brand_id === brandId && link.platform === platform && (link.outlet_id || null) === outletId)?.url || "";
-}
-
 function extraLinks(links: OrderLink[], brandId: string): string {
-  const extras = links.filter((link) => link.brand_id === brandId && !link.outlet_id && link.platform !== "gofood" && link.platform !== "grabfood");
+  const extras = links.filter(
+    (link) => link.brand_id === brandId && !link.outlet_id && !hiddenOrderPlatform(link.platform),
+  );
   if (!extras.length) return "";
   return extras
     .map(
@@ -1124,7 +1122,6 @@ function extraLinks(links: OrderLink[], brandId: string): string {
 export function outletsPage(
   outlets: Array<Outlet & { brand_name: string }>,
   brands: Brand[],
-  links: OrderLink[],
   params: URLSearchParams,
   staff: Array<{ outlet_id: string; id: string; name: string; wa: string; email: string | null }> = [],
 ): string {
@@ -1143,10 +1140,7 @@ export function outletsPage(
           <button class="btn btn-line">${o.active ? "Nonaktifkan" : "Aktifkan"}</button>
         </form>
         <form method="post" action="/admin/outlet/${esc(o.id)}/pesan">
-          <h3 style="margin-top:8px">Pesan online outlet ini</h3>
-          <p class="fine">Kalau diisi, tombol di kartu memakai tautan ini, bukan tautan merek.</p>
-          <label class="lbl">GoFood</label><input name="gofood" type="url" value="${esc(storeUrl(links, o.brand_id, "gofood", o.id))}" placeholder="https://" />
-          <label class="lbl">GrabFood</label><input name="grabfood" type="url" value="${esc(storeUrl(links, o.brand_id, "grabfood", o.id))}" placeholder="https://" />
+          <h3 style="margin-top:8px">Order / Booking</h3>
           <label class="lbl">WhatsApp order / booking</label><input name="wa" inputmode="tel" value="${esc(o.wa || "")}" placeholder="0812 3456 4567" />
           <p class="fine">Tombol Order / Booking membuka chat dengan pesan “Halo, mau order/booking di ${esc(o.name)}”. Kosongkan untuk menyembunyikan.</p>
           <button class="btn btn-solid">Simpan tautan</button>
@@ -1250,16 +1244,22 @@ export function emptyDbPage(): string {
   return messagePage("Database masih kosong", "Jalankan npm run setup di komputer, lalu buka lagi.", "/health", "Cek server");
 }
 
+function stampChoices(selected: number): string {
+  const opts: Array<[string, number]> = [
+    ["0,25", 1],
+    ["0,5", 2],
+    ["0,75", 3],
+    ["1", 4],
+  ];
+  return opts.map(([label, quarters]) => `<option value="${label}"${selected === quarters ? " selected" : ""}>${label} stamp</option>`).join("");
+}
+
 export function missionsPage(input: {
-  points: string;
+  stamps: number;
+  progress: string;
   streak: number;
-  levelName: string;
-  levelIcon: string;
-  levelPct: number;
-  levelHint: string;
   celebrate: boolean;
   brand: Brand | null;
-  expiry?: ExpiryNote;
   missions: Array<{
     id: string;
     title: string;
@@ -1290,7 +1290,7 @@ export function missionsPage(input: {
             <div class="qico mystery" aria-hidden="true">?</div>
             <div><div class="qtitle">Quest rahasia</div><p class="fine">${esc(m.tease || "Ada quest yang belum terbuka.")}</p></div>
           </div>
-          <div class="lockline">Belum kebuka nih. Kumpulin ${esc(m.unlock)} poin dulu.</div>
+          <div class="lockline">Belum kebuka nih.</div>
         </section>`;
       }
       const tag = m.tag === "new" ? `<span class="tag tag-new">NEW</span>` : m.tag === "limited" ? `<span class="tag tag-lim">Limited</span>` : "";
@@ -1307,7 +1307,7 @@ export function missionsPage(input: {
           ${m.done ? `<span class="qcheck" aria-label="Selesai">${CHECK}</span>` : ""}
         </div>
         <div class="qfoot">
-          <span class="poinbadge sm"><span class="coin" aria-hidden="true">🍃</span><b>${esc(m.points)}</b></span>
+          <span class="poinbadge sm"><b>${esc(m.points)}</b></span>
           <span class="fine">${esc(m.brand)} · ${esc(m.limit)}</span>
         </div>
         <div class="qbar" role="progressbar" aria-valuenow="${m.pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${m.pct}%"></span></div>
@@ -1323,17 +1323,8 @@ export function missionsPage(input: {
     `${input.celebrate ? confetti() : ""}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
       <header class="hero">
         <div class="hero-kicker">SIDE QUEST</div>
-        <div class="hero-title">Poin kamu</div>
-        <div class="hero-row">${coin(input.points)}${streak}</div>
-        ${expiryBlock(input.expiry)}
-        <div class="level">
-          <div class="qico" aria-hidden="true">${esc(input.levelIcon || "🌱")}</div>
-          <div>
-            <b>${esc(input.levelName)}</b>
-            <div class="qbar light"><span style="width:${Math.max(0, Math.min(100, input.levelPct))}%"></span></div>
-            <p class="hero-fine">${esc(input.levelHint)}</p>
-          </div>
-        </div>
+        <div class="hero-title">${input.stamps} stamp</div>
+        <div class="hero-row"><span class="hero-fine">${esc(input.progress)}</span>${streak}</div>
       </header>
       ${flashes(input.params)}
       ${cards || `<section class="card"><p>Belum ada side quest.</p></section>`}
@@ -1344,24 +1335,24 @@ export function missionsPage(input: {
 }
 
 export function catalogPage(input: {
-  points: string;
+  stamps: number;
   brandName: string;
   brand: Brand;
   brands: Array<{ id: string; name: string; on: boolean }>;
-  rewards: Array<{ id: string; title: string; cost: string; note: string; ready: boolean; icon: string; soldOut: boolean }>;
+  rewards: Array<{ id: string; title: string; cost: string; note: string; ready: boolean; icon: string; image: string; soldOut: boolean }>;
   params: URLSearchParams;
-  expiry?: ExpiryNote;
 }): string {
   const chips = input.brands.map((b) => `<a class="pill${b.on ? " on" : ""}" href="/hadiah?merek=${esc(b.id)}">${esc(b.name)}</a>`).join("");
   const cards = input.rewards
     .map((r) => {
       const action = r.ready
-        ? `<form method="post" action="/hadiah/${esc(r.id)}/tukar"><button class="btn btn-solid">Tukar yuk</button></form>`
-        : `<button class="btn btn-line" type="button" disabled>${r.soldOut ? "Habis" : "Poinnya belum cukup"}</button>`;
+        ? `<form method="post" action="/tukar/stamp"><input type="hidden" name="tier" value="${esc(r.id)}" /><input type="hidden" name="dari" value="hadiah" /><button class="btn btn-solid">Tukar</button></form>`
+        : `<button class="btn btn-line" type="button" disabled>${r.soldOut ? "Habis" : "Stamp belum cukup"}</button>`;
+      const face = r.image ? `<img src="${esc(r.image)}" alt="" />` : esc(r.icon || "🎁");
       return `<article class="goods${r.ready ? "" : " dim"}">
-        <div class="face" aria-hidden="true">${esc(r.icon || "🍵")}</div>
+        <div class="face" aria-hidden="true">${face}</div>
         <h2>${esc(r.title)}</h2>
-        <span class="poinbadge sm"><span class="coin" aria-hidden="true">🍃</span><b>${esc(r.cost)}</b></span>
+        <span class="poinbadge sm"><b>${esc(r.cost)}</b></span>
         ${r.note ? `<p class="fine">${esc(r.note)}</p>` : ""}
         ${action}
       </article>`;
@@ -1369,14 +1360,12 @@ export function catalogPage(input: {
     .join("");
   const skin = customerSkin(input.brand);
   return doc(
-    "Hadiah",
+    "Redeem",
     `<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
       <header class="hero">
-        <div class="hero-kicker">HADIAH</div>
-        <div class="hero-title">Tukar yuk</div>
+        <div class="hero-kicker">REDEEM</div>
+        <div class="hero-title">${input.stamps} stamp</div>
         <div class="hero-sub">${esc(input.brandName)}</div>
-        <div class="hero-row">${coin(input.points)}</div>
-        ${expiryBlock(input.expiry)}
       </header>
       <div class="pills">${chips}</div>
       ${flashes(input.params)}
@@ -1410,7 +1399,7 @@ export function codePage(input: { code: string; label: string; brand: string; sv
             </section>`
           : input.status === "confirmed"
             ? `${confetti()}<section class="card center"><div class="qcheck burst">${CHECK}</div><h2>Yeay, hadiahnya sudah di tangan!</h2><p class="fine">${esc(input.label)}</p><a class="btn btn-solid" href="/kartu">Ke kartu</a></section>`
-            : `<section class="card center"><h2>Kodenya hangus, poin atau stamp-nya balik</h2><a class="btn btn-solid" href="/kartu">Ke kartu</a></section>`
+            : `<section class="card center"><h2>Kodenya hangus, stamp-nya balik</h2><a class="btn btn-solid" href="/kartu">Ke kartu</a></section>`
       }
     </main>`,
     skin.accent,
@@ -1458,43 +1447,37 @@ export function adminMissionsPage(input: {
         <form method="post" action="/admin/misi/${esc(m.id)}/aktif"><button class="textlink">${m.active ? "Matikan" : "Nyalakan"}</button></form></div>`,
     )
     .join("");
-  const options = [`<option value="">Semua merek</option>`].concat(input.brands.map((b) => `<option value="${esc(b.id)}">${esc(b.name)}</option>`)).join("");
+  const options = input.brands.map((b) => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("");
   const badges = input.levels
     .map((level) => `<div class="row"><span>${esc(level.icon)} ${esc(level.name)} · ${esc(level.brand)}</span><b>${esc(level.min)} poin</b></div>`)
     .join("");
   const approved = (input.approved || [])
     .map(
-      (row) => `<div class="row"><span>${esc(row.member)} · ${esc(row.title)} · ${esc(row.points)} poin</span>
-        <form method="post" action="/admin/misi/${esc(row.id)}/tarik"><button class="textlink">Tarik poin</button></form></div>`,
+      (row) => `<div class="row"><span>${esc(row.member)} · ${esc(row.title)} · ${esc(row.points)}</span>
+        <form method="post" action="/admin/misi/${esc(row.id)}/tarik"><button class="textlink">Tarik stamp</button></form></div>`,
     )
     .join("");
   return adminShell(
     "/admin/misi",
     `<h1>Kelola Side Quest</h1>${flashes(input.params)}
-     <p class="fine">Bukti yang masuk langsung disetujui. Kalau perlu, poin yang sudah masuk bisa ditarik.</p>
+     <p class="fine">Foto bukti langsung dapat pecahan stamp. Satu quest sekali per pelanggan. Kalau perlu, stamp quest bisa ditarik.</p>
      <h2 style="margin-top:16px">Antrian lama</h2>
      ${queue || `<p class="fine">Tidak ada yang menunggu.</p>`}
-     <h2 style="margin-top:16px">Poin yang sudah masuk</h2>
+     <h2 style="margin-top:16px">Quest yang sudah masuk</h2>
      ${approved || `<p class="fine">Belum ada.</p>`}
      <form class="panel" style="margin-top:16px" method="post" action="/admin/misi">
        <h2>Quest baru</h2>
        <label class="lbl">Judul</label><input name="title" required maxlength="80" placeholder="Makan ayam pakai kuah gulai" />
        <label class="lbl">Deskripsi</label><textarea name="description" placeholder="Cerita singkat buat customer"></textarea>
        <label class="lbl">Langkah (satu baris satu langkah)</label><textarea name="steps" placeholder="Pesan menunya&#10;Tunjukin ke kasir"></textarea>
-       <label class="lbl">Poin (boleh 0.5)</label><input name="points" required placeholder="0.5" />
+       <label class="lbl">Stamp</label><select name="points" required>${stampChoices(2)}</select>
        <label class="lbl">Ikon</label><input name="icon" maxlength="8" placeholder="🍜" />
        <label class="lbl">Tag</label><select name="tag"><option value="">Biasa</option><option value="new">NEW</option><option value="limited">Limited</option></select>
        <label class="lbl">Urutan</label><input name="sort" type="number" min="0" max="999" value="0" />
-       <label class="lbl">Merek</label><select name="brand_id">${options}</select>
+       <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
        <label class="lbl">Mulai</label><input name="starts" type="date" />
        <label class="lbl">Selesai</label><input name="ends" type="date" />
-       <label class="lbl">Batas per member</label><select name="limit_kind"><option value="once">Sekali saja</option><option value="week">Sekali seminggu</option></select>
-       <label class="lbl">Bukti</label>
-       <select name="proof" required>
-         <option value="upload">Upload foto</option>
-         <option value="link">Tautan</option>
-         <option value="cashier">Pembelian dicek kasir</option>
-       </select>
+       <p class="fine">Sekali per pelanggan. Buktinya foto.</p>
        <label class="checkline"><input type="checkbox" name="mystery" value="on" /> Quest rahasia, judul disembunyikan</label>
        <label class="lbl">Teks godaan saat terkunci</label><input name="tease" maxlength="140" placeholder="Selesaikan side quest dulu" />
        <label class="lbl">Terbuka setelah poin quest (0 = langsung)</label><input name="unlock" placeholder="0" />
@@ -1507,56 +1490,43 @@ export function adminMissionsPage(input: {
        <label class="lbl">Nama</label><input name="name" required maxlength="40" placeholder="Matcha Master" />
        <label class="lbl">Mulai dari poin</label><input name="points" required placeholder="5" />
        <label class="lbl">Ikon</label><input name="icon" maxlength="8" placeholder="👑" />
-       <label class="lbl">Merek (kosong = semua)</label><select name="brand_id">${options}</select>
+       <label class="lbl">Merek (kosong = semua)</label><select name="brand_id"><option value="">Semua merek</option>${options}</select>
        <button class="btn btn-solid">Simpan lencana</button>
      </form>
      <article class="panel" style="margin-top:12px"><h2>Lencana</h2>${badges || `<p>Belum ada lencana.</p>`}</article>`,
   );
 }
 
-export function adminCatalogPage(input: {
-  rewards: Array<{ id: string; brand: string; title: string; cost: string; stock: string; active: boolean; icon: string }>;
+export function adminTiersPage(input: {
+  tiers: Array<{ id: string; brand: string; stamps: number; reward: string; icon: string; stock: string; active: boolean }>;
   brands: Array<{ id: string; name: string }>;
   params: URLSearchParams;
 }): string {
   const options = input.brands.map((b) => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("");
-  const rows = input.rewards
-    .map((r) => `<div class="row"><span>${esc(r.icon)} ${esc(r.brand)} · ${esc(r.title)} · ${esc(r.cost)} poin · ${esc(r.stock)}</span><b>${r.active ? "aktif" : "mati"}</b></div>`)
+  const rows = input.tiers
+    .map(
+      (t) => `<div class="row"><span>${esc(t.icon)} ${esc(t.brand)} · ${esc(t.reward)} · ${t.stamps} stamp · stok ${esc(t.stock)}</span>
+        <form method="post" action="/admin/tingkat/${esc(t.id)}/aktif"><button class="textlink">${t.active ? "Matikan" : "Nyalakan"}</button></form></div>`,
+    )
     .join("");
   return adminShell(
-    "/admin/katalog",
-    `<h1>Hadiah</h1>${flashes(input.params)}
-     <form class="panel" style="margin-top:12px" method="post" action="/admin/katalog">
+    "/admin/tingkat",
+    `<h1>Redeem</h1>${flashes(input.params)}
+     <p class="fine">Hadiah ditukar pakai stamp utuh. 5 dan 10 cuma pintasan. Kosongkan stok kalau tidak dibatasi. Kode kasir tetap 5 angka, sekitar 10 menit. Kalau hangus, stamp kembali.</p>
+     <form class="panel" style="margin-top:12px" method="post" action="/admin/tingkat" enctype="multipart/form-data">
        <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
-       <label class="lbl">Nama hadiah</label><input name="title" required maxlength="60" />
-       <label class="lbl">Ikon</label><input name="icon" maxlength="8" placeholder="🍵" />
-       <label class="lbl">Harga poin</label><input name="points" required placeholder="2.5" />
+       <label class="lbl">Nama hadiah</label><input name="reward_text" required maxlength="80" placeholder="Free upsize" />
+       <label class="lbl">Ikon</label><input name="icon" maxlength="8" placeholder="🎁" />
+       <label class="lbl">Foto (opsional)</label><input name="gambar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" />
+       <label class="lbl">Pintasan</label>
+       <label class="checkline"><input type="radio" name="preset" value="5" checked /> 5 stamp</label>
+       <label class="checkline"><input type="radio" name="preset" value="10" /> 10 stamp</label>
+       <label class="lbl">Atau jumlah stamp lain</label><input name="stamps" type="number" min="1" max="999" placeholder="misalnya 7" />
        <label class="lbl">Stok (kosong = tidak terbatas)</label><input name="stock" type="number" min="0" />
        <label class="checkline"><input type="checkbox" name="active" value="on" checked /> Aktif</label>
-       <button class="btn btn-solid">Tambah</button>
+       <button class="btn btn-solid">Simpan</button>
      </form>
-     <article class="panel" style="margin-top:12px">${rows || `<p>Kosong.</p>`}</article>`,
-  );
-}
-
-export function adminTiersPage(input: {
-  tiers: Array<{ brand: string; stamps: number; reward: string }>;
-  brands: Array<{ id: string; name: string }>;
-  params: URLSearchParams;
-}): string {
-  const options = input.brands.map((b) => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("");
-  const rows = input.tiers.map((t) => `<div class="row"><span>${esc(t.brand)}</span><b>${t.stamps} stamp = ${esc(t.reward)}</b></div>`).join("");
-  return adminShell(
-    "/admin/tingkat",
-    `<h1>Tingkat stamp</h1>${flashes(input.params)}
-     <p class="fine">Pelanggan boleh menukar tingkat yang lebih rendah sekarang, atau lanjut kumpulin.</p>
-     <form class="panel" style="margin-top:12px" method="post" action="/admin/tingkat">
-       <label class="lbl">Merek</label><select name="brand_id">${options}</select>
-       <label class="lbl">Jumlah stamp</label><input name="stamps" type="number" min="1" max="50" required />
-       <label class="lbl">Hadiah</label><input name="reward_text" required maxlength="80" />
-       <button class="btn btn-solid">Tambah tingkat</button>
-     </form>
-     <article class="panel" style="margin-top:12px">${rows}</article>`,
+     <article class="panel" style="margin-top:12px">${rows || `<p>Belum ada hadiah.</p>`}</article>`,
   );
 }
 
@@ -1567,12 +1537,10 @@ export function missionDetailPage(input: {
   description: string;
   steps: string;
   points: string;
-  kind: "upload" | "link" | "cashier";
   open: boolean;
   locked: boolean;
   tease: string;
   photos: Array<{ src: string; caption: string }>;
-  expiry: ExpiryNote;
   params: URLSearchParams;
 }): string {
   const skin = customerSkin(input.brand);
@@ -1592,15 +1560,12 @@ export function missionDetailPage(input: {
     .join("");
   const proof = input.locked
     ? `<p class="fine">${esc(input.tease || "Belum kebuka nih.")}</p>`
-    : input.kind === "cashier"
-      ? `<p class="fine">Yang ini dicek kasir. Tunjukin pesananmu di kasir ya.</p>`
-      : input.open
-        ? `<form method="post" action="/misi/${esc(input.id)}" enctype="multipart/form-data">
-            ${input.kind === "link" ? `<label class="lbl">Tautan</label><input name="link" type="url" placeholder="https://" required />` : ""}
-            ${input.kind === "upload" ? `<label class="lbl">Foto bukti</label><input name="gambar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required />` : ""}
-            <button class="btn btn-solid">Kirim bukti</button>
-          </form>`
-        : `<p class="fine">Quest ini sudah kamu selesaikan.</p>`;
+    : input.open
+      ? `<form method="post" action="/misi/${esc(input.id)}" enctype="multipart/form-data">
+          <label class="lbl">Foto bukti</label><input name="gambar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required />
+          <button class="btn btn-solid">Kirim bukti</button>
+        </form>`
+      : `<p class="fine">Quest ini sudah kamu selesaikan.</p>`;
   return doc(
     input.title,
     `<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
@@ -1609,9 +1574,8 @@ export function missionDetailPage(input: {
       <section class="card">
         <div class="eyebrow">SIDE QUEST</div>
         <h1 class="display" style="font-size:1.6rem">${esc(input.title)}</h1>
-        <span class="poinbadge sm"><span class="coin">🍃</span><b>${esc(input.points)}</b></span>
+        <span class="poinbadge sm"><b>${esc(input.points)}</b></span>
         <p class="fine">${esc(input.description)}</p>
-        ${expiryBlock(input.expiry)}
         ${steps ? `<ol class="steps">${steps}</ol>` : ""}
         ${proof}
         <a class="btn btn-line" href="/misi${input.brand ? `?merek=${esc(input.brand.id)}` : ""}">Kembali</a>
@@ -1654,6 +1618,7 @@ export function adminMissionEditPage(input: {
     description: string;
     steps?: string;
     points_tenths: number;
+    points_quarters?: number;
     icon: string;
     tag: string;
     mystery: number;
@@ -1673,10 +1638,8 @@ export function adminMissionEditPage(input: {
   params: URLSearchParams;
 }): string {
   const m = input.mission;
-  const kind = m.proof_kind === "link" || m.proof_kind === "cashier" || m.proof_kind === "upload" ? m.proof_kind : m.proof_link && !m.proof_screenshot ? "link" : !m.proof_link && !m.proof_screenshot ? "cashier" : "upload";
-  const options = [`<option value="">Semua merek</option>`]
-    .concat(input.brands.map((b) => `<option value="${esc(b.id)}"${b.id === m.brand_id ? " selected" : ""}>${esc(b.name)}</option>`))
-    .join("");
+  const options = input.brands.map((b) => `<option value="${esc(b.id)}"${b.id === m.brand_id ? " selected" : ""}>${esc(b.name)}</option>`).join("");
+  const award = missionQuarters(m);
   const photos = input.photos
     .map(
       (photo) => `<div class="row">
@@ -1695,20 +1658,14 @@ export function adminMissionEditPage(input: {
        <label class="lbl">Judul</label><input name="title" required maxlength="80" value="${esc(m.title)}" />
        <label class="lbl">Deskripsi</label><textarea name="description">${esc(m.description)}</textarea>
        <label class="lbl">Langkah</label><textarea name="steps">${esc(m.steps || "")}</textarea>
-       <label class="lbl">Poin</label><input name="points" required value="${(m.points_tenths / 10).toString()}" />
+       <label class="lbl">Stamp</label><select name="points" required>${stampChoices(award || 2)}</select>
        <label class="lbl">Ikon</label><input name="icon" maxlength="8" value="${esc(m.icon)}" />
        <label class="lbl">Tag</label><select name="tag"><option value="">Biasa</option><option value="new" ${m.tag === "new" ? "selected" : ""}>NEW</option><option value="limited" ${m.tag === "limited" ? "selected" : ""}>Limited</option></select>
        <label class="lbl">Urutan</label><input name="sort" type="number" min="0" max="999" value="${m.sort_order}" />
-       <label class="lbl">Merek</label><select name="brand_id">${options}</select>
+       <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
        <label class="lbl">Mulai</label><input name="starts" type="date" value="${m.starts_at ? esc(toWibDateInput(m.starts_at)) : ""}" />
        <label class="lbl">Selesai</label><input name="ends" type="date" value="${m.ends_at ? esc(toWibDateInput(m.ends_at)) : ""}" />
-       <label class="lbl">Batas</label><select name="limit_kind"><option value="once" ${m.limit_kind === "week" ? "" : "selected"}>Sekali saja</option><option value="week" ${m.limit_kind === "week" ? "selected" : ""}>Sekali seminggu</option></select>
-       <label class="lbl">Bukti</label>
-       <select name="proof">
-         <option value="upload" ${kind === "upload" ? "selected" : ""}>Upload foto</option>
-         <option value="link" ${kind === "link" ? "selected" : ""}>Tautan</option>
-         <option value="cashier" ${kind === "cashier" ? "selected" : ""}>Pembelian dicek kasir</option>
-       </select>
+       <p class="fine">Sekali per pelanggan. Buktinya foto.</p>
        <label class="checkline"><input type="checkbox" name="mystery" ${m.mystery ? "checked" : ""} /> Quest rahasia</label>
        <label class="checkline"><input type="checkbox" name="active" ${m.active ? "checked" : ""} /> Aktif</label>
        <label class="lbl">Teks godaan</label><input name="tease" maxlength="140" value="${esc(m.tease)}" />

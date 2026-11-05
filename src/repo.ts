@@ -1,4 +1,5 @@
 import type { OrderLink } from "./orders";
+import { applyQuestQuarters } from "./quest-stamp";
 import type { ActivityRow, Banner, Brand, Card, FlagRow, Member, Outlet, SessionRow } from "./types";
 import type { StoredClaim } from "./tokens";
 
@@ -324,6 +325,28 @@ export async function reopenClaim(db: D1Database, id: string): Promise<void> {
 }
 
 type StampUpdate = { stamps: number; lifetime_stamps: number };
+
+export async function adjustQuestProgress(
+  db: D1Database,
+  input: { memberId: string; brandId: string; quarterDelta: number; now: number },
+): Promise<{ stampDelta: number; stamps: number; quarters: number }> {
+  const card = await ensureCard(db, input.memberId, input.brandId, input.now);
+  const next = applyQuestQuarters(
+    { stamps: card.quest_stamps || 0, quarters: card.remainder_quarters || 0 },
+    input.quarterDelta,
+  );
+  const stampDelta = next.stampDelta;
+  const stamps = Math.max(0, card.stamps + stampDelta);
+  const lifetime = Math.max(0, card.lifetime_stamps + stampDelta);
+  await db
+    .prepare(
+      `UPDATE cards SET stamps = ?, lifetime_stamps = ?, remainder_quarters = ?, quest_stamps = ?, updated_at = ?
+       WHERE member_id = ? AND brand_id = ?`,
+    )
+    .bind(stamps, lifetime, next.pool.quarters, next.pool.stamps, input.now, input.memberId, input.brandId)
+    .run();
+  return { stampDelta, stamps, quarters: next.pool.quarters };
+}
 
 export async function addStampAtomic(
   db: D1Database,
@@ -853,6 +876,16 @@ export async function deleteMemberCascade(db: D1Database, id: string): Promise<v
     db.prepare(`UPDATE claim_tokens SET member_id = NULL WHERE member_id = ?`).bind(id),
     db.prepare(`DELETE FROM members WHERE id = ?`).bind(id),
   ]);
+}
+
+export async function birthdayClaimedYears(db: D1Database, memberId: string, brandId: string, fromYear: number, toYear: number): Promise<number[]> {
+  const result = await db
+    .prepare(
+      `SELECT reward_year FROM birthday_redemptions WHERE member_id = ? AND brand_id = ? AND reward_year >= ? AND reward_year <= ?`,
+    )
+    .bind(memberId, brandId, fromYear, toYear)
+    .all<{ reward_year: number }>();
+  return (result.results ?? []).map((row) => row.reward_year);
 }
 
 export async function birthdayTaken(db: D1Database, memberId: string, brandId: string, year: number): Promise<boolean> {
