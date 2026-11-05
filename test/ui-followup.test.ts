@@ -133,8 +133,8 @@ describe("salinan dan logo", () => {
       orderOutlets: [{ id: "o1", name: "Senopati", on: true }],
       slices: [slice(loft, "/banners/loft-1.jpg", "free matcha"), slice(kris, "/banners/krispy-1.jpg", "es krim"), slice(soto, "/banners/soto-1.jpg", "es teh")],
     });
-    expect(html).toContain("Kumpulin Stamp");
-    expect(html).not.toContain("Collect Stamps");
+    expect(html).toContain("Collect Stamps");
+    expect(html).not.toContain("Kumpulin Stamp");
     expect(html).toContain(RESERVASI_LABEL);
     expect(html).not.toContain("Booking / Order via WA");
     expect(html).toContain("brand-loft25");

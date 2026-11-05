@@ -586,7 +586,7 @@ export function cardPage(input: {
       ${flashes(input.params)}
       <div class="rail" data-rail>${rail}</div>
       <div class="raildots" aria-hidden="true">${dots}</div>
-      <button type="button" class="btn btn-solid"${locked ? " data-open-verify" : " data-scan"}>${locked ? "🔒 Kumpulin Stamp" : "Kumpulin Stamp"}</button>
+      <button type="button" class="btn btn-solid"${locked ? " data-open-verify" : " data-scan"}>${locked ? "🔒 Collect Stamps" : "Collect Stamps"}</button>
       <p class="fine center">${locked ? "Verifikasi dulu biar stamp-nya kebuka." : "Arahin kamera ke QR di kasir ya"}</p>
       ${rests}
       </div>
