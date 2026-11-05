@@ -186,6 +186,8 @@ Side Quest menambah stamp di kartu merek itu, bukan saldo poin terpisah. Hadiah 
 
 Di **Setting Program**, tiap merek punya warna utama, warna lembut, warna tombol, warna latar, pilihan ikon stamp (pengocok matcha, mangkuk, piring, atau upload), plus upload logo header dan ikon aplikasi. Ikon aplikasi masuk ke `/app.webmanifest`. Loft25 memakai hijau matcha, Soto Oseng biru dan merah, Krispyporkk pink dan hitam.
 
+Merek dengan `active = 0` disembunyikan dari pelanggan, kasir, dan dashboard. Datanya tidak dihapus. Di **Setting Program**, bagian **Merek disembunyiin** punya tombol **Merek aktif** untuk menyalakan satu merek lagi. Kasir merek yang mati melihat “Merek ini lagi belum aktif”.
+
 ## Cara pakai sehari-hari
 
 - Pelanggan scan QR stan, isi nama, nomor WA, dan PIN. Login di HP itu bertahan 365 hari. Kalau mereka membuka aplikasi lagi setelah sekitar sehari, cookie diperpanjang 365 hari dari kunjungan itu. Keluar tetap menghapus cookie. Di HP lain, mereka masuk dengan nomor WA + PIN.

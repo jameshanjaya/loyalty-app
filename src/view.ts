@@ -99,7 +99,7 @@ const SKINS: Record<string, Skin> = {
     soft: "#e4f0dc",
     deep: "#0e2c1d",
     cta: "#143d28",
-    glass: "rgba(255,252,247,.74)",
+    glass: "#fffdf8",
     line: "rgba(255,255,255,.72)",
     heroA: "#1c5a3c",
     heroB: "#0c2418",
@@ -113,7 +113,7 @@ const SKINS: Record<string, Skin> = {
     soft: "#b3c9ee",
     deep: "#c93a26",
     cta: "#c93a26",
-    glass: "rgba(255,255,255,.78)",
+    glass: "#ffffff",
     line: "rgba(255,255,255,.72)",
     heroA: "#1e6a9a",
     heroB: "#16324a",
@@ -127,7 +127,7 @@ const SKINS: Record<string, Skin> = {
     soft: "#ffd0e4",
     deep: "#111111",
     cta: "#111111",
-    glass: "rgba(255,255,255,.86)",
+    glass: "#ffffff",
     line: "rgba(255,255,255,.8)",
     heroA: "#ff6fa8",
     heroB: "#111111",
@@ -146,7 +146,7 @@ export function customerSkin(brand: Brand | null): { style: string; dark: boolea
       soft: brand?.accent_soft || "#e4f0dc",
       deep: brand?.accent || "#143d28",
       cta: brand?.accent || "#143d28",
-      glass: "rgba(255,252,247,.74)",
+      glass: "#fffdf8",
       line: "rgba(255,255,255,.7)",
       heroA: brand?.accent || "#143d28",
       heroB: "#102018",
@@ -221,7 +221,9 @@ function carousel(banners: Banner[], now: number): string {
     const cta = banner.cta || (banner.link_url ? "Lihat" : "");
     const copy = `<div class="slide-copy">${banner.title ? `<h3>${esc(banner.title)}</h3>` : ""}${banner.subtitle ? `<p>${esc(banner.subtitle)}</p>` : ""}${cta ? `<span class="cta">${esc(cta)}</span>` : ""}</div>`;
     const media = img
-      ? `<img src="${esc(img)}" alt="${esc(banner.title)}" ${index === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async" />`
+      ? index === 0
+        ? `<img src="${esc(img)}" alt="${esc(banner.title)}" fetchpriority="high" decoding="async" width="900" height="600" />`
+        : `<img data-src="${esc(img)}" alt="${esc(banner.title)}" decoding="async" width="900" height="600" />`
       : `<div class="slide-fallback"></div>`;
     const inner = `${media}${copy}`;
     return banner.link_url ? `<a class="slide" href="${esc(banner.link_url)}">${inner}</a>` : `<div class="slide">${inner}</div>`;
@@ -1046,7 +1048,7 @@ export function bannersPage(banners: Banner[], brands: Brand[], params: URLSearc
   );
 }
 
-export function rulesPage(brands: Brand[], links: OrderLink[], params: URLSearchParams): string {
+export function rulesPage(brands: Brand[], hidden: Brand[], links: OrderLink[], params: URLSearchParams): string {
   const forms = brands
     .map(
       (b) => `<form class="panel" style="margin-top:12px;${paint(b.accent, b.accent_soft)}" method="post" action="/admin/aturan/${esc(b.id)}">
@@ -1101,7 +1103,21 @@ export function rulesPage(brands: Brand[], links: OrderLink[], params: URLSearch
       ${extraLinks(links, b.id)}`,
     )
     .join("");
-  return adminShell("/admin/aturan", `<h1>Setting program</h1>${flashes(params)}<p class="fine">Teks centang inilah yang dilihat kasir sebelum kasih stamp.</p>${forms}`);
+  const tucked = hidden.length
+    ? `<details class="panel" style="margin-top:16px">
+        <summary>Merek disembunyiin</summary>
+        <p class="fine">Data merek ini tetap utuh. Satu ketukan nyalakan lagi, kartu, quest, redeem, dan outlet-nya balik.</p>
+        ${hidden
+          .map(
+            (b) => `<form method="post" action="/admin/aturan/${esc(b.id)}/nyala" style="margin-top:10px">
+              <span>${esc(b.emoji)} ${esc(b.name)}</span>
+              <button class="btn btn-line">Merek aktif</button>
+            </form>`,
+          )
+          .join("")}
+      </details>`
+    : "";
+  return adminShell("/admin/aturan", `<h1>Setting program</h1>${flashes(params)}<p class="fine">Teks centang inilah yang dilihat kasir sebelum kasih stamp.</p>${forms}${tucked}`);
 }
 
 function extraLinks(links: OrderLink[], brandId: string): string {

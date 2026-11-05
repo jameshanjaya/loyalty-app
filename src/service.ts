@@ -1,4 +1,5 @@
 import { birthdayRedeemAllowed, birthdayStatus, parseBirthday } from "./birthday";
+import { brandOpen } from "./brands";
 import { bytesToHex, hashPin, randomBytes, randomId, verifyPin } from "./crypto";
 import { ownerPasswordOk, ownerSubject, planOwnerPasswordChange, type StoredOwnerPassword } from "./owner-password";
 import { maskName } from "./format";
@@ -105,6 +106,7 @@ export async function giveStamp(
 ): Promise<{ ok: true; activityId: string; balance: number; masked: string } | Fail> {
   const staff = await blockIfStaff(db, input);
   if (staff) return staff;
+  if (!brandOpen(input.brand)) return { ok: false, error: "merek" };
   const previewRule = applyStamp({ confirmed: input.confirmed, balance: 0 });
   if (!previewRule.ok) return { ok: false, error: "syarat" };
   const today = startOfWibDay(input.now);
@@ -170,6 +172,7 @@ export async function giveRedeem(
 ): Promise<{ ok: true; activityId: string; balance: number; masked: string } | Fail> {
   const staff = await blockIfStaff(db, input);
   if (staff) return staff;
+  if (!brandOpen(input.brand)) return { ok: false, error: "merek" };
   await repo.ensureCard(db, input.member.id, input.brand.id, input.now);
   const updated = await repo.redeemAtomic(db, {
     memberId: input.member.id,
@@ -245,7 +248,7 @@ export async function joinMember(
     join_method: "wa",
   };
   await repo.insertMember(db, { id: member.id, name: member.name, wa, pinHash, pinSalt: salt, now: input.now });
-  const brands = await repo.listBrands(db, false);
+  const brands = await repo.listBrands(db, true);
   for (const brand of brands) await repo.ensureCard(db, member.id, brand.id, input.now);
   const brandId = input.brandId && brands.some((b) => b.id === input.brandId) ? input.brandId : brands[0]?.id;
   if (brandId) {
@@ -327,6 +330,8 @@ export async function loginCashier(
   if (!secretsReady(env)) return { ok: false, error: "secret" };
   const outlet = await repo.getOutlet(db, input.outletId);
   if (!outlet || !outlet.active) return { ok: false, error: "outlet" };
+  const brand = await repo.getBrand(db, outlet.brand_id);
+  if (!brandOpen(brand)) return { ok: false, error: "merek" };
   const byOut = await failureBlocked(db, `cpin:out:${outlet.id}`, input.now, LIMITS.cashierPin);
   const byIp = await failureBlocked(db, `cpin:ip:${input.ip}`, input.now, LIMITS.cashierPinIp);
   if (!byOut.ok || !byIp.ok) return { ok: false, error: "pinwait" };
@@ -419,6 +424,8 @@ export async function openClaim(
   input: { outlet: Outlet; sessionId: string; kind: "stamp" | "redeem" | "birthday"; confirmed: boolean; now: number },
 ): Promise<{ ok: true; id: string } | Fail> {
   if (!secretsReady(env)) return { ok: false, error: "secret" };
+  const brand = await repo.getBrand(db, input.outlet.brand_id);
+  if (!brandOpen(brand)) return { ok: false, error: "merek" };
   if (input.kind === "stamp" && !input.confirmed) return { ok: false, error: "syarat" };
   const limited = await enforceLimit(db, `issue:${input.sessionId}`, input.now, LIMITS.cashierIssue);
   if (!limited.ok) return { ok: false, error: "cepat" };
@@ -450,7 +457,7 @@ export async function finishClaim(
   }
   const brand = await repo.getBrand(db, seen.payload.brandId);
   const outlet = await repo.getOutlet(db, seen.payload.outletId);
-  if (!brand || !brand.active || !outlet) return { ok: false, error: "claim" };
+  if (!brandOpen(brand) || !outlet) return { ok: false, error: brand && !brand.active ? "merek" : "claim" };
   if (seen.payload.kind === "stamp") {
     const today = startOfWibDay(input.now);
     const card = await repo.ensureCard(db, input.member.id, brand.id, input.now);
@@ -663,6 +670,7 @@ export async function giveBirthday(
 ): Promise<{ ok: true; activityId: string; balance: number; masked: string } | Fail> {
   const staff = await blockIfStaff(db, input);
   if (staff) return staff;
+  if (!brandOpen(input.brand)) return { ok: false, error: "merek" };
   const offer = birthdayStatus(input.member.birthday, input.now, {
     active: input.brand.birthday_active === 1,
     window: input.brand.birthday_window === "around" ? "around" : "month",
@@ -739,7 +747,7 @@ export async function completeGoogleProfile(
   await repo.insertMember(db, { id: member.id, name: member.name, wa, pinHash, pinSalt: salt, now: input.now });
   await repo.setMemberGoogle(db, member.id, input.sub, input.email, "google");
   await repo.setMemberBirthday(db, member.id, birthday);
-  const brands = await repo.listBrands(db, false);
+  const brands = await repo.listBrands(db, true);
   for (const brand of brands) await repo.ensureCard(db, member.id, brand.id, input.now);
   if (brands[0]) {
     await repo.insertActivity(db, {

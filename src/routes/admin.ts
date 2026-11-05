@@ -8,6 +8,7 @@ import { normalizeWa, validOutletPin, weakPin } from "../phone";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { OWNER_SESSION_MS } from "../loyalty";
+import { brandOpen } from "../brands";
 import { formatPoints, parsePointsOrZero, proofKind } from "../points";
 import { formatAward, missionQuarters, questQuarters } from "../quest-stamp";
 import * as pdb from "../points-db";
@@ -95,7 +96,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     } catch {
       /* bersihkan lain kali */
     }
-    const brands = await repo.listBrands(db, false);
+    const brands = await repo.listBrands(db, true);
     const brand = brands.find((b) => b.id === url.searchParams.get("merek")) || null;
     const brandId = brand?.id || null;
     const dayStart = startOfWibDay(now);
@@ -138,7 +139,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if ((path === "/admin/member.csv" || path === "/admin/member.xlsx") && request.method === "GET") {
-    const listed = await repo.listMemberRows(db, memberQuery(url));
+    const listed = await repo.listMemberRows(db, await liveMemberQuery(db, url));
     const notes = await expiryNotes(db, now);
     const exported = listed.map((m) => toExport(m, now, notes.get(m.id)));
     if (path.endsWith(".xlsx")) {
@@ -157,8 +158,8 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (path === "/admin/member" && request.method === "GET") {
-    const members = await repo.listMemberRows(db, memberQuery(url));
-    return html(membersPage(members, await repo.listBrands(db, false), url.searchParams));
+    const members = await repo.listMemberRows(db, await liveMemberQuery(db, url));
+    return html(membersPage(members, await repo.listBrands(db, true), url.searchParams));
   }
 
   if (path.startsWith("/admin/member/") && request.method === "GET" && path.endsWith("/hapus")) {
@@ -210,14 +211,15 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (path === "/admin/reward" && request.method === "GET") {
-    const brands = await repo.listBrands(db, false);
-    const brandId = url.searchParams.get("merek") || "";
+    const brands = await repo.listBrands(db, true);
+    const requested = url.searchParams.get("merek") || "";
+    const brandId = brands.some((brand) => brand.id === requested) ? requested : "";
     const rows = await repo.listActivities(db, { brandId: brandId || undefined, type: "redeem", limit: 80, offset: 0 });
     return html(rewardsPage(rows, brands, brandId));
   }
 
   if (path === "/admin/banner" && request.method === "GET") {
-    return html(bannersPage(await repo.listBanners(db, null), await repo.listBrands(db, false), url.searchParams));
+    return html(bannersPage(await repo.listBanners(db, null), await repo.listBrands(db, true), url.searchParams));
   }
 
   if (path === "/admin/banner" && request.method === "POST") {
@@ -226,7 +228,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const form = await request.formData();
     const brandId = String(form.get("brand_id") || "");
     const brand = await repo.getBrand(db, brandId);
-    if (!brand) return back("/admin/banner", "aturan");
+    if (!brandOpen(brand)) return back("/admin/banner", "merek");
     const title = clip(String(form.get("title") || ""), 80);
     if (!title) return back("/admin/banner", "aturan");
     const file = form.get("gambar");
@@ -269,7 +271,23 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (path === "/admin/aturan" && request.method === "GET") {
-    return html(rulesPage(await repo.listBrands(db, false), await repo.listOrderLinks(db, null), url.searchParams));
+    const program = await repo.listBrands(db, false);
+    return html(
+      rulesPage(
+        program.filter((brand) => brand.active === 1),
+        program.filter((brand) => brand.active !== 1),
+        await repo.listOrderLinks(db, null),
+        url.searchParams,
+      ),
+    );
+  }
+
+  if (path.startsWith("/admin/aturan/") && path.endsWith("/nyala") && request.method === "POST") {
+    const id = decodeURIComponent(path.slice("/admin/aturan/".length, -"/nyala".length));
+    const existing = await repo.getBrand(db, id);
+    if (!existing) return back("/admin/aturan", "aturan");
+    await repo.setBrandActive(db, id, 1);
+    return ok("/admin/aturan", "simpan");
   }
 
   if (path.startsWith("/admin/aturan/") && request.method === "POST") {
@@ -302,8 +320,11 @@ export async function handleAdmin(app: App): Promise<Response | null> {
 
   if (path === "/admin/outlet" && request.method === "GET") {
     const outlets = await repo.listOutlets(db);
-    const brands = await repo.listBrands(db, false);
-    const view = outlets.map((o) => ({ ...o, brand_name: brands.find((b) => b.id === o.brand_id)?.name || o.brand_id }));
+    const brands = await repo.listBrands(db, true);
+    const live = new Set(brands.map((brand) => brand.id));
+    const view = outlets
+      .filter((outlet) => live.has(outlet.brand_id))
+      .map((o) => ({ ...o, brand_name: brands.find((b) => b.id === o.brand_id)?.name || o.brand_id }));
     return html(outletsPage(view, brands, url.searchParams, await repo.listOutletStaff(db)));
   }
 
@@ -311,7 +332,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const form = await request.formData();
     const brand = await repo.getBrand(db, String(form.get("brand_id") || ""));
     const name = clip(String(form.get("name") || ""), 60);
-    if (!brand || !name) return back("/admin/outlet", "aturan");
+    if (!brandOpen(brand) || !name) return back("/admin/outlet", "merek");
     const pin = String(form.get("pin") || "");
     const made = await hashNewPin(env, pin);
     if (!made.ok) return back("/admin/outlet", made.error);
@@ -374,13 +395,16 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (path === "/admin/aktivitas" && request.method === "GET") {
-    const filter = activityFilter(url);
+    const filter = await liveActivityFilter(db, url);
     const rows = await repo.listActivities(db, { ...filter, limit: 100, offset: 0 });
+    const brands = await repo.listBrands(db, true);
+    const live = new Set(brands.map((brand) => brand.id));
+    const outlets = (await repo.listOutlets(db)).filter((outlet) => live.has(outlet.brand_id));
     return html(
       activityPage({
         rows,
-        brands: await repo.listBrands(db, false),
-        outlets: await repo.listOutlets(db),
+        brands,
+        outlets,
         query: url.searchParams.toString(),
         params: url.searchParams,
       }),
@@ -388,7 +412,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (path === "/admin/aktivitas.csv" && request.method === "GET") {
-    const rows = await repo.listActivities(db, { ...activityFilter(url), limit: 5000, offset: 0 });
+    const rows = await repo.listActivities(db, { ...(await liveActivityFilter(db, url)), limit: 5000, offset: 0 });
     const header = ["waktu", "member", "wa", "merek", "outlet", "jenis", "delta", "sisa", "catatan", "sesi", "batal"];
     const lines = [header.join(",")];
     for (const row of rows) {
@@ -437,7 +461,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   if (path === "/admin/misi" && request.method === "GET") {
     const missions = await pdb.listMissions(db, false);
     const queue = await pdb.listPending(db);
-    const brands = await repo.listBrands(db, false);
+    const brands = await repo.listBrands(db, true);
     return html(
       adminMissionsPage({
         missions: missions.map((m) => ({
@@ -463,7 +487,9 @@ export async function handleAdmin(app: App): Promise<Response | null> {
           image: q.r2_key ? `/admin/bukti/${q.id}` : "",
         })),
         brands: brands.map((b) => ({ id: b.id, name: b.short_name })),
-        levels: (await pdb.listLevels(db)).map((level) => ({
+        levels: (await pdb.listLevels(db))
+          .filter((level) => !level.brand_id || brands.some((b) => b.id === level.brand_id))
+          .map((level) => ({
           name: level.name,
           min: formatPoints(level.min_points_tenths),
           icon: level.icon || "🌱",
@@ -484,7 +510,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const id = decodeURIComponent(path.slice("/admin/misi/quest/".length).split("/")[0] || "");
     const mission = await pdb.getMission(db, id);
     if (!mission) return back("/admin/misi", "umum");
-    const brands = await repo.listBrands(db, false);
+    const brands = await repo.listBrands(db, true);
     const photos = await pdb.listMissionPhotos(db, mission.id);
     return html(
       adminMissionEditPage({
@@ -505,7 +531,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const form = await request.formData();
     const built = readMission(form);
     if (!built) return back("/admin/misi", "aturan");
-    if (built.brand_id && !(await repo.getBrand(db, built.brand_id))) return back("/admin/misi", "aturan");
+    if (!brandOpen(await repo.getBrand(db, built.brand_id))) return back("/admin/misi", "merek");
     const id = randomId();
     await pdb.insertMission(db, { ...built, id, active: 1, created_at: now });
     return redirect(`/admin/misi/quest/${id}?ok=simpan`);
@@ -541,7 +567,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
         const form = await request.formData();
         const built = readMission(form);
         if (!built) return back(`/admin/misi/quest/${id}`, "aturan");
-        if (built.brand_id && !(await repo.getBrand(db, built.brand_id))) return back(`/admin/misi/quest/${id}`, "aturan");
+        if (!brandOpen(await repo.getBrand(db, built.brand_id))) return back(`/admin/misi/quest/${id}`, "merek");
         await pdb.updateMission(db, { ...built, id, active: form.get("active") === "on" ? 1 : 0, created_at: mission.created_at });
         return ok(`/admin/misi/quest/${id}`, "simpan");
       }
@@ -630,7 +656,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
 
   if (path === "/admin/tingkat" && request.method === "GET") {
     const tiers = await pdb.listAllTiers(db);
-    const brands = await repo.listBrands(db, false);
+    const brands = await repo.listBrands(db, true);
     return html(
       adminTiersPage({
         tiers: tiers.map((t) => ({
@@ -657,7 +683,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const reward = clip(String(form.get("reward_text") || ""), 80);
     const stockRaw = String(form.get("stock") || "").trim();
     const stock = stockRaw === "" ? null : Number(stockRaw);
-    if (!brand || !reward || !Number.isInteger(stamps) || stamps < 1 || stamps > 999) return back("/admin/tingkat", "aturan");
+    if (!brandOpen(brand) || !reward || !Number.isInteger(stamps) || stamps < 1 || stamps > 999) return back("/admin/tingkat", "merek");
     if (stock != null && (!Number.isInteger(stock) || stock < 0)) return back("/admin/tingkat", "aturan");
     const id = randomId();
     const image = await storeImage(env, form.get("gambar"), `redeem/${id}`);
@@ -713,6 +739,14 @@ function markIcon(raw: string, fallback: string): string {
 function csv(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
   return value;
+}
+
+async function liveActivityFilter(db: D1Database, url: URL) {
+  const filter = activityFilter(url);
+  if (!filter.brandId) return filter;
+  const brand = await repo.getBrand(db, filter.brandId);
+  if (!brandOpen(brand)) return { ...filter, brandId: undefined };
+  return filter;
 }
 
 function activityFilter(url: URL) {
@@ -831,6 +865,14 @@ async function storeImage(env: Env, value: unknown, key: string): Promise<{ key:
   if (value.size > 2_000_000 || !allowed.has(value.type)) return null;
   await env.BANNERS.put(key, value.stream(), { httpMetadata: { contentType: value.type } });
   return { key };
+}
+
+async function liveMemberQuery(db: D1Database, url: URL) {
+  const query = memberQuery(url);
+  if (!query.brandId) return query;
+  const brand = await repo.getBrand(db, query.brandId);
+  if (!brandOpen(brand)) return { ...query, brandId: "" };
+  return query;
 }
 
 function memberQuery(url: URL) {

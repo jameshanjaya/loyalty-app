@@ -43,6 +43,7 @@ export const ERR: Record<string, string> = {
   passbeda: "Password baru dan ulangi-nya belum sama.",
   passsalah: "Password sekarang kurang tepat.",
   sendiri: "Gak bisa kasih stamp ke akun sendiri ya",
+  merek: "Merek ini lagi belum aktif",
 };
 
 export const OK: Record<string, string> = {

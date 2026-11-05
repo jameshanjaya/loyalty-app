@@ -23,7 +23,7 @@ function bootPoll() {
       if (wait) wait.textContent = "QR hangus. Tap Kasih Stamp lagi.";
       return;
     }
-    setTimeout(tick, 250);
+    setTimeout(tick, 1000);
   };
   tick();
 
@@ -61,7 +61,23 @@ function bootReel() {
     const go = (index) => {
       track.scrollTo({ left: width() * index, behavior: reduced ? "auto" : "smooth" });
     };
-    track.addEventListener("scroll", mark, { passive: true });
+    const warm = (index) => {
+      const slide = track.children[index];
+      const img = slide && slide.querySelector("img[data-src]");
+      if (!img) return;
+      img.src = img.getAttribute("data-src");
+      img.removeAttribute("data-src");
+    };
+    track.addEventListener(
+      "scroll",
+      () => {
+        mark();
+        warm(current());
+        warm(current() + 1);
+      },
+      { passive: true },
+    );
+    warm(1);
     dots.forEach((dot) => {
       dot.addEventListener("click", () => go(Number(dot.getAttribute("data-dot") || "0")));
     });

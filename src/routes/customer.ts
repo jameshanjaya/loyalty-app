@@ -1,5 +1,6 @@
 import { randomId } from "../crypto";
 import { birthdayNotice, type BirthdayNotice } from "../birthday";
+import { brandOpen, pickLiveBrand } from "../brands";
 import { bookingTarget, bookingUrl, hiddenOrderPlatform, visibleOrderLinks } from "../orders";
 import { tierChoices } from "../points";
 import { LIMITS, enforceLimit } from "../ratelimit";
@@ -130,7 +131,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     if (signup) return html(profilePage({ mode: "google", name: signup.pending.name, email: signup.pending.email, params: url.searchParams }));
     if (!member) return redirect("/masuk");
     const brands = await repo.listBrands(db, true);
-    const brand = brands.find((b) => b.id === url.searchParams.get("merek")) || brands[0] || null;
+    const brand = pickLiveBrand(brands, url.searchParams.get("merek"));
     return html(
       profilePage({
         mode: "member",
@@ -220,8 +221,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     await expireCodes(db, now);
     const brands = await repo.listBrands(db, true);
     if (!brands.length) return html(emptyDbPage());
-    const wanted = url.searchParams.get("merek");
-    const brand = brands.find((b) => b.id === wanted) || brands[0];
+    const brand = pickLiveBrand(brands, url.searchParams.get("merek"));
     if (!brand) return html(emptyDbPage());
     for (const item of brands) await repo.ensureCard(db, member.id, item.id, now);
     const cards = new Map((await repo.listCards(db, member.id)).map((c) => [c.brand_id, c]));
@@ -293,7 +293,8 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       const outletId = decodeURIComponent(path.slice("/pesan/outlet/".length));
       const outlet = await repo.getOutlet(db, outletId);
       const dest = outlet && outlet.active ? bookingUrl(outlet.name, outlet.wa || "") : null;
-      if (!outlet || !dest) return redirect("/kartu");
+      const outletBrand = outlet ? await repo.getBrand(db, outlet.brand_id) : null;
+      if (!outlet || !dest || !brandOpen(outletBrand)) return redirect("/kartu");
       const gate = await enforceLimit(db, `order:${ip}`, now, LIMITS.orderClick);
       if (gate.ok) {
         await repo.logOrderClick(db, {
@@ -310,7 +311,8 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     }
     const id = decodeURIComponent(path.slice("/pesan/".length));
     const link = await repo.getOrderLink(db, id);
-    if (!link || link.active !== 1 || !link.url.startsWith("https://") || hiddenOrderPlatform(link.platform)) return redirect("/kartu");
+    const linkBrand = link ? await repo.getBrand(db, link.brand_id) : null;
+    if (!link || link.active !== 1 || !link.url.startsWith("https://") || hiddenOrderPlatform(link.platform) || !brandOpen(linkBrand)) return redirect("/kartu");
     const gate = await enforceLimit(db, `order:${ip}`, now, LIMITS.orderClick);
     if (gate.ok) {
       await repo.logOrderClick(db, {
@@ -349,7 +351,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
       return redirect("/kartu");
     }
     const brand = await repo.getBrand(db, activity.brand_id);
-    if (!brand) return redirect("/kartu");
+    if (!brandOpen(brand)) return redirect("/kartu");
     const card = await repo.ensureCard(db, member.id, brand.id, now);
     const banners = await repo.listBanners(db, brand.id);
     const brands = await repo.listBrands(db, true);

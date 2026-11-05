@@ -19,6 +19,12 @@ export async function getBrand(db: D1Database, id: string): Promise<Brand | null
   return db.prepare(`SELECT * FROM brands WHERE id = ?`).bind(id).first<Brand>();
 }
 
+export async function setBrandActive(db: D1Database, id: string, active: number): Promise<void> {
+  await db.prepare(`UPDATE brands SET active = ? WHERE id = ?`).bind(active ? 1 : 0, id).run();
+}
+
+const LIVE_BRAND = `IN (SELECT id FROM brands WHERE active = 1)`;
+
 export async function saveBrand(
   db: D1Database,
   id: string,
@@ -556,6 +562,7 @@ export type ActivityFilter = {
   to?: number;
   limit: number;
   offset: number;
+  includeHidden?: boolean;
 };
 
 export async function listActivities(db: D1Database, filter: ActivityFilter): Promise<ActivityRow[]> {
@@ -564,6 +571,8 @@ export async function listActivities(db: D1Database, filter: ActivityFilter): Pr
   if (filter.brandId) {
     where.push("a.brand_id = ?");
     binds.push(filter.brandId);
+  } else if (filter.includeHidden !== true) {
+    where.push(`a.brand_id ${LIVE_BRAND}`);
   }
   if (filter.outletId) {
     where.push("a.outlet_id = ?");
@@ -638,7 +647,9 @@ export async function listBanners(db: D1Database, brandId: string | null): Promi
   if (brandId) {
     return rows<Banner>(db.prepare(`SELECT * FROM banners WHERE brand_id = ? ORDER BY sort_order, created_at DESC`).bind(brandId));
   }
-  return rows<Banner>(db.prepare(`SELECT * FROM banners ORDER BY sort_order, created_at DESC`));
+  return rows<Banner>(
+    db.prepare(`SELECT * FROM banners WHERE brand_id ${LIVE_BRAND} ORDER BY sort_order, created_at DESC`),
+  );
 }
 
 export function bannerLive(banner: Banner, now: number): boolean {
@@ -733,7 +744,7 @@ export async function dashNumbers(db: D1Database, brandId: string | null, now: n
     brandId ? db.prepare(memberSql).bind(brandId) : db.prepare(memberSql),
     brandId
       ? db.prepare(`SELECT COUNT(*) AS n FROM activities WHERE type='stamp' AND voided=0 AND created_at>=? AND brand_id=?`).bind(dayStart, brandId)
-      : db.prepare(`SELECT COUNT(*) AS n FROM activities WHERE type='stamp' AND voided=0 AND created_at>=?`).bind(dayStart),
+      : db.prepare(`SELECT COUNT(*) AS n FROM activities WHERE type='stamp' AND voided=0 AND created_at>=? AND brand_id ${LIVE_BRAND}`).bind(dayStart),
     brandId
       ? db
           .prepare(
@@ -742,12 +753,12 @@ export async function dashNumbers(db: D1Database, brandId: string | null, now: n
           .bind(dayStart, brandId)
       : db
           .prepare(
-            `SELECT COUNT(DISTINCT outlet_id) AS n FROM activities WHERE type='stamp' AND voided=0 AND created_at>=? AND outlet_id IS NOT NULL`,
+            `SELECT COUNT(DISTINCT outlet_id) AS n FROM activities WHERE type='stamp' AND voided=0 AND created_at>=? AND outlet_id IS NOT NULL AND brand_id ${LIVE_BRAND}`,
           )
           .bind(dayStart),
     brandId
       ? db.prepare(`SELECT COUNT(*) AS n FROM activities WHERE type='redeem' AND voided=0 AND created_at>=? AND brand_id=?`).bind(monthStart, brandId)
-      : db.prepare(`SELECT COUNT(*) AS n FROM activities WHERE type='redeem' AND voided=0 AND created_at>=?`).bind(monthStart),
+      : db.prepare(`SELECT COUNT(*) AS n FROM activities WHERE type='redeem' AND voided=0 AND created_at>=? AND brand_id ${LIVE_BRAND}`).bind(monthStart),
     brandId ? db.prepare(activeSql).bind(brandId, since30) : db.prepare(activeSql).bind(since30),
   ]);
   const n = (part: D1Result<{ n: number }>) => part.results[0]?.n ?? 0;
@@ -765,7 +776,7 @@ export async function stampsByDay(db: D1Database, brandId: string | null, since:
     ? `SELECT CAST((created_at + ?) / 86400000 AS INTEGER) AS day, COUNT(*) AS n
        FROM activities WHERE type='stamp' AND voided=0 AND created_at>=? AND brand_id=? GROUP BY day`
     : `SELECT CAST((created_at + ?) / 86400000 AS INTEGER) AS day, COUNT(*) AS n
-       FROM activities WHERE type='stamp' AND voided=0 AND created_at>=? GROUP BY day`;
+       FROM activities WHERE type='stamp' AND voided=0 AND created_at>=? AND brand_id ${LIVE_BRAND} GROUP BY day`;
   const stmt = brandId ? db.prepare(sql).bind(wibMs, since, brandId) : db.prepare(sql).bind(wibMs, since);
   const list = await rows<{ day: number; n: number }>(stmt);
   return new Map(list.map((row) => [row.day, row.n]));
@@ -781,6 +792,7 @@ export async function topMembers(db: D1Database, brandId: string | null): Promis
        ORDER BY stamps DESC LIMIT 5`
     : `SELECT m.id, m.name, SUM(c.lifetime_stamps) AS stamps, SUM(c.lifetime_redeems) AS rewards
        FROM cards c JOIN members m ON m.id = c.member_id
+       JOIN brands b ON b.id = c.brand_id AND b.active = 1
        GROUP BY m.id HAVING stamps > 0
        ORDER BY stamps DESC LIMIT 5`;
   const stmt = brandId ? db.prepare(sql).bind(brandId) : db.prepare(sql);
@@ -801,7 +813,7 @@ export async function lapsedMembers(db: D1Database, brandId: string | null, befo
     FROM members m
     JOIN cards c ON c.member_id = m.id
     JOIN brands b ON b.id = c.brand_id
-    WHERE m.last_seen_at < ? AND c.stamps > 0
+    WHERE m.last_seen_at < ? AND c.stamps > 0 AND b.active = 1
       AND (? IS NULL OR c.brand_id = ?)
       AND c.stamps = (
         SELECT MAX(c2.stamps) FROM cards c2
@@ -948,10 +960,10 @@ export async function listMemberRows(
     SELECT m.*,
       IFNULL((
         SELECT group_concat(b.short_name || ' ' || c.stamps || '/' || b.stamps_required, ' · ')
-        FROM cards c JOIN brands b ON b.id = c.brand_id
+        FROM cards c JOIN brands b ON b.id = c.brand_id AND b.active = 1
         WHERE c.member_id = m.id
       ), '') AS stamps_label,
-      IFNULL((SELECT SUM(c.lifetime_redeems) FROM cards c WHERE c.member_id = m.id), 0) AS rewards
+      IFNULL((SELECT SUM(c.lifetime_redeems) FROM cards c JOIN brands b ON b.id = c.brand_id AND b.active = 1 WHERE c.member_id = m.id), 0) AS rewards
     FROM members m
     ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
     ORDER BY ${order}
@@ -964,6 +976,7 @@ export async function birthdaysThisMonth(db: D1Database, month: number): Promise
     db
       .prepare(
         `SELECT * FROM members WHERE birthday IS NOT NULL AND CAST(substr(birthday, 6, 2) AS INTEGER) = ?
+         AND EXISTS (SELECT 1 FROM cards c JOIN brands b ON b.id = c.brand_id AND b.active = 1 WHERE c.member_id = members.id)
          ORDER BY substr(birthday, 9, 2), name LIMIT 30`,
       )
       .bind(month),
@@ -973,7 +986,7 @@ export async function birthdaysThisMonth(db: D1Database, month: number): Promise
 export async function countBirthdayRedeems(db: D1Database, since: number, brandId: string | null): Promise<number> {
   const sql = brandId
     ? `SELECT COUNT(*) AS n FROM activities WHERE type = 'birthday' AND voided = 0 AND created_at >= ? AND brand_id = ?`
-    : `SELECT COUNT(*) AS n FROM activities WHERE type = 'birthday' AND voided = 0 AND created_at >= ?`;
+    : `SELECT COUNT(*) AS n FROM activities WHERE type = 'birthday' AND voided = 0 AND created_at >= ? AND brand_id ${LIVE_BRAND}`;
   const stmt = brandId ? db.prepare(sql).bind(since, brandId) : db.prepare(sql).bind(since);
   const row = await stmt.first<{ n: number }>();
   return row?.n ?? 0;
@@ -1054,7 +1067,7 @@ export async function memberCards(db: D1Database, memberId: string): Promise<Arr
   return rows<Card & { short_name: string }>(
     db
       .prepare(
-        `SELECT c.*, b.short_name AS short_name FROM cards c JOIN brands b ON b.id = c.brand_id
+        `SELECT c.*, b.short_name AS short_name FROM cards c JOIN brands b ON b.id = c.brand_id AND b.active = 1
          WHERE c.member_id = ? ORDER BY b.name`,
       )
       .bind(memberId),

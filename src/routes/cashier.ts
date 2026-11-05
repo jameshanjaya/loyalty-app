@@ -1,4 +1,5 @@
 import { birthdayRedeemAllowed, birthdayStatus } from "../birthday";
+import { brandOpen } from "../brands";
 import { maskName } from "../format";
 import type { Member } from "../types";
 import { html, json, readCookie, redirect, sameOrigin } from "../http";
@@ -39,11 +40,13 @@ export async function handleCashier(app: App): Promise<Response | null> {
   if (path !== "/kasir" && !path.startsWith("/kasir/")) return null;
 
   if (path === "/kasir" && request.method === "GET") {
+    const parked = readCookie(request.headers.get("cookie"), COOKIE.cashier);
+    if (parked && !url.searchParams.get("err") && (await hiddenCashierBrand(db, parked))) return redirect("/kasir?err=merek");
     const outlets = await repo.listOutlets(db);
-    const brands = await repo.listBrands(db, false);
+    const brands = await repo.listBrands(db, true);
     if (!brands.length) return html(emptyDbPage());
     const view = outlets
-      .filter((o) => o.active)
+      .filter((o) => o.active && brandOpen(brands.find((b) => b.id === o.brand_id)))
       .map((o) => {
         const brand = brands.find((b) => b.id === o.brand_id);
         return { ...o, brand_name: brand?.name || "", emoji: brand?.emoji || "🍵", accent: brand?.accent || "#6ea564" };
@@ -69,7 +72,11 @@ export async function handleCashier(app: App): Promise<Response | null> {
   }
 
   const cashier = await loadCashier(request, db, now);
-  if (!cashier && path !== "/kasir/keluar") return redirect("/kasir");
+  if (!cashier && path !== "/kasir/keluar") {
+    const parked = readCookie(request.headers.get("cookie"), COOKIE.cashier);
+    if (parked && (await hiddenCashierBrand(db, parked))) return redirect("/kasir?err=merek");
+    return redirect("/kasir");
+  }
 
   if (path === "/kasir/keluar" && request.method === "POST") {
     if (!sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
@@ -324,4 +331,13 @@ export async function handleCashier(app: App): Promise<Response | null> {
   }
 
   return html(messagePage("Tidak ketemu", "Halaman kasir itu tidak ada.", "/kasir/meja"), 404);
+}
+
+async function hiddenCashierBrand(db: D1Database, sessionId: string): Promise<boolean> {
+  const session = await repo.getSession(db, sessionId);
+  if (!session || session.kind !== "cashier" || !session.subject_id) return false;
+  const outlet = await repo.getOutlet(db, session.subject_id);
+  if (!outlet) return false;
+  const brand = await repo.getBrand(db, outlet.brand_id);
+  return Boolean(brand && !brand.active);
 }
