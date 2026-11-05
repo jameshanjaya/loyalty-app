@@ -9,7 +9,9 @@
 <body>
 <main class="phone" id="app"></main>
 <script>
-const CUP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 8h8v5a4 4 0 0 1-8 0V8z"/><path d="M15 9.5h1.8a2.2 2.2 0 0 1 0 4.4H15"/><path d="M8 20h6"/></svg>`;
+const WHISK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M7.2 12.2h7.2v2.6a3.6 3.6 0 0 1-7.2 0v-2.6z"/><path d="M14.4 13.4h1.6a1.8 1.8 0 0 1 0 3.6h-1.6"/><path d="M10.8 3.6v4.2"/><path d="M8.6 6.2 10.8 8.4"/><path d="M13 6.2 10.8 8.4"/><path d="M9.2 20.2h5.2"/></svg>`;
+const BOWL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4.2 10.2h15.6c-.7 5.4-3.5 8.2-7.8 8.2s-7.1-2.8-7.8-8.2z"/><path d="M8 10.2c.4-2.8 1.7-4.4 4-4.4s3.6 1.6 4 4.4"/><path d="M9.2 8.2h.01M12 7.6h.01M14.6 8.4h.01"/></svg>`;
+const PLATE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><ellipse cx="12" cy="15.2" rx="8" ry="3.3"/><ellipse cx="12" cy="14.4" rx="5.2" ry="1.7"/><path d="M8 13.6c.7-2.6 2.2-4 4-4s3.3 1.4 4 4"/><path d="M10.2 12.4h3.6"/></svg>`;
 const CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M5 12.5 9.2 17 19 7"/></svg>`;
 const LEAF = `<svg viewBox="0 0 24 24" fill="none" stroke="#6a4a12" stroke-width="2"><path d="M5 19C14 19 19 12 19 5 12 5 5 8 5 19z"/><path d="M8 16c2-2 4-5 6-8"/></svg>`;
 const NAV = [
@@ -23,7 +25,7 @@ const ICO = {
   thread: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7h8M8 12h8M8 17h5"/><circle cx="5" cy="7" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="17" r="1" fill="currentColor"/></svg>`,
   spark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>`,
   gift: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="8" rx="1.4"/><path d="M12 11v8"/></svg>`,
-  cup: CUP,
+  cup: WHISK,
   bowl: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 10h14c-.6 5-3.2 8-7 8s-6.4-3-7-8z"/><path d="M8 10c.4-3 1.6-4 4-4s3.6 1 4 4"/></svg>`,
   ice: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 14c0 3 1.8 5 4 5s4-2 4-5H8z"/><circle cx="9" cy="9" r="2"/><circle cx="13" cy="8" r="2.2"/><circle cx="16" cy="11" r="1.6"/></svg>`,
 };
@@ -39,6 +41,7 @@ const brands = {
     lead: "4 stamp lagi dapat free matcha",
     rule: "Min. Rp50.000 · 10 stamp = free matcha",
     reward: "Milk tea",
+    stamp: "whisk",
     code: "48291",
     slides: [
       ["../public/banners/loft-1.jpg", "PROMO", "Matcha Strawberry", "Beli 2 lebih hemat"],
@@ -61,6 +64,7 @@ const brands = {
     lead: "6 stamp lagi dapat Soto Oseng paket",
     rule: "Ada oseng babi · 10 stamp = paket",
     reward: "Es teh",
+    stamp: "bowl",
     code: "19384",
     slides: [
       ["../public/banners/soto-1.jpg", "JUMAT", "Paket Jumat", "Oseng + es teh manis"],
@@ -83,6 +87,7 @@ const brands = {
     lead: "8 stamp lagi dapat diskon 50%",
     rule: "Min. Rp100.000 · diskon di kasir",
     reward: "Es krim",
+    stamp: "plate",
     code: "77021",
     slides: [
       ["../public/banners/krispy-1.jpg", "BARU", "Crispy Bowl", "Nasi tambahan Rp5.000"],
@@ -110,10 +115,11 @@ function nav(on) {
   return `<nav class="tabbar">${NAV.map(([id, label, icon]) => `<a class="${on === id ? "on" : ""}" href="screen.html?brand=${brand.key}&screen=${id}">${icon}<span>${label}</span></a>`).join("")}</nav>`;
 }
 function stamps(n) {
+  const icon = brand.stamp === "bowl" ? BOWL : brand.stamp === "plate" ? PLATE : WHISK;
   let html = "";
   for (let i = 1; i <= 10; i++) {
     const on = i <= n;
-    html += `<div class="stamp${on ? " on" : ""}${i === n ? " fresh" : ""}">${on ? CUP : i}</div>`;
+    html += `<div class="stamp${on ? " on" : ""}${i === n ? " fresh" : ""}">${icon}</div>`;
   }
   return `<div class="stamps">${html}</div>`;
 }
@@ -182,10 +188,11 @@ function kartu() {
 
 function quest() {
   const items = [
-    ["done", "cam", "Foto & review Google", "new", "Selesai", 100, "0.5"],
+    ["", "bowl", "Makan ayam pakai kuah gulai", "new", "Kasir cek nota · belum", 0, "1"],
+    ["done", "cam", "Foto & review Google", "", "Selesai", 100, "0.5"],
     ["", "thread", "Post Threads tag kami", "", "Belum minggu ini", 0, "0.5"],
     ["", "spark", "IG Story tag kami", "lim", "Belum minggu ini", 35, "1"],
-  ];
+  ].filter((item) => brand.key === "soto" || item[2] !== "Makan ayam pakai kuah gulai");
   const cards = items.map(([cls, ico, title, tag, status, pct, pts]) => `
     <article class="quest ${cls}">
       <div class="qico">${ICO[ico]}</div>
