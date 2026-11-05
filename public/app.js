@@ -186,7 +186,7 @@ function bootBirthday() {
         const days = Math.floor(total / 1440);
         const hours = Math.floor((total % 1440) / 60);
         const minutes = total % 60;
-        label.textContent = `Claim your birthday gift in ${days} days ${hours} hours ${minutes} minutes`;
+        label.textContent = `Hadiah ultah dalam ${days} hari ${hours} jam ${minutes} menit`;
       }
     };
     tick();
@@ -194,16 +194,22 @@ function bootBirthday() {
   });
 }
 
+function rememberBrand(id) {
+  if (!id) return;
+  try {
+    localStorage.setItem("loyalty-brand", id);
+  } catch {
+    /* private mode */
+  }
+}
+
 function bootRail() {
   const rail = document.querySelector("[data-rail]");
-  if (!rail) return;
+  const root = document.querySelector("[data-brand-root]");
+  if (!rail || !root) return;
+  const page = root.querySelector("[data-page]") || root;
   const cards = [...rail.querySelectorAll(".stampcard")];
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const cores = navigator.hardwareConcurrency || 8;
-  const memory = navigator.deviceMemory || 8;
-  const canBlur = !reduced && cores > 4 && memory > 4;
-  if (canBlur) rail.classList.add("can-blur");
-  let swipeTimer = 0;
   const mark = () => {
     const mid = rail.scrollLeft + rail.clientWidth / 2;
     let best = cards[0];
@@ -216,59 +222,88 @@ function bootRail() {
         bestDist = dist;
       }
     }
-    const index = cards.indexOf(best);
-    cards.forEach((card, n) => {
-      card.classList.toggle("on", card === best);
-      card.classList.toggle("side", canBlur && Math.abs(n - index) === 1);
-    });
+    cards.forEach((card) => card.classList.toggle("on", card === best));
     document.querySelectorAll("[data-dot-brand]").forEach((dot) => {
       dot.classList.toggle("on", dot.getAttribute("data-dot-brand") === (best && best.getAttribute("data-brand")));
     });
     return best;
   };
-  rail.addEventListener(
-    "scroll",
-    () => {
-      if (canBlur) {
-        rail.classList.add("is-swiping");
-        window.clearTimeout(swipeTimer);
-        swipeTimer = window.setTimeout(() => rail.classList.remove("is-swiping"), 180);
-      }
-      mark();
-    },
-    { passive: true },
-  );
-  const show = async (id) => {
-    if (!id) return;
-    const incoming = [...document.querySelectorAll(`[data-pane="${id}"] img`)];
-    await Promise.all(incoming.map((img) => decodeImg(img)));
-    document.querySelectorAll("[data-pane]").forEach((pane) => {
-      pane.hidden = pane.getAttribute("data-pane") !== id;
-    });
-    const skin = document.querySelector(`.stage[data-pane="${id}"]`);
-    const root = document.querySelector("[data-brand-root]");
-    if (skin && root) {
-      root.setAttribute("style", skin.getAttribute("data-skin") || "");
-      root.classList.toggle("skin-dark", skin.getAttribute("data-dark") === "1");
-      root.classList.add(reduced ? "theme-fade" : "theme-shift");
-    }
+  const pointTabs = (id) => {
     document.querySelectorAll(".tabbar a").forEach((link) => {
       const url = new URL(link.getAttribute("href"), location.origin);
       url.searchParams.set("merek", id);
       link.setAttribute("href", `${url.pathname}${url.search}`);
     });
+    rememberBrand(id);
+  };
+  let token = 0;
+  const show = async (id, mine) => {
+    if (!id) return;
+    const incoming = [...document.querySelectorAll(`[data-pane="${id}"] img`)];
+    for (const img of incoming) {
+      const src = img.getAttribute("data-src");
+      if (src) {
+        img.src = src;
+        img.removeAttribute("data-src");
+      }
+    }
+    if (mine !== token) return;
+    document.querySelectorAll("[data-pane]").forEach((pane) => {
+      pane.hidden = pane.getAttribute("data-pane") !== id;
+    });
+    const skin = document.querySelector(`.stage[data-pane="${id}"]`);
+    if (skin) {
+      root.setAttribute("style", skin.getAttribute("data-skin") || "");
+      root.classList.toggle("skin-dark", skin.getAttribute("data-dark") === "1");
+      root.classList.add(reduced ? "theme-fade" : "theme-shift");
+    }
+    pointTabs(id);
     const here = new URL(location.href);
     if (here.searchParams.get("merek") !== id) {
       here.searchParams.set("merek", id);
       history.replaceState({}, "", `${here.pathname}${here.search}`);
     }
+    shown = id;
+    await Promise.race([
+      Promise.all(incoming.map((img) => decodeImg(img))),
+      new Promise((resolve) => window.setTimeout(resolve, 400)),
+    ]);
   };
+  let shown = (cards.find((card) => card.classList.contains("on")) || cards[0])?.getAttribute("data-brand") || "";
+  rememberBrand(shown);
   let timer = 0;
-  rail.addEventListener("scrollend", () => {
+  let clearTimer = 0;
+  const settle = () => {
     const card = mark();
-    if (!card || cards.length < 2) return;
+    const id = card && card.getAttribute("data-brand");
+    if (!id) return;
+    pointTabs(id);
+    if (id === shown) {
+      window.clearTimeout(clearTimer);
+      clearTimer = window.setTimeout(() => page.classList.remove("is-blurring"), reduced ? 0 : 180);
+      return;
+    }
+    const mine = ++token;
+    show(id, mine).finally(() => {
+      if (mine !== token) return;
+      window.clearTimeout(clearTimer);
+      clearTimer = window.setTimeout(() => page.classList.remove("is-blurring"), reduced ? 0 : 220);
+    });
+  };
+  rail.addEventListener(
+    "scroll",
+    () => {
+      const card = mark();
+      const id = card && card.getAttribute("data-brand");
+      if (id && id !== shown && !reduced) page.classList.add("is-blurring");
+      window.clearTimeout(timer);
+      timer = window.setTimeout(settle, 80);
+    },
+    { passive: true },
+  );
+  rail.addEventListener("scrollend", () => {
     window.clearTimeout(timer);
-    timer = window.setTimeout(() => show(card.getAttribute("data-brand")), reduced ? 0 : 160);
+    settle();
   });
   const active = rail.querySelector(".stampcard.on");
   if (active && cards.length > 1) active.scrollIntoView({ inline: "center", block: "nearest" });

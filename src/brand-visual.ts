@@ -8,8 +8,8 @@ export type BrandArt = {
 
 const ART: Record<string, BrandArt> = {
   loft25: { full: "/brands/loft-mark.svg", mark: "/brands/loft-mark.svg", chip: "#f4efe4" },
-  krispyporkk: { full: "/brands/kp-full.svg", mark: "/brands/kp-pig.svg", chip: "#111111" },
-  "soto-oseng": { full: "/brands/soto-full.svg", mark: "/brands/soto-face.svg", chip: "#ffffff" },
+  krispyporkk: { full: "/brands/kp-full.svg", mark: "/brands/kp-pig.png", chip: "#111111" },
+  "soto-oseng": { full: "/brands/soto-full.svg", mark: "/brands/soto-face.png", chip: "#ffffff" },
 };
 
 export function brandArt(brand: Pick<Brand, "id" | "logo_key">): BrandArt {

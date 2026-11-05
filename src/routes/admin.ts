@@ -2,6 +2,7 @@ import { RESERVED_KASIR, slugifyOutlet } from "../brand-visual";
 import { bytesToHex, hashPin, randomBytes, randomId } from "../crypto";
 import { membersCsv, membersXlsx, type ExportRow } from "../export";
 import { clip, httpsUrl, prettyWa } from "../format";
+import { readBirthdayRaw } from "../birthday";
 import { orderLabel, orderPlatform } from "../orders";
 import { html, readCookie, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
@@ -251,7 +252,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const form = await request.formData();
     const result = await ownerSetBirthday(db, {
       member,
-      birthdayRaw: String(form.get("lahir") || ""),
+      birthdayRaw: readBirthdayRaw(form),
       now,
       allowThisYear: form.get("boleh") === "on",
     });

@@ -153,6 +153,7 @@ export async function handleShop(app: App): Promise<Response | null> {
         rewards: rewards.map((r) => ({
           id: r.id,
           title: r.reward_text,
+          stamps: r.stamps,
           cost: `${r.stamps} stamp`,
           note: r.stock == null ? "" : r.stock === 0 ? "Habis" : `Sisa ${r.stock}`,
           ready: stamps >= r.stamps && (r.stock == null || r.stock > 0),

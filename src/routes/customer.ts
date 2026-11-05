@@ -2,6 +2,7 @@ import { nextRewardLine } from "../brand-visual";
 import { randomId } from "../crypto";
 import { packReferralCookie, unpackReferralCookie } from "../referral";
 import { attachReferral, logReferralOpen, referralProgress, refreshReferral } from "../referral-flow";
+import { readBirthdayRaw } from "../birthday";
 import { loadBirthdayNotice } from "../birthday-gate";
 import { brandOpen, pickLiveBrand } from "../brands";
 import { bookingTarget, bookingUrl, hiddenOrderPlatform, visibleOrderLinks } from "../orders";
@@ -236,6 +237,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
   if (path === "/profil" && request.method === "POST") {
     if (!sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
     const form = await request.formData();
+    const birthdayRaw = readBirthdayRaw(form);
     if (signup) {
       if (form.get("setuju") !== "on") {
         return html(
@@ -245,7 +247,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
             email: signup.pending.email,
             params: errQuery("setuju"),
             wa: String(form.get("wa") || ""),
-            birthday: String(form.get("lahir") || ""),
+            birthday: birthdayRaw,
           }),
           400,
         );
@@ -256,7 +258,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         email: signup.pending.email,
         name: String(form.get("nama") || signup.pending.name),
         waRaw: String(form.get("wa") || ""),
-        birthdayRaw: String(form.get("lahir") || ""),
+        birthdayRaw,
         pin: String(form.get("pin") || ""),
         pin2: String(form.get("pin2") || ""),
         now,
@@ -271,7 +273,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
             email: signup.pending.email,
             params,
             wa: String(form.get("wa") || ""),
-            birthday: String(form.get("lahir") || ""),
+            birthday: birthdayRaw,
           }),
           400,
         );
@@ -294,8 +296,8 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     } catch {
       /* referral dicek lagi nanti */
     }
-    if (member.birthday && !form.get("lahir")) return redirect("/profil?ok=setuju");
-    const saved = await setOwnBirthday(db, { member, birthdayRaw: String(form.get("lahir") || ""), now });
+    if (member.birthday && !birthdayRaw) return redirect("/profil?ok=setuju");
+    const saved = await setOwnBirthday(db, { member, birthdayRaw, now });
     if (!saved.ok) return redirect(`/profil?err=${saved.error}`);
     return redirect("/kartu?ok=lahirsimpan");
   }
@@ -304,20 +306,21 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     if (!sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
     if (!signup) return redirect("/masuk");
     const form = await request.formData();
+    const birthdayRaw = readBirthdayRaw(form);
     const result = await linkGoogleWithPin(db, env, {
       pendingId: signup.pending.id,
       sub: signup.pending.sub,
       email: signup.pending.email,
       waRaw: String(form.get("wa") || ""),
       pin: String(form.get("pin") || ""),
-      birthdayRaw: String(form.get("lahir") || ""),
+      birthdayRaw,
       ip,
       now,
     });
     if (!result.ok) {
       const params = errQuery(result.error);
       params.set("wa", String(form.get("wa") || ""));
-      return html(profilePage({ mode: "link", name: signup.pending.name, email: signup.pending.email, params, wa: String(form.get("wa") || ""), birthday: String(form.get("lahir") || "") }), 400);
+      return html(profilePage({ mode: "link", name: signup.pending.name, email: signup.pending.email, params, wa: String(form.get("wa") || ""), birthday: birthdayRaw }), 400);
     }
     await repo.deleteSession(db, signup.sessionId);
     return redirect("/kartu", [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)]);

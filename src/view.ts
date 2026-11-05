@@ -1,6 +1,6 @@
 import { esc, formatInt, maskName, maskWa, prettyWa } from "./format";
-import { hiddenOrderPlatform, orderLabel, type OrderLink } from "./orders";
-import type { BirthdayNotice } from "./birthday";
+import { RESERVASI_LABEL, hiddenOrderPlatform, orderLabel, type OrderLink } from "./orders";
+import { ID_MONTHS, birthdayParts, birthdayYears, formatBirthdayId, type BirthdayNotice } from "./birthday";
 import { progressCopy } from "./loyalty";
 import { missionQuarters, questProgressLabel } from "./quest-stamp";
 import { errText, okText } from "./messages";
@@ -20,9 +20,43 @@ function stampMark(brand: Brand): string {
   return `<img class="stampimg" src="${stampIconSrc(kind)}" alt="" />`;
 }
 
-function logoSlot(brand: Brand): string {
+function logoSlot(brand: Brand, opts?: { decorative?: boolean; extra?: string; attrs?: string }): string {
   const art = brandArt(brand);
-  return `<span class="logo-chip" style="background:${esc(art.chip)}"><img src="${esc(art.mark)}" alt="${esc(brand.short_name)}" /></span>`;
+  const extra = opts?.extra ? ` ${opts.extra}` : "";
+  const alt = opts?.decorative ? "" : brand.short_name;
+  return `<span class="logo-chip brand-${esc(brand.id)}${extra}" style="--chip:${esc(art.chip)}"${opts?.attrs || ""}><img src="${esc(art.mark)}" alt="${esc(alt)}" /></span>`;
+}
+
+function birthdayFields(value: string | null | undefined): string {
+  const parts = birthdayParts(value);
+  const years = birthdayYears(Date.now(), parts?.year);
+  const dayOpts = [`<option value="">–</option>`]
+    .concat(
+      Array.from({ length: 31 }, (_, index) => {
+        const day = String(index + 1).padStart(2, "0");
+        return `<option value="${day}"${parts?.day === day ? " selected" : ""}>${index + 1}</option>`;
+      }),
+    )
+    .join("");
+  const monthOpts = [`<option value="">–</option>`]
+    .concat(
+      ID_MONTHS.map((name, index) => {
+        const month = String(index + 1).padStart(2, "0");
+        return `<option value="${month}"${parts?.month === month ? " selected" : ""}>${name}</option>`;
+      }),
+    )
+    .join("");
+  const yearOpts = [`<option value="">–</option>`]
+    .concat(years.map((year) => `<option value="${year}"${parts?.year === String(year) ? " selected" : ""}>${year}</option>`))
+    .join("");
+  return `<div class="bdate">
+    <div class="lbl">Tanggal lahir</div>
+    <div class="bdate-row">
+      <label><span>Tanggal</span><select name="lahir_tgl" required>${dayOpts}</select></label>
+      <label><span>Bulan</span><select name="lahir_bln" required>${monthOpts}</select></label>
+      <label><span>Tahun</span><select name="lahir_thn" required>${yearOpts}</select></label>
+    </div>
+  </div>`;
 }
 
 function confetti(): string {
@@ -45,11 +79,12 @@ function doc(title: string, inner: string, theme = "#6ea564", brandId = ""): str
 <link rel="manifest" href="${manifest}" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/app.css?v=11" />
+<link rel="stylesheet" href="/app.css?v=13" />
+<script src="/brand.js?v=13"></script>
 </head>
 <body>
 ${inner}
-<script src="/app.js?v=11" defer></script>
+<script src="/app.js?v=14" defer></script>
 </body>
 </html>`;
 }
@@ -189,12 +224,12 @@ function orderBlock(
         .join("")}</div>`
     : "";
   const book = booking
-    ? `<a class="obadge booking" href="${esc(booking.url)}" data-track="/pesan/outlet/${esc(booking.id)}">Booking / Order via WA</a>`
+    ? `<a class="obadge booking" href="${esc(booking.url)}" data-track="/pesan/outlet/${esc(booking.id)}">${RESERVASI_LABEL}</a>`
     : pickBooking
-      ? `<p class="fine">Pilih outlet dulu buat Booking / Order via WA.</p>`
+      ? `<p class="fine">Pilih outlet dulu buat ${RESERVASI_LABEL}.</p>`
       : "";
   return `<section class="card order">
-    <div class="eyebrow">Order</div>
+    <div class="eyebrow">${RESERVASI_LABEL}</div>
     ${chips}
     ${book}
     ${extras.length ? `<div class="order-extra">${extras.map(badge).join("")}</div>` : ""}
@@ -275,15 +310,15 @@ function flipDigits(n: number): string {
 function birthdayBlock(notice: BirthdayNotice, reward: string, brandId: string, now: number): string {
   if (!notice.show) return "";
   if (notice.phase === "open") {
-    return `<section class="bday"><div class="kicker">Claim your birthday gift</div><h3>${esc(reward)}</h3><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(brandId)}" /><button class="btn btn-solid">Claim your birthday gift</button></form></section>`;
+    return `<section class="bday"><div class="kicker">Klaim hadiah ultah</div><h3>${esc(reward)}</h3><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(brandId)}" /><button class="btn btn-solid">Klaim hadiah ultah</button></form></section>`;
   }
   const left = Math.max(0, notice.target - now);
   const days = Math.floor(left / 86_400_000);
   const hours = Math.floor((left % 86_400_000) / 3_600_000);
   const minutes = Math.floor((left % 3_600_000) / 60_000);
   const seconds = Math.floor((left % 60_000) / 1000);
-  const note = notice.phase === "claimed" ? `<p class="bday-note">Udah diklaim, see you next year</p>` : "";
-  return `<section class="bday" data-bday="${notice.target}"><div class="kicker">Claim your birthday gift in…</div>${note}<div class="flip"><div class="u"><div data-dd>${flipDigits(days)}</div><small>HARI</small></div><div class="u"><div data-hh>${flipDigits(hours)}</div><small>JAM</small></div><div class="u"><div data-mm>${flipDigits(minutes)}</div><small>MENIT</small></div><div class="u"><div data-ss>${flipDigits(seconds)}</div><small>DETIK</small></div></div></section>`;
+  const note = notice.phase === "claimed" ? `<p class="bday-note">Udah diklaim, sampai tahun depan</p>` : "";
+  return `<section class="bday" data-bday="${notice.target}"><div class="kicker">Hadiah ultah dalam…</div>${note}<div class="flip"><div class="u"><div data-dd>${flipDigits(days)}</div><small>HARI</small></div><div class="u"><div data-hh>${flipDigits(hours)}</div><small>JAM</small></div><div class="u"><div data-mm>${flipDigits(minutes)}</div><small>MENIT</small></div><div class="u"><div data-ss>${flipDigits(seconds)}</div><small>DETIK</small></div></div></section>`;
 }
 
 function tabbar(on: "kartu" | "hadiah" | "profil", brandId: string): string {
@@ -354,13 +389,16 @@ export function messagePage(title: string, text: string, href = "/", label = "Ke
 
 export function homePage(brands: Brand[]): string {
   const pills = brands
-    .map((b) => `<a class="pill" href="/gabung/${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`)
+    .map((b) => {
+      const halal = b.non_halal === 1 ? `<span class="nonhalal-tag">Non-halal</span>` : "";
+      return `<a class="pill brandpill" href="/gabung/${esc(b.id)}">${logoSlot(b, { decorative: true })}<span class="brandpill-copy"><span>${esc(b.short_name)}</span>${halal}</span></a>`;
+    })
     .join("");
   return doc(
     "Loyalty Bos",
-    `<main class="phone" style="${paint("#6ea564", "#e7f3df")}">
-      <header class="hero center"><div class="checkbubble">${CUP}</div><div class="hero-big">Kartu stamp kamu</div><p class="hero-fine">Satu akun untuk semua merek. Simpan di HP, tanpa download aplikasi.</p></header>
-      <section class="card"><h2>Pilih merek</h2><div class="pills">${pills}</div><a class="btn btn-solid" href="/gabung">Gabung</a><a class="btn btn-line" href="/masuk">Sudah punya kartu</a></section>
+    `<main class="phone landing">
+      <header class="hero hero-plain center"><div class="checkbubble">${CUP}</div><div class="hero-big">Kartu stamp kamu</div><p class="hero-fine">1 kartu buat semua brand favorit lu. Simpan di HP, tanpa download aplikasi.</p></header>
+      <section class="card"><h2>Pilih brand</h2><div class="pills">${pills}</div><a class="btn btn-solid" href="/gabung">Gabung</a><a class="btn btn-line" href="/masuk">Udah punya kartu</a></section>
       <p class="fine center" style="margin-top:16px"><a href="/kasir">Masuk kasir</a></p>
     </main>`,
   );
@@ -372,25 +410,25 @@ export function joinPage(input: { brands: Brand[]; brand: Brand | null; next: st
   return doc(
     title,
     `<main class="phone" style="${paint(accent, input.brand?.accent_soft || "#e7f3df")}">
-      <header class="hero"><div class="hero-top"><div class="avatar">${esc(input.brand?.emoji || "🍵")}</div><div><div class="hero-title">${esc(title)}</div><div class="hero-sub">Satu akun buat semua merek</div></div></div></header>
+      <header class="hero"><div class="hero-top">${input.brand ? logoSlot(input.brand) : `<div class="avatar">${CUP}</div>`}<div><div class="hero-title">${esc(title)}</div><div class="hero-sub">1 kartu buat semua brand favorit lu</div></div></div></header>
       ${flashes(input.params)}
       <form class="card" method="post" action="/gabung">
         <input type="hidden" name="next" value="${esc(input.next)}" />
         <input type="hidden" name="merek" value="${esc(input.brand?.id || "")}" />
         <input type="hidden" name="ajak" value="${esc(input.params.get("ajak") || "")}" />
         <label class="lbl" for="nama">Nama</label>
-        <input id="nama" name="nama" required maxlength="40" autocomplete="name" value="${esc(input.values?.nama || "")}" />
+        <input id="nama" name="nama" type="text" required maxlength="40" autocomplete="name" value="${esc(input.values?.nama || "")}" />
         <label class="lbl" for="wa">Nomor WhatsApp</label>
-        <input id="wa" name="wa" required inputmode="tel" autocomplete="tel" placeholder="0812 3456 4567" value="${esc(input.values?.wa || "")}" />
+        <input id="wa" name="wa" type="tel" required inputmode="tel" autocomplete="tel" placeholder="0812 3456 4567" value="${esc(input.values?.wa || "")}" />
         <label class="lbl" for="pin">PIN pilihan kamu (4–6 angka)</label>
-        <input id="pin" name="pin" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" pattern="\\d{4,6}" />
+        <input id="pin" name="pin" type="text" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" pattern="\\d{4,6}" />
         <label class="lbl" for="pin2">Ulangi PIN</label>
-        <input id="pin2" name="pin2" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" pattern="\\d{4,6}" />
+        <input id="pin2" name="pin2" type="text" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" pattern="\\d{4,6}" />
         <p class="fine">Tidak ada SMS. PIN ini yang dipakai kalau kamu masuk di HP lain. Jangan kasih ke orang.</p>
         <label class="checkline"><input type="checkbox" name="setuju" value="on" required /> Aku setuju nerima promo dan ucapan ulang tahun (UU PDP).</label>
         <button class="btn btn-solid">Simpan &amp; lihat kartu</button>
       </form>
-      <p class="fine center" style="margin-top:12px">Sudah terdaftar? <a href="/masuk?next=${encodeURIComponent(input.next)}">Masuk</a></p>
+      <p class="fine center" style="margin-top:12px">Udah terdaftar? <a href="/masuk?next=${encodeURIComponent(input.next)}">Masuk</a></p>
     </main>`,
     accent,
   );
@@ -405,9 +443,9 @@ export function loginPage(input: { next: string; params: URLSearchParams }): str
       <form class="card" method="post" action="/masuk">
         <input type="hidden" name="next" value="${esc(input.next)}" />
         <label class="lbl" for="wa">Nomor WhatsApp</label>
-        <input id="wa" name="wa" required inputmode="tel" autocomplete="tel" placeholder="0812 3456 4567" />
+        <input id="wa" name="wa" type="tel" required inputmode="tel" autocomplete="tel" placeholder="0812 3456 4567" />
         <label class="lbl" for="pin">PIN</label>
-        <input id="pin" name="pin" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="current-password" />
+        <input id="pin" name="pin" type="text" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="current-password" />
         <button class="btn btn-solid">Masuk</button>
       </form>
       <a class="btn btn-google" href="/masuk/google">Masuk dengan Google</a>
@@ -457,7 +495,7 @@ export function cardPage(input: {
         if (row.type === "redeem") return `<div class="row"><div><b class="reward">Tukar ${esc(row.reward_text)}</b><div class="small muted">${esc(row.outlet_name || row.short_name)}</div></div><div class="muted">${esc(when)}</div></div>`;
         if (row.type === "cancel") return `<div class="row"><div><b class="muted">Dibatalkan</b></div><div class="muted">${esc(when)}</div></div>`;
         if (row.type === "join") return `<div class="row"><div><b>Gabung kartu</b></div><div class="muted">${esc(when)}</div></div>`;
-        if (row.type === "birthday") return `<div class="row"><div><b class="reward">Birthday Freebies</b><div class="small muted">${esc(row.note)}</div></div><div class="muted">${esc(when)}</div></div>`;
+        if (row.type === "birthday") return `<div class="row"><div><b class="reward">Hadiah ultah</b><div class="small muted">${esc(row.note)}</div></div><div class="muted">${esc(when)}</div></div>`;
         const label = row.voided ? "Stamp dibatalkan" : "+1 stamp";
         return `<div class="row"><div><b class="${row.voided ? "muted" : "plus"}">${label}</b><div class="small muted">${esc(row.outlet_name || "")}</div></div><div class="muted">${esc(when)}</div></div>`;
       })
@@ -488,7 +526,6 @@ export function cardPage(input: {
     .map((brand) => {
       const count = input.cards.get(brand.id)?.stamps ?? 0;
       const tone = customerSkin(brand);
-      const art = brandArt(brand);
       const active = brand.id === input.brand.id;
       const slice = slices.find((item) => item.brand.id === brand.id);
       const brandGifts = (slice?.tiers || (active ? gifts : [])).map((tier) => ({ stamps: tier.stamps, icon: tier.icon || "🎁" }));
@@ -498,14 +535,20 @@ export function cardPage(input: {
       const cardBg = brand.id === "krispyporkk" ? "#111111" : brand.accent || "#143d28";
       return `<article class="stampcard${active ? " on" : ""}" data-brand="${esc(brand.id)}" data-href="/kartu?merek=${esc(brand.id)}" data-skin="${tone.style}" data-dark="${tone.dark ? "1" : "0"}" style="${tone.style};background:${esc(cardBg)};color:#fff${brand.id === "krispyporkk" ? ";border:1.5px solid #F27BA6" : ""}">
         ${veil}
-        <div class="stamphead"><span class="logo-chip" style="background:${esc(art.chip)}"><img src="${esc(art.mark)}" alt="${esc(brand.short_name)}" /></span><b>${count}/${brand.stamps_required}</b></div>
+        <div class="stamphead">${logoSlot(brand)}<b>${count}/${brand.stamps_required}</b></div>
         ${stampGrid(count, brand.stamps_required, stampMark(brand), brandGifts, brand.id)}
         <p class="stampnote">${esc(nextRewardLine(count, slice?.tiers || []))}</p>
       </article>`;
     })
     .join("");
   const dots = input.brands
-    .map((brand) => `<i class="${brand.id === input.brand.id ? "on" : ""}" data-dot-brand="${esc(brand.id)}"></i>`)
+    .map((brand) =>
+      logoSlot(brand, {
+        decorative: true,
+        extra: brand.id === input.brand.id ? "on" : "",
+        attrs: ` data-dot-brand="${esc(brand.id)}"`,
+      }),
+    )
     .join("");
   const phone = input.member.wa.startsWith("62") ? `+${input.member.wa}` : input.member.wa;
   const stages = slices
@@ -534,6 +577,7 @@ export function cardPage(input: {
   return doc(
     input.brand.short_name,
     `${celebrate ? confetti() : ""}${installPrompt()}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}" data-brand-root data-member="1">
+      <div class="page-swap" data-page>
       ${stages}
       <section class="hello">
         <h1 class="display">Hai, ${esc(first)} 👋</h1>
@@ -545,6 +589,7 @@ export function cardPage(input: {
       <button type="button" class="btn btn-solid"${locked ? " data-open-verify" : " data-scan"}>${locked ? "🔒 Collect Stamps" : "Collect Stamps"}</button>
       <p class="fine center">${locked ? "Verifikasi dulu biar stamp-nya kebuka." : "Arahin kamera ke QR di kasir ya"}</p>
       ${rests}
+      </div>
       <div class="dimmer" data-verify-dim hidden></div>
       <section class="sheet" data-verify-sheet hidden>
         <div class="grab"></div>
@@ -615,7 +660,7 @@ export function successPage(input: {
     input.kind === "stamp"
       ? "Yeay, stamp kamu nambah!"
       : input.kind === "birthday"
-        ? `Birthday Freebies ${input.brand.short_name}!`
+        ? `Hadiah ultah ${input.brand.short_name}!`
         : `Reward ${input.brand.short_name} ditukar!`;
   const others = input.otherBrands.length ? `Cek juga kartu kamu di ${input.otherBrands.join(" & ")}` : "Kartu kamu tersimpan di HP ini";
   return doc(
@@ -654,7 +699,7 @@ export function cashierPinPage(outlet: Outlet, brand: Brand, params: URLSearchPa
       <form class="card" method="post" action="/kasir/masuk">
         <input type="hidden" name="outlet_id" value="${esc(outlet.id)}" />
         <label class="lbl" for="pin">PIN</label>
-        <input id="pin" name="pin" required inputmode="numeric" minlength="4" maxlength="8" autocomplete="current-password" />
+        <input id="pin" name="pin" type="text" required inputmode="numeric" minlength="4" maxlength="8" autocomplete="current-password" />
         <button class="btn btn-solid">Masuk</button>
       </form>
       <p class="fine"><a href="/kasir">Pilih outlet lain</a></p>
@@ -665,7 +710,7 @@ export function cashierPinPage(outlet: Outlet, brand: Brand, params: URLSearchPa
 
 export function cashierLoginPage(outlets: Array<Outlet & { brand_name: string; emoji: string; accent: string }>, params: URLSearchParams): string {
   const options = outlets
-    .map((o) => `<option value="${esc(o.id)}">${esc(o.emoji)} ${esc(o.name)}</option>`)
+    .map((o) => `<option value="${esc(o.id)}">${esc(o.name)}</option>`)
     .join("");
   return doc(
     "Kasir",
@@ -676,7 +721,7 @@ export function cashierLoginPage(outlets: Array<Outlet & { brand_name: string; e
         <label class="lbl" for="outlet">Outlet</label>
         <select id="outlet" name="outlet_id" required>${options}</select>
         <label class="lbl" for="pin">PIN outlet</label>
-        <input id="pin" name="pin" required inputmode="numeric" minlength="4" maxlength="8" autocomplete="current-password" />
+        <input id="pin" name="pin" type="text" required inputmode="numeric" minlength="4" maxlength="8" autocomplete="current-password" />
         <button class="btn btn-solid">Masuk</button>
       </form>
     </main>`,
@@ -734,7 +779,7 @@ export function cashierDeskPage(input: {
     `Kasir ${input.outlet.name}`,
     `<main class="kasir-desk phone" style="${paint(input.brand.accent, input.brand.accent_soft)}">
       <header class="hero">
-        <div class="hero-top"><div class="avatar">${esc(input.brand.emoji)}</div><div><div class="hero-title">Kasir · ${esc(input.outlet.name)}</div><div class="hero-sub">Tablet outlet</div></div></div>
+        <div class="hero-top">${logoSlot(input.brand)}<div><div class="hero-title">Kasir · ${esc(input.outlet.name)}</div><div class="hero-sub">Tablet outlet</div></div></div>
         <div class="badge">${CHECK} Login PIN outlet</div>
       </header>
       ${input.params.get("ok") === "stamp" && input.params.get("siapa") ? `<div class="flash good">✓ Stamp masuk ke ${esc(input.params.get("siapa") || "")}${input.cancelId ? `<form method="post" action="/kasir/batal/${esc(input.cancelId)}"><button class="textlink">Batalkan</button></form>` : ""}</div>` : flashes(input.params)}
@@ -746,7 +791,7 @@ export function cashierDeskPage(input: {
           <label class="checkline"><input type="checkbox" name="syarat" value="on" required /> ${esc(input.brand.condition_label)}</label>
           <button class="btn btn-solid">${CUP} Buka QR stamp</button>
           <label class="lbl" for="wa">Nomor WA customer</label>
-          <input id="wa" name="wa" inputmode="tel" placeholder="0812 3456 4567" value="${esc(input.params.get("wa") || "")}" />
+          <input id="wa" name="wa" type="tel" inputmode="tel" placeholder="0812 3456 4567" value="${esc(input.params.get("wa") || "")}" />
           <button class="btn btn-line" formaction="/kasir/stamp/manual">+1 stamp ke nomor ini</button>
           <button class="btn btn-line" formaction="/kasir/cari" formnovalidate>Cari member</button>
         </form>
@@ -795,7 +840,7 @@ export function cashierQrPage(input: {
   return doc(
     "QR kasir",
     `${refresh}<main class="phone" style="${paint(input.brand.accent, input.brand.accent_soft)}">
-      <header class="hero"><div class="hero-top"><div class="avatar">${esc(input.brand.emoji)}</div><div><div class="hero-title">Kasir · ${esc(input.brand.short_name)}</div><div class="hero-sub">Login PIN outlet</div></div></div></header>
+      <header class="hero"><div class="hero-top">${logoSlot(input.brand)}<div><div class="hero-title">Kasir · ${esc(input.brand.short_name)}</div><div class="hero-sub">Login PIN outlet</div></div></div></header>
       <section class="card center">
         <h2>${input.status === "pending" ? "Minta customer scan QR ini" : "Status QR"}</h2>
         <p class="fine">${noun} · ${esc(input.brand.short_name)} · sekali pakai</p>
@@ -943,7 +988,7 @@ export function dashboardPage(input: {
   };
 }): string {
   const chips = [`<a class="chip${input.brand ? "" : " on"}" href="/admin/dasbor">Semua</a>`]
-    .concat(input.brands.map((b) => `<a class="chip${input.brand?.id === b.id ? " on" : ""}" href="/admin/dasbor?merek=${esc(b.id)}">${esc(b.emoji)} ${esc(b.short_name)}</a>`))
+    .concat(input.brands.map((b) => `<a class="chip${input.brand?.id === b.id ? " on" : ""}" href="/admin/dasbor?merek=${esc(b.id)}">${logoSlot(b, { decorative: true })} ${esc(b.short_name)}</a>`))
     .join("");
   const max = Math.max(1, ...input.days.map((d) => d.n));
   const bars = input.days
@@ -1113,7 +1158,7 @@ export function memberDetailPage(input: {
      <article class="panel" style="margin-top:12px">
        <div class="row"><span>WA</span><b>${esc(prettyWa(input.member.wa))}</b></div>
        <div class="row"><span>Email</span><b>${esc(input.member.email || "-")}</b></div>
-       <div class="row"><span>Ulang tahun</span><b>${esc(input.member.birthday || "-")}</b></div>
+       <div class="row"><span>Ulang tahun</span><b>${esc(input.member.birthday ? formatBirthdayId(input.member.birthday) : "-")}</b></div>
        <div class="row"><span>Gabung</span><b>${esc(memberSince(input.member.created_at))} · ${esc(input.member.join_method)}</b></div>
        <div class="row"><span>Terakhir datang</span><b>${esc(feedTime(input.member.last_seen_at, Date.now()))}</b></div>
        <div class="row"><span>WA terverifikasi</span><b>${input.member.wa_verified === 1 ? "ya" : "belum"}</b></div>
@@ -1129,7 +1174,7 @@ export function memberDetailPage(input: {
      <form class="panel" style="margin-top:12px" method="post" action="/admin/member/${esc(input.member.id)}/lahir">
        <h2>Tanggal lahir</h2>
        <p class="fine">Pelanggan tidak bisa mengubah ini sendiri setelah terisi. Owner boleh. Kalau baru diubah, Birthday Freebies tahun ini terkunci 30 hari kecuali dicentang.</p>
-       <input name="lahir" type="date" required value="${esc(input.member.birthday || "")}" />
+       ${birthdayFields(input.member.birthday)}
        <label class="checkline"><input type="checkbox" name="boleh" value="on" /> Boleh klaim Birthday Freebies tahun ini</label>
        <button class="btn btn-solid">Simpan tanggal lahir</button>
      </form>
@@ -1169,7 +1214,7 @@ export function profilePage(input: {
   return doc(
     "Profil",
     `<main class="phone${skin ? ` skin with-tabs${skin.dark ? " skin-dark" : ""}` : ""}"${skin ? ` style="${skin.style}"` : ""} ${input.mode === "member" ? `data-member="1"` : ""}>
-      ${skin ? "" : `<header class="hero"><div class="hero-title">${link ? "Nomor ini sudah punya kartu" : "Lengkapi profil"}</div><div class="hero-sub">${esc(input.email || input.name)}</div></header>`}
+      ${skin ? "" : `<header class="hero"><div class="hero-title">${link ? "Nomor ini udah punya kartu" : "Lengkapi profil"}</div><div class="hero-sub">${esc(input.email || input.name)}</div></header>`}
       ${flashes(input.params)}
       ${
         link
@@ -1178,17 +1223,17 @@ export function profilePage(input: {
               <input type="hidden" name="wa" value="${esc(input.wa || "")}" />
               <input type="hidden" name="lahir" value="${esc(input.birthday || "")}" />
               <label class="lbl">PIN</label>
-              <input name="pin" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="current-password" />
+              <input name="pin" type="text" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="current-password" />
               <button class="btn btn-solid">Hubungkan</button>
             </form>`
           : input.mode === "google"
             ? `<form class="card" method="post" action="/profil">
-                <label class="lbl">Nama</label><input name="nama" required value="${esc(input.name)}" />
-                <label class="lbl">Tanggal lahir</label><input name="lahir" type="date" required value="${esc(input.birthday || "")}" />
+                <label class="lbl">Nama</label><input name="nama" type="text" required value="${esc(input.name)}" />
+                ${birthdayFields(input.birthday)}
                 <p class="fine">Tanggal lahir tidak bisa diubah sendiri setelah disimpan.</p>
-                <label class="lbl">Nomor WhatsApp</label><input name="wa" required inputmode="tel" value="${esc(input.wa || "")}" placeholder="0812 3456 4567" />
-                <label class="lbl">PIN 4–6 angka</label><input name="pin" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" />
-                <label class="lbl">Ulangi PIN</label><input name="pin2" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" />
+                <label class="lbl">Nomor WhatsApp</label><input name="wa" type="tel" required inputmode="tel" value="${esc(input.wa || "")}" placeholder="0812 3456 4567" />
+                <label class="lbl">PIN 4–6 angka</label><input name="pin" type="text" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" />
+                <label class="lbl">Ulangi PIN</label><input name="pin2" type="text" required inputmode="numeric" minlength="4" maxlength="6" autocomplete="new-password" />
                 <p class="fine">PIN ini buat masuk tanpa Google, di HP lain.</p>
                 <label class="checkline"><input type="checkbox" name="setuju" value="on" required /> Aku setuju nerima promo dan ucapan ulang tahun (UU PDP).</label>
                 <button class="btn btn-solid">Simpan dan lihat kartu</button>
@@ -1202,8 +1247,9 @@ export function profilePage(input: {
               </section>
               <form class="card" method="post" action="/profil">
                 <p class="fine">${input.wa ? esc(maskWa(input.wa)) : ""}${input.email ? ` · ${esc(input.email)}` : ""}</p>
-                ${input.birthday ? `<p><b>Ulang tahun ${esc(input.birthday)}</b> sudah tersimpan. Tidak bisa diubah sendiri.</p>` : `<label class="lbl">Tanggal lahir</label><input name="lahir" type="date" required /><p class="fine">Sekali simpan, dikunci. Birthday Freebies baru bisa 30 hari kemudian.</p>`}
-                ${input.consent ? `<p class="fine">Persetujuan promo dan ulang tahun sudah tercatat.</p>` : `<label class="checkline"><input type="checkbox" name="setuju" value="on" required /> Aku setuju nerima promo dan ucapan ulang tahun (UU PDP).</label><button class="btn btn-solid">Simpan</button>`}
+                ${input.birthday ? `<p><b>Ulang tahun ${esc(formatBirthdayId(input.birthday))}</b> udah tersimpan. Tidak bisa diubah sendiri.</p>` : `${birthdayFields(null)}<p class="fine">Sekali simpan, dikunci. Hadiah ultah baru bisa 30 hari kemudian.</p>`}
+                ${input.consent ? `<p class="fine">Persetujuan promo dan ulang tahun sudah tercatat.</p>` : `<label class="checkline"><input type="checkbox" name="setuju" value="on" required /> Aku setuju nerima promo dan ucapan ulang tahun (UU PDP).</label>`}
+                ${!input.birthday || !input.consent ? `<button class="btn btn-solid">Simpan</button>` : ""}
               </form>
               ${input.google ? "" : `<a class="btn btn-google" href="/masuk/google?niat=hubung">Hubungkan Google</a>`}
               ${
@@ -1299,7 +1345,7 @@ export function bannersPage(input: { banners: Banner[]; news: NewsCard[]; brands
         </form>`;
       });
       return `<section style="margin-top:22px">
-        <h2>${esc(brand.emoji)} ${esc(brand.short_name)}</h2>
+        <h2>${logoSlot(brand)} ${esc(brand.short_name)}</h2>
         <form class="panel" method="post" action="/admin/banner/jeda">
           <input type="hidden" name="brand_id" value="${esc(brand.id)}" />
           <label class="lbl">Jeda geser banner (detik)</label>
@@ -1323,7 +1369,7 @@ export function rulesPage(brands: Brand[], hidden: Brand[], links: OrderLink[], 
   const forms = brands
     .map(
       (b) => `<form class="panel" style="margin-top:12px;${paint(b.accent, b.accent_soft)}" method="post" action="/admin/aturan/${esc(b.id)}">
-        <h2>${esc(b.emoji)} ${esc(b.name)}</h2>
+        <h2>${logoSlot(b)} ${esc(b.name)}</h2>
         <label class="lbl">Nama</label><input name="name" value="${esc(b.name)}" required />
         <label class="lbl">Nama singkat</label><input name="short_name" value="${esc(b.short_name)}" required />
         <label class="lbl">Handle</label><input name="handle" value="${esc(b.handle)}" required />
@@ -1384,7 +1430,7 @@ export function rulesPage(brands: Brand[], hidden: Brand[], links: OrderLink[], 
         ${hidden
           .map(
             (b) => `<form method="post" action="/admin/aturan/${esc(b.id)}/nyala" style="margin-top:10px">
-              <span>${esc(b.emoji)} ${esc(b.name)}</span>
+              <span>${logoSlot(b)} ${esc(b.name)}</span>
               <button class="btn btn-line">Merek aktif</button>
             </form>`,
           )
@@ -1434,9 +1480,9 @@ export function outletsPage(
           <button class="btn btn-line">${o.active ? "Nonaktifkan" : "Aktifkan"}</button>
         </form>
         <form method="post" action="/admin/outlet/${esc(o.id)}/pesan">
-          <h3 style="margin-top:8px">Order / Booking</h3>
-          <label class="lbl">WhatsApp order / booking</label><input name="wa" inputmode="tel" value="${esc(o.wa || "")}" placeholder="0812 3456 4567" />
-          <p class="fine">Satu tombol Booking / Order via WA di kartu. Pesannya “Halo, mau booking / order di …” pakai nomor ini. Kosongkan untuk menyembunyikan.</p>
+          <h3 style="margin-top:8px">${RESERVASI_LABEL}</h3>
+          <label class="lbl">WhatsApp order / booking</label><input name="wa" type="tel" inputmode="tel" value="${esc(o.wa || "")}" placeholder="0812 3456 4567" />
+          <p class="fine">Satu tombol ${RESERVASI_LABEL} di kartu. Pesannya “Halo, mau booking / order di …” pakai nomor ini. Kosongkan untuk menyembunyikan.</p>
           <button class="btn btn-solid">Simpan tautan</button>
         </form>
         <h3 style="margin-top:8px">Staf</h3>
@@ -1519,7 +1565,7 @@ export function stanPage(brands: Brand[], origin: string, svgs: Record<string, s
   const cards = brands
     .map(
       (b) => `<article class="stan" style="${paint(b.accent, b.accent_soft)}">
-        <h2>${esc(b.emoji)} ${esc(b.name)}</h2>
+        <h2>${logoSlot(b)} ${esc(b.name)}</h2>
         <p class="fine">Scan untuk gabung kartu stamp</p>
         <div class="qrbox">${svgs[b.id] || ""}</div>
         <p class="small">${esc(`${origin}/gabung/${b.id}`)}</p>
@@ -1553,7 +1599,7 @@ export function catalogPage(input: {
   brandName: string;
   brand: Brand;
   brands: Array<{ id: string; name: string; on: boolean }>;
-  rewards: Array<{ id: string; title: string; cost: string; note: string; ready: boolean; icon: string; image: string; soldOut: boolean }>;
+  rewards: Array<{ id: string; title: string; stamps: number; cost: string; note: string; ready: boolean; icon: string; image: string; soldOut: boolean }>;
   params: URLSearchParams;
   birthday?: BirthdayNotice;
   birthdayReward?: string;
@@ -1564,9 +1610,10 @@ export function catalogPage(input: {
   const rewards = input.rewards
     .map((reward) => {
       const face = rewardFace(reward.title);
+      const gap = reward.stamps - input.stamps;
       const action = reward.ready
-        ? `<form method="post" action="/tukar/stamp"><input type="hidden" name="tier" value="${esc(reward.id)}" /><input type="hidden" name="dari" value="hadiah" /><button class="textlink go">Tukar</button></form>`
-        : `<span class="soon">${reward.soldOut ? "Habis" : "Kurang<br>dikit lagi"}</span>`;
+        ? `<form class="redeemact" method="post" action="/tukar/stamp"><input type="hidden" name="tier" value="${esc(reward.id)}" /><input type="hidden" name="dari" value="hadiah" /><button class="textlink go" type="submit">Tukar</button></form>`
+        : `<span class="soon">${reward.soldOut ? "Habis" : `Kurang ${gap} lagi`}</span>`;
       return `<article class="redeemrow"><span class="ic">${reward.image ? `<img src="${esc(reward.image)}" alt="" />` : esc(reward.icon || "🎁")}</span><div><b>${esc(face.title)}</b> <span class="freebadge">${esc(face.badge)}</span><small>${esc(reward.cost)}</small></div>${action}</article>`;
     })
     .join("");
@@ -1579,6 +1626,7 @@ export function catalogPage(input: {
     "News & Redeem",
     `<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
       <div class="brandchip">${logoSlot(input.brand)} ${esc(art.full ? input.brand.short_name : input.brandName)}</div>
+      <p class="stampbal"><b>${input.stamps}</b> stamp</p>
       <h2 class="sectiontitle">Tukerin stamp lu</h2>
       <div class="redeemlist">${rewards || `<p class="fine">Belum ada redeem.</p>`}</div>
       ${flashes(input.params)}

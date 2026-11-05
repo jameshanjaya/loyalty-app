@@ -279,9 +279,9 @@ lines.push(
   ('tier_kris_10', 'krispyporkk', 10, 'diskon 50%', 1, 1);
   INSERT INTO point_ledger (id, member_id, brand_id, delta_tenths, reason, ref_id, created_at, earned_at, expires_at) VALUES
   ('poin_rina', 'm_rina', 'loft25', 15, 'mission', 'sub_rina_review', ${now - 2 * DAY}, ${now - 2 * DAY}, ${now + 11 * DAY});
-  UPDATE brands SET cta='#143d28', page_bg='#f3eee4', stamp_icon='whisk' WHERE id='loft25';
-  UPDATE brands SET cta='#c93a26', page_bg='#e7eef8', stamp_icon='bowl' WHERE id='soto-oseng';
-  UPDATE brands SET cta='#111111', page_bg='#fff5f8', stamp_icon='snout' WHERE id='krispyporkk';
+  UPDATE brands SET accent='#143d28', accent_soft='#cfe3b8', cta='#143d28', page_bg='#f4efe4', stamp_icon='whisk', non_halal=0 WHERE id='loft25';
+  UPDATE brands SET accent='#1F3A8A', accent_soft='#d6e4f5', cta='#D7262E', page_bg='#f7f3ee', stamp_icon='bowl', non_halal=1 WHERE id='soto-oseng';
+  UPDATE brands SET accent='#F27BA6', accent_soft='#ffd0e4', cta='#F27BA6', page_bg='#1a1a1a', stamp_icon='snout', non_halal=1 WHERE id='krispyporkk';
   UPDATE missions SET proof_kind='upload', description='Foto struk atau minuman, terus review di Google. Lampirin screenshot-nya ya.', steps='Buka Google Maps.\nCari outlet-nya.\nKasih bintang dan tulis review.\nScreenshot, lalu kirim di sini.' WHERE id='misi_review';
   UPDATE missions SET proof_kind='link', description='Post di Threads, tag kami, terus tempel tautannya.' WHERE id='misi_threads';
   UPDATE missions SET proof_kind='upload', description='Story Instagram yang nge-tag kami. Lampirin screenshot-nya.' WHERE id='misi_story';
