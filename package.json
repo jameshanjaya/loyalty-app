@@ -17,7 +17,7 @@
     "uqr": "^0.1.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20251104.0",
+    "@cloudflare/workers-types": "^5.20261103.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4",
     "wrangler": "^4.157.0"

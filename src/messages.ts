@@ -39,6 +39,10 @@ export const ERR: Record<string, string> = {
   kode: "Kodenya tidak berlaku. Cek merek outlet dan masa berlakunya.",
   bukti: "Buktinya belum lengkap, ya.",
   misi: "Quest ini sudah kamu kirim, atau lagi dikunci.",
+  passpendek: "Password baru minimal 8 karakter, ya.",
+  passbeda: "Password baru dan ulangi-nya belum sama.",
+  passsalah: "Password sekarang kurang tepat.",
+  sendiri: "Gak bisa kasih stamp ke akun sendiri ya",
 };
 
 export const OK: Record<string, string> = {
@@ -58,6 +62,7 @@ export const OK: Record<string, string> = {
   tarik: "Poin quest ditarik balik.",
   tolak: "Misi ditolak.",
   kode: "Kode dikonfirmasi.",
+  password: "Password diganti. Sesi owner lain sudah dikeluarkan.",
 };
 
 export function errText(code: string | null): string | null {

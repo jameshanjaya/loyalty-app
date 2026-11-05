@@ -92,7 +92,7 @@ npx wrangler d1 create loyalty-bos
 
 Perintah itu menampilkan `database_id`. Salin ID-nya.
 
-3. Buka `wrangler.jsonc`. Ganti `database_id` yang sekarang (`00000000-0000-0000-0000-000000000001`) dengan ID dari langkah 2. Simpan file.
+3. `database_id` di `wrangler.jsonc` yang ada di git sengaja tetap `00000000-0000-0000-0000-000000000001`. Itu placeholder, bukan database sungguhan. Saat deploy, pakai ID asli dari langkah 2 hanya di mesin yang memasang, dan jangan commit perubahan itu.
 
 4. Buat tempat gambar banner.
 
@@ -188,8 +188,8 @@ Di **Setting Program**, tiap merek punya warna utama, warna lembut, warna tombol
 
 ## Cara pakai sehari-hari
 
-- Pelanggan scan QR stan, isi nama, nomor WA, dan PIN. HP itu tetap masuk. Di HP lain, mereka masuk dengan nomor WA + PIN.
-- Kasir masuk dengan PIN outlet. Satu outlet hanya memberi stamp untuk mereknya.
+- Pelanggan scan QR stan, isi nama, nomor WA, dan PIN. Login di HP itu bertahan 365 hari. Kalau mereka membuka aplikasi lagi setelah sekitar sehari, cookie diperpanjang 365 hari dari kunjungan itu. Keluar tetap menghapus cookie. Di HP lain, mereka masuk dengan nomor WA + PIN.
+- Kasir masuk dengan PIN outlet. Satu outlet hanya memberi stamp untuk mereknya. Di **Outlet & PIN**, owner bisa menandai akun member sebagai **Staf** outlet itu (nomor WA atau email). Kasir outlet itu tidak bisa kasih stamp atau tukar ke akun staf. Percobaan yang ditolak muncul di dashboard, bagian **Yang perlu dicek**.
 - Satu transaksi paling satu stamp. Kasir harus mencentang syarat. Teks centangnya diatur di **Setting Program**.
 - Satu pelanggan paling 2 stamp per merek per hari. Angka ini bisa diubah di Setting Program.
 - Stamp penuh: kasir tap **Tukar Reward**, pelanggan scan QR untuk setuju. Atau kasir cari nomor WA lalu tukar. Stamp yang lebih dari 10 tetap nyangkut.
@@ -203,6 +203,10 @@ Di **Setting Program**, tiap merek punya warna utama, warna lembut, warna tombol
 - Banner promo di kartu pelanggan diatur di **Banner Promo**. Satu merek boleh punya beberapa foto, dengan urutan dan tanggal mulai/selesai. Bisa tempel tautan gambar https, atau unggah file (paling 2 MB, jpg/png/webp/gif). Judul, subjudul, dan teks tombol tampil di atas fotonya. Pelanggan menggeser fotonya, dan foto berganti sendiri. Warna kartu ikut merek yang dipilih: Loft25 hijau matcha, Soto Oseng merah tanah, Krispyporkk oranye di latar gelap.
 - Log aktivitas ada di menu **Aktivitas**. Bisa diunduh sebagai CSV.
 - Kalau kasir memberi stamp sangat banyak dalam waktu singkat, atau ada yang mentok batas harian, dashboard menampilkan **Yang perlu dicek**.
+
+## Ganti password owner
+
+Menu **Ganti Password** di dashboard. Isi password sekarang, password baru, dan ulangi password baru. Minimal 8 karakter. Hash-nya disimpan di D1. Setelah itu login memakai hash itu, dan password di `OWNER_PASSWORD` tidak berlaku lagi sampai hash-nya dihapus dari database. Sesi owner yang sedang dipakai tetap masuk. Sesi owner yang lain dikeluarkan. Login yang gagal di `/admin/masuk` tetap dikunci 5 kali per 15 menit per IP.
 
 ## Ganti PIN dan password
 
@@ -226,7 +230,7 @@ Tes ini memeriksa QR yang hanya bisa dipakai sekali dan yang kedaluwarsa, aturan
 - Halaman bilang database kosong: jalankan `npm run setup`.
 - Login owner ditolak: password di `.dev.vars` minimal 8 karakter, dan `PIN_PEPPER` minimal 16 karakter. Restart `npm run dev` setelah mengubah file itu.
 - Pelanggan tidak bisa masuk setelah kamu mengganti `PIN_PEPPER`: itu diharapkan. Kembalikan pepper lama, atau buat PIN baru untuk semua orang.
-- Deploy ditolak karena database: `database_id` di `wrangler.jsonc` harus ID dari `wrangler d1 create`, bukan ID contoh.
+- Deploy ditolak karena database: file di git memang menyimpan ID contoh. Di mesin deploy, isi `database_id` dengan ID dari `wrangler d1 create` tanpa mengcommitnya.
 
 ## Batas paket gratis
 

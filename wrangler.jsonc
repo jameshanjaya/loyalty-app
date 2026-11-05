@@ -25,7 +25,7 @@
     {
       "binding": "DB",
       "database_name": "loyalty-bos",
-      // Ganti dengan database_id dari: npx wrangler d1 create loyalty-bos
+      // Placeholder di git. Jangan commit ID produksi. Deploy memakai ID asli hanya di mesin yang memasang.
       "database_id": "00000000-0000-0000-0000-000000000001",
       "migrations_dir": "migrations"
     }

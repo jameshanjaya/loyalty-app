@@ -1,5 +1,6 @@
 import { birthdayRedeemAllowed, birthdayStatus, parseBirthday } from "./birthday";
-import { bytesToHex, hashPin, passwordMatches, randomBytes, randomId, verifyPin } from "./crypto";
+import { bytesToHex, hashPin, randomBytes, randomId, verifyPin } from "./crypto";
+import { ownerPasswordOk, ownerSubject, planOwnerPasswordChange, type StoredOwnerPassword } from "./owner-password";
 import { maskName } from "./format";
 import {
   CASHIER_FLAG_AT,
@@ -16,6 +17,7 @@ import { normalizeWa, validName, validOutletPin, validPin, weakPin } from "./pho
 import { birthdayEditAllowed, decidePhone } from "./profile";
 import * as repo from "./repo";
 import { LIMITS, enforceLimit, failureBlocked } from "./ratelimit";
+import { STAFF_FLAG_REASON, staffFlagDetail } from "./staff";
 import { startOfWibDay } from "./time";
 import { issueClaim, inspectClaim, type ClaimReader } from "./tokens";
 import type { Brand, Member, Outlet } from "./types";
@@ -56,6 +58,26 @@ async function paceFlag(db: D1Database, sessionId: string | null, outletId: stri
   logEvent("flag_ramai", { outlet: outletId, count: n });
 }
 
+async function blockIfStaff(
+  db: D1Database,
+  input: { outletId: string | null; member: Member; sessionId: string | null; now: number },
+): Promise<Fail | null> {
+  if (!input.outletId) return null;
+  if (!(await repo.isOutletStaff(db, input.outletId, input.member.id))) return null;
+  await repo.insertFlag(db, {
+    id: randomId(),
+    outletId: input.outletId,
+    sessionId: input.sessionId,
+    memberId: input.member.id,
+    reason: STAFF_FLAG_REASON,
+    detail: staffFlagDetail(input.member.name),
+    now: input.now,
+    dedupe: false,
+  });
+  logEvent("staff_block", { outlet: input.outletId, member: input.member.id });
+  return { ok: false, error: "sendiri" };
+}
+
 async function capFlag(db: D1Database, memberId: string, outletId: string | null, sessionId: string | null, now: number): Promise<void> {
   await repo.insertFlag(db, {
     id: randomId(),
@@ -81,6 +103,8 @@ export async function giveStamp(
     note: string;
   },
 ): Promise<{ ok: true; activityId: string; balance: number; masked: string } | Fail> {
+  const staff = await blockIfStaff(db, input);
+  if (staff) return staff;
   const previewRule = applyStamp({ confirmed: input.confirmed, balance: 0 });
   if (!previewRule.ok) return { ok: false, error: "syarat" };
   const today = startOfWibDay(input.now);
@@ -144,6 +168,8 @@ export async function giveRedeem(
     note: string;
   },
 ): Promise<{ ok: true; activityId: string; balance: number; masked: string } | Fail> {
+  const staff = await blockIfStaff(db, input);
+  if (staff) return staff;
   await repo.ensureCard(db, input.member.id, input.brand.id, input.now);
   const updated = await repo.redeemAtomic(db, {
     memberId: input.member.id,
@@ -323,32 +349,68 @@ export async function loginCashier(
   return { ok: true, sessionId, outlet };
 }
 
+async function storedOwnerPassword(db: D1Database): Promise<StoredOwnerPassword | null> {
+  const salt = await repo.getSetting(db, "owner_pass_salt");
+  const hash = await repo.getSetting(db, "owner_pass_hash");
+  if (!salt || !hash) return null;
+  return { salt, hash };
+}
+
 export async function loginOwner(
   db: D1Database,
   env: Env,
   input: { password: string; ip: string; now: number },
 ): Promise<{ ok: true; sessionId: string } | Fail> {
-  if (!env.OWNER_PASSWORD || env.OWNER_PASSWORD.length < 8 || !env.PIN_PEPPER || env.PIN_PEPPER.length < 16) {
-    return { ok: false, error: "secret" };
-  }
+  if (!env.PIN_PEPPER || env.PIN_PEPPER.length < 16) return { ok: false, error: "secret" };
+  const stored = await storedOwnerPassword(db);
+  if (!stored && (!env.OWNER_PASSWORD || env.OWNER_PASSWORD.length < 8)) return { ok: false, error: "secret" };
   const blocked = await failureBlocked(db, `owner:ip:${input.ip}`, input.now, LIMITS.ownerPin);
   if (!blocked.ok) return { ok: false, error: "pinwait" };
-  const ok = await passwordMatches(input.password, env.OWNER_PASSWORD, env.PIN_PEPPER);
+  const ok = await ownerPasswordOk({
+    password: input.password,
+    pepper: env.PIN_PEPPER,
+    envPassword: env.OWNER_PASSWORD || "",
+    stored,
+  });
   if (!ok) {
     await enforceLimit(db, `owner:ip:${input.ip}`, input.now, LIMITS.ownerPin);
     logEvent("owner_login_fail", { ip: input.ip });
     return { ok: false, error: "pin" };
   }
+  const version = await repo.getSetting(db, "owner_session_version");
   const sessionId = randomId();
   await repo.createSession(db, {
     id: sessionId,
     kind: "owner",
-    subjectId: "owner",
+    subjectId: ownerSubject(version),
     now: input.now,
     expiresAt: input.now + OWNER_SESSION_MS,
   });
   logEvent("owner_login", {});
   return { ok: true, sessionId };
+}
+
+export async function changeOwnerPassword(
+  db: D1Database,
+  env: Env,
+  input: { sessionId: string; current: string; next: string; confirm: string; now: number },
+): Promise<{ ok: true } | Fail> {
+  const stored = await storedOwnerPassword(db);
+  const plan = await planOwnerPasswordChange({
+    current: input.current,
+    next: input.next,
+    confirm: input.confirm,
+    pepper: env.PIN_PEPPER || "",
+    envPassword: env.OWNER_PASSWORD || "",
+    stored,
+  });
+  if (!plan.ok) return plan;
+  const previous = Number(await repo.getSetting(db, "owner_session_version")) || 0;
+  const version = String(previous + 1);
+  await repo.saveOwnerPassword(db, { salt: plan.salt, hash: plan.hash, version, sessionId: input.sessionId });
+  await repo.insertAdminLog(db, { id: randomId(), action: "ganti-password", detail: `versi ${version}`, now: input.now });
+  logEvent("owner_password", { version });
+  return { ok: true };
 }
 
 export async function openClaim(
@@ -599,6 +661,8 @@ export async function giveBirthday(
     note: string;
   },
 ): Promise<{ ok: true; activityId: string; balance: number; masked: string } | Fail> {
+  const staff = await blockIfStaff(db, input);
+  if (staff) return staff;
   const offer = birthdayStatus(input.member.birthday, input.now, {
     active: input.brand.birthday_active === 1,
     window: input.brand.birthday_window === "around" ? "around" : "month",

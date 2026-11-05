@@ -33,6 +33,15 @@ describe("batas percobaan", () => {
     expect(over.ok).toBe(false);
   });
 
+  it("login owner mengizinkan 5 gagal per 15 menit lalu mengunci", () => {
+    expect(LIMITS.ownerPin).toEqual({ windowMs: 15 * 60_000, limit: 5 });
+    const state = new Map();
+    const now = 1_700_000_000_000;
+    for (let i = 1; i <= 5; i++) expect(hitLimit(state, "owner:ip:1.2.3.4", now, LIMITS.ownerPin).ok).toBe(true);
+    expect(hitLimit(state, "owner:ip:1.2.3.4", now, LIMITS.ownerPin).ok).toBe(false);
+    expect(hitLimit(state, "owner:ip:9.9.9.9", now, LIMITS.ownerPin).ok).toBe(true);
+  });
+
   it("batas klaim dan batas kasir terpisah", () => {
     const state = new Map();
     const now = 9_000_000;

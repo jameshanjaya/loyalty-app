@@ -12,13 +12,14 @@ import { formatPoints, flagsForProof, parsePoints, parsePointsOrZero, proofKind 
 import * as pdb from "../points-db";
 import { expireCodes, expireDays, expiryNotes, memberPointState, reviewMission, revokeMission } from "../points-flow";
 import { shortDate } from "../time";
-import { loginOwner, ownerDeleteMember, ownerSetBirthday, ownerSetPhone, setOutletPinHash } from "../service";
+import { changeOwnerPassword, loginOwner, ownerDeleteMember, ownerSetBirthday, ownerSetPhone, setOutletPinHash } from "../service";
 import { clearCookie, COOKIE, loadOwner, setSessionCookie } from "../session";
 import { WIB_MS, feedTime, memberSince, parseWibDate, parseWibLocal, startOfWibDay, startOfWibMonth, wibDayIndex } from "../time";
 import type { Banner } from "../types";
 import {
   activityPage,
   adminLoginPage,
+  ownerPasswordPage,
   bannersPage,
   adminCatalogPage,
   adminMissionsPage,
@@ -71,6 +72,22 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (request.method === "POST" && !sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
+
+  if (path === "/admin/password" && request.method === "GET") return html(ownerPasswordPage(url.searchParams));
+
+  if (path === "/admin/password" && request.method === "POST") {
+    if (!owner) return redirect("/admin");
+    const form = await request.formData();
+    const result = await changeOwnerPassword(db, env, {
+      sessionId: owner,
+      current: String(form.get("password_lama") || ""),
+      next: String(form.get("password_baru") || ""),
+      confirm: String(form.get("password_ulang") || ""),
+      now,
+    });
+    if (!result.ok) return back("/admin/password", result.error);
+    return ok("/admin/password", "password");
+  }
 
   if (path === "/admin/dasbor" && request.method === "GET") {
     try {
@@ -294,7 +311,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const outlets = await repo.listOutlets(db);
     const brands = await repo.listBrands(db, false);
     const view = outlets.map((o) => ({ ...o, brand_name: brands.find((b) => b.id === o.brand_id)?.name || o.brand_id }));
-    return html(outletsPage(view, brands, await repo.listOrderLinks(db, null), url.searchParams));
+    return html(outletsPage(view, brands, await repo.listOrderLinks(db, null), url.searchParams, await repo.listOutletStaff(db)));
   }
 
   if (path === "/admin/outlet" && request.method === "POST") {
@@ -329,6 +346,27 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const id = decodeURIComponent(path.slice("/admin/pesan/".length, -"/hapus".length));
     await repo.deleteOrderLink(db, id);
     return ok("/admin/aturan", "hapus");
+  }
+
+  if (path.startsWith("/admin/outlet/") && path.endsWith("/staf/lepas") && request.method === "POST") {
+    const id = decodeURIComponent(path.slice("/admin/outlet/".length, -"/staf/lepas".length));
+    const form = await request.formData();
+    const memberId = String(form.get("member_id") || "");
+    if (!memberId || !(await repo.getOutlet(db, id))) return back("/admin/outlet", "aturan");
+    await repo.removeOutletStaff(db, id, memberId);
+    return ok("/admin/outlet", "simpan");
+  }
+
+  if (path.startsWith("/admin/outlet/") && path.endsWith("/staf") && request.method === "POST") {
+    const id = decodeURIComponent(path.slice("/admin/outlet/".length, -"/staf".length));
+    if (!(await repo.getOutlet(db, id))) return back("/admin/outlet", "aturan");
+    const form = await request.formData();
+    const raw = String(form.get("cari") || "").trim();
+    const wa = normalizeWa(raw);
+    const member = wa ? await repo.getMemberByWa(db, wa) : raw.includes("@") ? await repo.findMemberByEmail(db, raw) : null;
+    if (!member) return back("/admin/outlet", "belum");
+    await repo.addOutletStaff(db, id, member.id, now);
+    return ok("/admin/outlet", "simpan");
   }
 
   if (path.startsWith("/admin/outlet/") && path.endsWith("/pin") && request.method === "POST") {

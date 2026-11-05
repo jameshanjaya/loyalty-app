@@ -637,6 +637,7 @@ const NAV: Array<[string, string]> = [
   ["/admin/outlet", "Outlet & PIN"],
   ["/admin/aktivitas", "Aktivitas"],
   ["/admin/stan", "QR Stan"],
+  ["/admin/password", "Ganti Password"],
 ];
 
 function adminShell(active: string, body: string, accent = "#5c8f4b"): string {
@@ -650,6 +651,24 @@ function adminShell(active: string, body: string, accent = "#5c8f4b"): string {
       <div class="main">${body}</div>
     </div>`,
     accent,
+  );
+}
+
+export function ownerPasswordPage(params: URLSearchParams): string {
+  return adminShell(
+    "/admin/password",
+    `<h1>Ganti Password</h1>
+     ${flashes(params)}
+     <form class="panel" style="margin-top:12px" method="post" action="/admin/password">
+       <p class="fine">Minimal 8 karakter. Setelah disimpan, password di secret tidak bisa dipakai lagi. Sesi owner yang lain ikut keluar. Sesi kamu tetap masuk.</p>
+       <label class="lbl" for="password_lama">Password sekarang</label>
+       <input id="password_lama" name="password_lama" type="password" required autocomplete="current-password" />
+       <label class="lbl" for="password_baru">Password baru</label>
+       <input id="password_baru" name="password_baru" type="password" required minlength="8" maxlength="200" autocomplete="new-password" />
+       <label class="lbl" for="password_ulang">Ulangi password baru</label>
+       <input id="password_ulang" name="password_ulang" type="password" required minlength="8" maxlength="200" autocomplete="new-password" />
+       <button class="btn btn-solid">Simpan password</button>
+     </form>`,
   );
 }
 
@@ -709,7 +728,7 @@ export function dashboardPage(input: {
   const program = input.brand;
   const activePct = input.numbers.members ? Math.round((input.numbers.active30 / input.numbers.members) * 100) : 0;
   const flags = input.flags
-    .map((f) => `<div class="flag"><b>${esc(f.reason === "ramai" ? "Kasir terlalu ramai" : "Batas harian")}</b> · ${esc(f.outlet_name || "")} ${esc(f.member_name || "")}<div class="small">${esc(f.detail)} · ${esc(feedTime(f.created_at, input.now))}</div></div>`)
+    .map((f) => `<div class="flag"><b>${esc(f.reason === "ramai" ? "Kasir terlalu ramai" : f.reason === "sendiri" ? "Stamp ke akun sendiri" : "Batas harian")}</b> · ${esc(f.outlet_name || "")} ${esc(f.member_name || "")}<div class="small">${esc(f.detail)} · ${esc(feedTime(f.created_at, input.now))}</div></div>`)
     .join("");
   const body = `
     <div class="toprow"><h1>Dashboard</h1><div class="chips">${chips}</div></div>
@@ -1107,6 +1126,7 @@ export function outletsPage(
   brands: Brand[],
   links: OrderLink[],
   params: URLSearchParams,
+  staff: Array<{ outlet_id: string; id: string; name: string; wa: string; email: string | null }> = [],
 ): string {
   const options = brands.map((b) => `<option value="${esc(b.id)}">${esc(b.short_name)}</option>`).join("");
   const list = outlets
@@ -1130,6 +1150,22 @@ export function outletsPage(
           <label class="lbl">WhatsApp order / booking</label><input name="wa" inputmode="tel" value="${esc(o.wa || "")}" placeholder="0812 3456 4567" />
           <p class="fine">Tombol Order / Booking membuka chat dengan pesan “Halo, mau order/booking di ${esc(o.name)}”. Kosongkan untuk menyembunyikan.</p>
           <button class="btn btn-solid">Simpan tautan</button>
+        </form>
+        <h3 style="margin-top:8px">Staf</h3>
+        <p class="fine">Akun ini tidak bisa dapat stamp atau tukar dari kasir outlet ini.</p>
+        ${staff
+          .filter((person) => person.outlet_id === o.id)
+          .map(
+            (person) => `<form method="post" action="/admin/outlet/${esc(o.id)}/staf/lepas">
+              <span>${esc(person.name)} · ${esc(prettyWa(person.wa))}${person.email ? ` · ${esc(person.email)}` : ""}</span>
+              <input type="hidden" name="member_id" value="${esc(person.id)}" />
+              <button class="textlink">Lepas</button>
+            </form>`,
+          )
+          .join("") || `<p class="fine">Belum ada staf.</p>`}
+        <form method="post" action="/admin/outlet/${esc(o.id)}/staf">
+          <label class="lbl">Tambah staf (nomor WA atau email)</label>
+          <div class="actions"><input name="cari" required placeholder="0812… atau email" /><button class="btn btn-solid">Jadikan staf</button></div>
         </form>
       </article>`,
     )
