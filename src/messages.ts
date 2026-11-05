@@ -1,5 +1,6 @@
 export const ERR: Record<string, string> = {
   syarat: "Centang dulu syarat transakinya.",
+  setuju: "Centang dulu persetujuan promo dan ulang tahun.",
   pin: "PIN-nya kurang tepat.",
   pinwait: "Terlalu banyak percobaan. Coba lagi nanti.",
   wa: "Nomor WhatsApp-nya belum beres. Contoh: 0812 3456 4567.",

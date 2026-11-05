@@ -12,15 +12,19 @@ const rows: ExportRow[] = [
     stamps: "Loft25 6/10",
     rewards: "5",
     lastVisit: "4 Nov",
-    pointsExpiry: "1.5 poin · 15 Nov",
+    pointsExpiry: "1 stamp · 15 Nov",
+    waVerified: "ya",
+    promoConsent: "belum",
   },
 ];
 
 describe("unduh database member", () => {
   it("CSV memuat kolom lengkap dan mengutip koma", () => {
     const csv = membersCsv(rows);
-    expect(csv.split("\n")[0]).toBe("nama,wa,email,ulang_tahun,gabung,cara_gabung,stamp,reward_ditukar,terakhir_datang,poin_hangus");
-    expect(csv).toContain("1.5 poin · 15 Nov");
+    expect(csv.split("\n")[0]).toBe("nama,wa,email,ulang_tahun,gabung,cara_gabung,stamp,reward_ditukar,terakhir_datang,poin_hangus,wa_terverifikasi,persetujuan_promo");
+    expect(csv).toContain("1 stamp · 15 Nov");
+    expect(csv).toContain("ya");
+    expect(csv).toContain("belum");
     expect(csv).toContain('"Rina, Pratiwi"');
     expect(csv).toContain("rina@example.com");
     expect(csv).toContain("1998-11-04");

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Soto Oseng Bang Jem">
+  <circle cx="32" cy="32" r="30" fill="#d6e4f5"/>
+  <circle cx="32" cy="32" r="26" fill="none" stroke="#1F3A8A" stroke-width="3"/>
+  <path fill="#1F3A8A" d="M18 24c2-8 8-12 14-12s12 4 14 12c-4-2-8-3-14-3s-10 1-14 3z"/>
+  <path fill="#fff" d="M20 28c2 10 6 18 12 18s10-8 12-18c-4 4-8 6-12 6s-8-2-12-6z"/>
+  <path fill="#1F3A8A" d="M24 36c2 1 4 1 6 0M34 36c2 1 4 1 6 0M28 42c2 3 6 3 8 0"/>
+</svg>

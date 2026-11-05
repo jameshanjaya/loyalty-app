@@ -179,8 +179,9 @@ async function pinPair(plain: string): Promise<{ hash: string; salt: string }> {
 const outlets = [
   ["o_loft", "loft25", "Loft25 Senopati", "258025"],
   ["o_loft_kemang", "loft25", "Loft25 Kemang", "258026"],
-  ["o_soto", "soto-oseng", "Soto Oseng Tebet", "369136"],
-  ["o_kris", "krispyporkk", "Krispyporkk Kemang", "470247"],
+  ["o_soto", "soto-oseng", "Soto Oseng", "369136"],
+  ["o_kris", "krispyporkk", "Krispyporkk Kembangan", "470247"],
+  ["o_kris_gading", "krispyporkk", "Krispyporkk Gading Serpong", "470248"],
 ] as const;
 
 for (const [id, brand, name, plain] of outlets) {
@@ -190,10 +191,11 @@ for (const [id, brand, name, plain] of outlets) {
   );
 }
 lines.push(
-  `UPDATE outlets SET wa = '6281211112580' WHERE id = 'o_loft';
-   UPDATE outlets SET wa = '6281233332586' WHERE id = 'o_loft_kemang';
-   UPDATE outlets SET wa = '6281322223691' WHERE id = 'o_soto';
-   UPDATE outlets SET wa = '6281344447024' WHERE id = 'o_kris';`,
+  `UPDATE outlets SET wa = '6281211112580', slug = 'loft25-senopati' WHERE id = 'o_loft';
+   UPDATE outlets SET wa = '6281233332586', slug = 'loft25-kemang' WHERE id = 'o_loft_kemang';
+   UPDATE outlets SET wa = '6287890143089', slug = 'soto-oseng' WHERE id = 'o_soto';
+   UPDATE outlets SET wa = '6285778336066', slug = 'krispyporkk-kembangan' WHERE id = 'o_kris';
+   UPDATE outlets SET wa = '6285880903421', slug = 'krispyporkk-gading-serpong' WHERE id = 'o_kris_gading';`,
 );
 
 const counter = { i: 1 };
@@ -279,7 +281,7 @@ lines.push(
   ('poin_rina', 'm_rina', 'loft25', 15, 'mission', 'sub_rina_review', ${now - 2 * DAY}, ${now - 2 * DAY}, ${now + 11 * DAY});
   UPDATE brands SET cta='#143d28', page_bg='#f3eee4', stamp_icon='whisk' WHERE id='loft25';
   UPDATE brands SET cta='#c93a26', page_bg='#e7eef8', stamp_icon='bowl' WHERE id='soto-oseng';
-  UPDATE brands SET cta='#111111', page_bg='#fff5f8', stamp_icon='plate' WHERE id='krispyporkk';
+  UPDATE brands SET cta='#111111', page_bg='#fff5f8', stamp_icon='snout' WHERE id='krispyporkk';
   UPDATE missions SET proof_kind='upload', description='Foto struk atau minuman, terus review di Google. Lampirin screenshot-nya ya.', steps='Buka Google Maps.\nCari outlet-nya.\nKasih bintang dan tulis review.\nScreenshot, lalu kirim di sini.' WHERE id='misi_review';
   UPDATE missions SET proof_kind='link', description='Post di Threads, tag kami, terus tempel tautannya.' WHERE id='misi_threads';
   UPDATE missions SET proof_kind='upload', description='Story Instagram yang nge-tag kami. Lampirin screenshot-nya.' WHERE id='misi_story';

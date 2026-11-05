@@ -17,7 +17,7 @@ export default {
       const now = Date.now();
       let response: Response;
       if (url.pathname === "/health") response = json({ ok: true });
-      else if (url.pathname === "/app.webmanifest") response = await appManifest(env, url.origin);
+      else if (url.pathname === "/app.webmanifest") response = await appManifest(env, url);
       else {
         const media = await serveMedia(env, url);
         if (media) response = media;
@@ -83,6 +83,13 @@ async function serveMedia(env: Env, url: URL): Promise<Response | null> {
     const object = await env.BANNERS.get(row.r2_key);
     return object ? imageResponse(object) : new Response("Tidak ketemu", { status: 404 });
   }
+  const news = url.pathname.match(/^\/media\/news\/([A-Za-z0-9_-]{8,80})$/);
+  if (news) {
+    const row = await env.DB.prepare(`SELECT r2_key FROM news_cards WHERE id = ?`).bind(news[1]).first<{ r2_key: string | null }>();
+    if (!row?.r2_key) return new Response("Tidak ketemu", { status: 404 });
+    const object = await env.BANNERS.get(row.r2_key);
+    return object ? imageResponse(object) : new Response("Tidak ketemu", { status: 404 });
+  }
   const redeem = url.pathname.match(/^\/media\/redeem\/([A-Za-z0-9_-]{8,80})$/);
   if (redeem) {
     const row = await env.DB.prepare(`SELECT r2_key FROM stamp_tiers WHERE id = ?`).bind(redeem[1]).first<{ r2_key: string | null }>();
@@ -98,26 +105,29 @@ async function serveMedia(env: Env, url: URL): Promise<Response | null> {
   return imageResponse(object);
 }
 
-async function appManifest(env: Env, origin: string): Promise<Response> {
-  const rows = await env.DB.prepare(`SELECT id, short_name, accent, icon_key FROM brands WHERE active = 1 ORDER BY name`).all<{
+async function appManifest(env: Env, url: URL): Promise<Response> {
+  const rows = await env.DB.prepare(`SELECT id, short_name, accent, page_bg, icon_key FROM brands WHERE active = 1 ORDER BY name`).all<{
     id: string;
     short_name: string;
     accent: string;
+    page_bg: string | null;
     icon_key: string | null;
   }>();
-  const brand = (rows.results || []).find((row) => row.icon_key) || rows.results?.[0];
-  const icon = brand?.icon_key ? `${origin}/media/ikon/${brand.id}` : `${origin}/icons/icon-192.png`;
+  const asked = url.searchParams.get("merek") || "";
+  const brand = (rows.results || []).find((row) => row.id === asked) || (rows.results || []).find((row) => row.icon_key) || rows.results?.[0];
+  const icon = brand?.icon_key ? `${url.origin}/media/ikon/${brand.id}` : `${url.origin}/icons/icon-192.png`;
   const body = {
-    name: "Loyalty Bos",
+    name: brand ? `Loyalty ${brand.short_name}` : "Loyalty Bos",
     short_name: brand?.short_name || "Loyalty",
-    start_url: "/",
+    start_url: brand ? `/kartu?merek=${encodeURIComponent(brand.id)}` : "/kartu",
+    scope: "/",
     display: "standalone",
-    background_color: "#f3eee4",
+    background_color: brand?.page_bg || "#f4efe4",
     theme_color: brand?.accent || "#143d28",
     lang: "id",
     icons: [
       { src: icon, sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: `${origin}/icons/icon-512.png`, sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: `${url.origin}/icons/icon-512.png`, sizes: "512x512", type: "image/png", purpose: "any" },
     ],
   };
   return new Response(JSON.stringify(body), {

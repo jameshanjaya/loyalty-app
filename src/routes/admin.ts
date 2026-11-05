@@ -1,3 +1,4 @@
+import { RESERVED_KASIR, slugifyOutlet } from "../brand-visual";
 import { bytesToHex, hashPin, randomBytes, randomId } from "../crypto";
 import { membersCsv, membersXlsx, type ExportRow } from "../export";
 import { clip, httpsUrl, prettyWa } from "../format";
@@ -9,6 +10,8 @@ import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { OWNER_SESSION_MS } from "../loyalty";
 import { brandOpen } from "../brands";
+import { referralBatchSize, referralFriendBonus } from "../referral";
+import { clawReferralGrant } from "../referral-flow";
 import { formatPoints, parsePointsOrZero, proofKind } from "../points";
 import { formatAward, missionQuarters, questQuarters } from "../quest-stamp";
 import * as pdb from "../points-db";
@@ -16,7 +19,7 @@ import { expireCodes, expireDays, expiryNotes, memberPointState, reviewMission, 
 import { shortDate } from "../time";
 import { changeOwnerPassword, loginOwner, ownerDeleteMember, ownerSetBirthday, ownerSetPhone, setOutletPinHash } from "../service";
 import { clearCookie, COOKIE, loadOwner, setSessionCookie } from "../session";
-import { WIB_MS, feedTime, memberSince, parseWibDate, parseWibLocal, startOfWibDay, startOfWibMonth, wibDayIndex } from "../time";
+import { WIB_MS, clock, feedTime, memberSince, parseWibDate, parseWibLocal, startOfWibDay, startOfWibMonth, wibDayIndex } from "../time";
 import type { Banner } from "../types";
 import {
   activityPage,
@@ -27,6 +30,7 @@ import {
   adminMissionEditPage,
   adminTiersPage,
   dashboardPage,
+  referralsAdminPage,
   deleteMemberPage,
   memberDetailPage,
   membersPage,
@@ -134,8 +138,61 @@ export async function handleAdmin(app: App): Promise<Response | null> {
         pointsRedeemed: formatPoints(points.redeemed),
         pendingMissions,
         expireDays: await expireDays(db),
+        story: await repo.dashStory(db, brandId, now),
       }),
     );
+  }
+
+  if (path === "/admin/ajak" && request.method === "GET") {
+    const rows = await db
+      .prepare(
+        `SELECT r.friend_id, r.qualified, r.consumed, f.name AS friend, p.name AS referrer, b.short_name AS brand,
+                (SELECT g.id FROM referral_grants g WHERE g.referrer_id = r.referrer_id AND g.brand_id = r.brand_id AND g.revoked = 0 ORDER BY g.created_at DESC LIMIT 1) AS grant_id
+         FROM referrals r
+         JOIN members f ON f.id = r.friend_id
+         JOIN members p ON p.id = r.referrer_id
+         JOIN brands b ON b.id = r.brand_id
+         ORDER BY r.created_at DESC LIMIT 100`,
+      )
+      .all<{ friend: string; referrer: string; brand: string; qualified: number; consumed: number; grant_id: string | null }>();
+    const events = await db
+      .prepare(`SELECT kind, detail, created_at FROM referral_events ORDER BY created_at DESC LIMIT 40`)
+      .all<{ kind: string; detail: string; created_at: number }>();
+    return html(
+      referralsAdminPage({
+        rows: (rows.results || []).map((row) => ({
+          friend: row.friend,
+          referrer: row.referrer,
+          brand: row.brand,
+          qualified: row.qualified,
+          consumed: row.consumed,
+          grantId: row.consumed ? row.grant_id : null,
+        })),
+        batch: referralBatchSize(await repo.getSetting(db, "referral_batch")),
+        bonus: referralFriendBonus(await repo.getSetting(db, "referral_friend_bonus")),
+        params: url.searchParams,
+        events: (events.results || []).map((event) => ({
+          when: clock(event.created_at),
+          kind: event.kind,
+          detail: event.detail,
+        })),
+      }),
+    );
+  }
+
+  if (path === "/admin/ajak" && request.method === "POST") {
+    const form = await request.formData();
+    const batch = referralBatchSize(String(form.get("batch") || ""));
+    const bonus = referralFriendBonus(String(form.get("bonus") || ""));
+    await repo.setSetting(db, "referral_batch", String(batch));
+    await repo.setSetting(db, "referral_friend_bonus", String(bonus));
+    return ok("/admin/ajak", "simpan");
+  }
+
+  if (path.startsWith("/admin/ajak/") && path.endsWith("/tarik") && request.method === "POST") {
+    const id = decodeURIComponent(path.slice("/admin/ajak/".length, -"/tarik".length));
+    const pulled = await clawReferralGrant(db, id, now);
+    return ok("/admin/ajak", pulled ? "hapus" : "batal");
   }
 
   if ((path === "/admin/member.csv" || path === "/admin/member.xlsx") && request.method === "GET") {
@@ -224,7 +281,47 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (path === "/admin/banner" && request.method === "GET") {
-    return html(bannersPage(await repo.listBanners(db, null), await repo.listBrands(db, true), url.searchParams));
+    const brands = await repo.listBrands(db, false);
+    const news = await repo.listAllNews(db);
+    return html(bannersPage({ banners: await repo.listEveryBanner(db), news, brands, params: url.searchParams }));
+  }
+
+  if (path === "/admin/banner/jeda" && request.method === "POST") {
+    const form = await request.formData();
+    const brand = await repo.getBrand(db, String(form.get("brand_id") || ""));
+    if (!brand) return back("/admin/banner", "merek");
+    const seconds = Number(form.get("seconds") || 3);
+    if (!Number.isFinite(seconds) || seconds < 2 || seconds > 20) return back("/admin/banner", "aturan");
+    await repo.setBannerDelay(db, brand.id, Math.round(seconds * 1000));
+    return ok("/admin/banner", "simpan");
+  }
+
+  if ((path === "/admin/banner/slot" || path === "/admin/news/slot") && request.method === "POST") {
+    const len = Number(request.headers.get("content-length") || "0");
+    if (len > 2_500_000) return back("/admin/banner", "besar");
+    const form = await request.formData();
+    const brand = await repo.getBrand(db, String(form.get("brand_id") || ""));
+    if (!brand) return back("/admin/banner", "merek");
+    const slot = Number(form.get("slot") || 0);
+    if (slot < 1 || slot > 3) return back("/admin/banner", "aturan");
+    const title = clip(String(form.get("title") || ""), 40);
+    const subtitle = clip(String(form.get("subtitle") || ""), 80);
+    const file = form.get("gambar");
+    let r2Key: string | null = null;
+    if (file instanceof File && file.size > 0) {
+      const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+      if (file.size > 2_000_000 || !allowed.has(file.type)) return back("/admin/banner", "gambar");
+      const id = randomId();
+      r2Key = path.endsWith("/news/slot") ? `news/${id}` : `banners/${id}`;
+      await env.BANNERS.put(r2Key, file.stream(), { httpMetadata: { contentType: file.type } });
+    }
+    if (path.endsWith("/news/slot")) {
+      const kind = ["NEWS", "PROMO", "MENU"].includes(String(form.get("kind") || "")) ? String(form.get("kind")) : "NEWS";
+      await repo.upsertNews(db, { id: randomId(), brandId: brand.id, slot, kind, title, subtitle, imageUrl: null, r2Key, active: 1 });
+    } else {
+      await repo.upsertBannerSlot(db, { id: randomId(), brandId: brand.id, slot, title: title || brand.short_name, subtitle, imageUrl: null, r2Key, now });
+    }
+    return ok("/admin/banner", "simpan");
   }
 
   if (path === "/admin/banner" && request.method === "POST") {
@@ -343,6 +440,19 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     if (!made.ok) return back("/admin/outlet", made.error);
     await repo.insertOutlet(db, { id: randomId(), brandId: brand.id, name, pinHash: made.hash, pinSalt: made.salt, now });
     return ok("/admin/outlet", "outlet");
+  }
+
+  if (path.startsWith("/admin/outlet/") && path.endsWith("/slug") && request.method === "POST") {
+    const id = decodeURIComponent(path.slice("/admin/outlet/".length, -"/slug".length));
+    const outlet = await repo.getOutlet(db, id);
+    if (!outlet) return back("/admin/outlet", "aturan");
+    const form = await request.formData();
+    const slug = slugifyOutlet(String(form.get("slug") || ""));
+    if (slug && (RESERVED_KASIR.has(slug) || !/^[a-z0-9-]{2,60}$/.test(slug))) return back("/admin/outlet", "aturan");
+    const taken = slug ? await repo.getOutletBySlug(db, slug) : null;
+    if (taken && taken.id !== outlet.id) return back("/admin/outlet", "ada");
+    await repo.setOutletSlug(db, outlet.id, slug);
+    return ok("/admin/outlet", "simpan");
   }
 
   if (path.startsWith("/admin/outlet/") && path.endsWith("/pesan") && request.method === "POST") {
@@ -797,7 +907,7 @@ function readBrand(form: FormData) {
   const page_bg = hexOrEmpty(String(form.get("page_bg") || ""));
   const stamp_icon = String(form.get("stamp_icon") || "whisk");
   if (cta == null || page_bg == null) return null;
-  if (!["whisk", "bowl", "plate", "custom"].includes(stamp_icon)) return null;
+  if (!["whisk", "bowl", "snout", "custom"].includes(stamp_icon)) return null;
   return {
     name,
     short_name,
@@ -892,7 +1002,7 @@ function memberQuery(url: URL) {
 }
 
 function toExport(
-  m: { id: string; name: string; wa: string; email: string | null; birthday: string | null; created_at: number; join_method: string; stamps_label: string; rewards: number; last_seen_at: number },
+  m: { id: string; name: string; wa: string; email: string | null; birthday: string | null; created_at: number; join_method: string; stamps_label: string; rewards: number; last_seen_at: number; wa_verified?: number; promo_consent?: number },
   now: number,
   note?: { tenths: number; expiresAt: number },
 ): ExportRow {
@@ -906,6 +1016,8 @@ function toExport(
     stamps: m.stamps_label,
     rewards: String(m.rewards),
     lastVisit: feedTime(m.last_seen_at, now),
-    pointsExpiry: note ? `${formatPoints(note.tenths)} poin · ${shortDate(note.expiresAt)}` : "",
+    pointsExpiry: note ? `${Math.floor(note.tenths / 10)} stamp · ${shortDate(note.expiresAt)}` : "",
+    waVerified: m.wa_verified === 1 ? "ya" : "belum",
+    promoConsent: m.promo_consent === 1 ? "ya" : "belum",
   };
 }

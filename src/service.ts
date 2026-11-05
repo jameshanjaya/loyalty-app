@@ -17,6 +17,7 @@ import {
 import { logEvent } from "./log";
 import { normalizeWa, validName, validOutletPin, validPin, weakPin } from "./phone";
 import { birthdayEditAllowed, decidePhone } from "./profile";
+import { refreshReferral } from "./referral-flow";
 import * as repo from "./repo";
 import { LIMITS, enforceLimit, failureBlocked } from "./ratelimit";
 import { STAFF_FLAG_REASON, staffFlagDetail } from "./staff";
@@ -156,6 +157,11 @@ export async function giveStamp(
   }
   const masked = maskName(input.member.name, input.member.wa);
   logEvent("stamp", { brand: input.brand.id, outlet: input.outletId, member: input.member.id, balance: updated.stamps });
+  try {
+    await refreshReferral(db, input.member.id, input.now);
+  } catch (error) {
+    logEvent("referral_fail", { member: input.member.id, message: error instanceof Error ? error.message : "error" });
+  }
   return { ok: true, activityId, balance: updated.stamps, masked };
 }
 
@@ -647,6 +653,13 @@ export async function cancelOwn(
     throw error;
   }
   logEvent("cancel", { activity: last.id, outlet: last.outlet_id });
+  if (last.type === "stamp") {
+    try {
+      await refreshReferral(db, last.member_id, input.now);
+    } catch (error) {
+      logEvent("referral_fail", { member: last.member_id, message: error instanceof Error ? error.message : "error" });
+    }
+  }
   return { ok: true };
 }
 

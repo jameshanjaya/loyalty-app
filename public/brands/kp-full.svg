@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" role="img" aria-label="Krispy Pork">
+  <rect width="240" height="120" fill="#111"/>
+  <path fill="#F27BA6" d="M78 18c-10 12-12 24-8 38 3 16 14 28 30 30 16 2 30-8 32-22 1-8-3-16-10-20 6-8 5-18-3-22-5-3-10 0-12 5-5-8-13-10-20-5-5 3-7 8-9 6z"/>
+  <path fill="#111" d="M84 40c10-2 24-1 32 5 1 1 1 3 0 4-10 3-22 1-32-4-2-1-2-4 0-5z"/>
+  <path fill="#111" d="M86 42h12v8H86zM104 41h14v9H104z"/>
+  <circle cx="118" cy="54" r="2" fill="#111"/>
+  <circle cx="123" cy="54" r="2" fill="#111"/>
+  <text x="120" y="104" text-anchor="middle" fill="#fff" font-family="Arial Black, Nunito, sans-serif" font-size="28" font-weight="800" letter-spacing="1">KRISPY PORK</text>
+</svg>

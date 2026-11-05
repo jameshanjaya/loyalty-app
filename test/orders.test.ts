@@ -45,4 +45,23 @@ describe("tautan pesan", () => {
     expect(bookingTarget("Loft25", outlets, "c")).toBeNull();
     expect(bookingTarget("Loft25", [outlets[0]!], null)?.url.startsWith("https://wa.me/")).toBe(true);
   });
+
+  it("nomor booking Soto dan Krispy yang disetujui", () => {
+    const soto = bookingUrl("Soto Oseng Bang Jem", "Soto Oseng", "0878-9014-3089");
+    expect(soto).toBe("https://wa.me/6287890143089?text=Halo%2C%20mau%20booking%20%2F%20order%20di%20Soto%20Oseng%20Bang%20Jem%2C%20Soto%20Oseng");
+    const kembangan = bookingUrl("Krispyporkk", "Krispyporkk Kembangan", "+6285778336066");
+    const gading = bookingUrl("Krispyporkk", "Krispyporkk Gading Serpong", "0858-8090-3421");
+    expect(kembangan).toContain("wa.me/6285778336066");
+    expect(gading).toContain("wa.me/6285880903421");
+    const picked = bookingTarget(
+      "Krispyporkk",
+      [
+        { id: "kembangan", name: "Krispyporkk Kembangan", wa: "0857-7833-6066" },
+        { id: "gading", name: "Krispyporkk Gading Serpong", wa: "0858-8090-3421" },
+      ],
+      null,
+    );
+    expect(picked).toBeNull();
+    expect(bookingTarget("Krispyporkk", [{ id: "kembangan", name: "Kembangan", wa: "085778336066" }], "kembangan")?.url).toContain("6285778336066");
+  });
 });
