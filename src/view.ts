@@ -184,7 +184,6 @@ function orderBlock(
       : "";
   return `<section class="card order">
     <div class="eyebrow">Order</div>
-    <h2>Booking / Order via WA</h2>
     ${chips}
     ${book}
     ${extras.length ? `<div class="order-extra">${extras.map(badge).join("")}</div>` : ""}
@@ -410,8 +409,8 @@ export function cardPage(input: {
           )
           .join("")}
       </section>
-      ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id, input.booking || null, Boolean(input.pickBooking))}
       ${birthdayBlock(input.birthday, input.birthdayReward, input.brand.id, input.now)}
+      ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id, input.booking || null, Boolean(input.pickBooking))}
       ${bonusStamp(input.missions || [], input.brand.id)}
       <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
       <div class="scan-sheet" data-scanner hidden>
