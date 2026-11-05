@@ -1,4 +1,4 @@
-const CACHE = "loyalty-bos-v5";
+const CACHE = "loyalty-bos-v6";
 const ASSETS = ["/app.css", "/app.js", "/offline.html", "/favicon.svg", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {

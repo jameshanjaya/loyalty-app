@@ -445,8 +445,37 @@ td, th { padding: 8px 4px; border-bottom: 1px solid var(--line); vertical-align:
 }
 .tabbar svg { width: 22px; height: 22px; }
 .tabbar a.on { color: var(--accent); }
-.bonus-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); text-decoration: none; color: inherit; font-weight: 800; }
-.bonus-row.dim { color: var(--muted); font-weight: 700; }
+.bonus-list { display: flex; flex-direction: column; min-width: 0; }
+.bonus-item {
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 8px 10px; align-items: center;
+  padding: 12px 0; border-top: 1px solid var(--line); min-width: 0;
+}
+.bonus-ico {
+  width: 36px; height: 36px; border-radius: 12px;
+  background: var(--accent-soft, #e7f3df); color: var(--accent);
+  display: grid; place-items: center;
+}
+.bonus-ico svg { width: 18px; height: 18px; }
+.bonus-copy { min-width: 0; }
+.bonus-copy b, .bonus-copy p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bonus-copy b { font-size: .98rem; }
+.bonus-copy p { margin: 2px 0 0; color: var(--muted); font-size: .86rem; font-weight: 700; }
+.bonus-status { color: var(--muted); font-size: .8rem; font-weight: 800; }
+.bonus-status.ok { color: var(--deep); }
+.bonus-status.ok svg { width: 14px; height: 14px; vertical-align: -2px; }
+.bonus-status.no { color: var(--danger, #d4504a); }
+.bonus-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.stamp-pill {
+  border-radius: 999px; padding: 4px 8px; font-size: .72rem; font-weight: 800;
+  background: var(--accent-soft, #e7f3df); color: var(--accent); white-space: nowrap;
+}
+.bonus-go {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: auto; min-height: 34px; margin: 0; padding: 0 12px;
+  border-radius: 999px; font-size: .86rem; font-weight: 800; text-decoration: none;
+  background: var(--cta, var(--deep)); color: var(--on-ink, #fff);
+}
 .bonus-done { margin-top: 4px; }
 .bonus-done summary { cursor: pointer; font-weight: 800; padding: 8px 0; }
 .scan-sheet {
