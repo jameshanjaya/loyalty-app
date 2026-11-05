@@ -4,7 +4,7 @@ Kartu stamp digital untuk kafe dan resto. Satu akun pelanggan dipakai di semua m
 
 Aplikasi ini jalan di Cloudflare versi gratis: Workers, database D1, dan tempat gambar R2. Tidak perlu aplikasi di Play Store. Pelanggan buka lewat browser HP, lalu bisa dipasang seperti aplikasi (PWA).
 
-Aplikasi yang jalan sekarang tidak mengirim SMS atau OTP. Pelanggan bikin PIN sendiri. Rencana verifikasi WhatsApp ada di bawah, dan belum dibuat.
+Aplikasi tidak mengirim SMS. Pelanggan bikin PIN sendiri. Verifikasi WhatsApp menyala hanya kalau secret-nya diisi.
 
 ## Yang perlu disiapkan
 
@@ -158,19 +158,33 @@ Jangan taruh Client secret di chat atau di git. Kalau Google belum diisi, tombol
 
 Pelanggan baru dari Google mengisi nama, tanggal lahir, nomor WA, dan PIN dulu sebelum kartu terbuka. Tanggal lahir tidak bisa diubah sendiri setelah tersimpan. Owner bisa mengubahnya di halaman member. Kalau nomor WA itu sudah punya kartu, pelanggan memasukkan PIN kartu itu supaya akun Google-nya tersambung. Kalau nomor itu sudah tersambung ke Google lain, aplikasi menolak.
 
-## Rencana gaya bahasa (belum dipakai di aplikasi)
+## Gaya bahasa
 
-Tulisan buat pelanggan nanti santai dan sama di semua merek. Pakai "kamu", kalimatnya pendek, emoji secukupnya. Contoh: "Yeay, stamp kamu nambah!", "Dikit lagi dapet matcha gratis", "Poin kamu mau hangus nih, buruan tukar", "Kirim WA-nya ya, biar nomor kamu ke-verif". Dashboard dan kasir tetap jelas, tapi tidak kaku. Mockup di `mockups/` sudah pakai gaya ini. Aplikasi yang jalan sekarang belum.
+Tulisan buat pelanggan santai dan sama di semua merek. Pakai "kamu", kalimatnya pendek. Contoh: "Yeay, stamp kamu nambah!", "Dikit lagi dapet matcha gratis", "Poin kamu mau hangus nih, buruan tukar", "Kirim WA-nya ya, biar nomor kamu ke-verif". Dashboard dan kasir tetap jelas.
 
-## Rencana verifikasi nomor WA (belum dibuat)
+## Verifikasi nomor WA
 
-Ini desain saja. Aplikasi belum menerima pesan WhatsApp.
+Fitur ini mati sampai secret ini terisi. Kosongkan untuk mematikannya.
 
-Setelah login Google dan isi profil (nama, tanggal lahir, nomor), pelanggan tap **Verifikasi via WA**. Tombol itu membuka `wa.me/<nomor bisnis>?text=VERIF-XXXXXX`. Pesannya sudah terisi. Pelanggan kirim saja, tidak mengetik OTP. Layar berikutnya menunggu, dengan tombol **Buka WA lagi**. Cadangannya tautan **Kirim kode OTP ke WA saya**. Kalau nomor cocok, muncul **Nomor terverifikasi**.
+```
+WA_BUSINESS_NUMBER=628xxxxxxxxxx
+WA_VERIFY_TOKEN=kalimat-acak-panjang
+WA_ACCESS_TOKEN=
+WA_APP_SECRET=
+WA_OTP_ENABLED=
+```
 
-Nanti, WhatsApp Cloud API mengirim pesan masuk ke webhook. Server mencocokkan kode dan nomor pengirim, lalu menandai nomor itu terverifikasi. Kode berlaku 10 menit. Satu nomor hanya untuk satu akun.
+`WA_ACCESS_TOKEN` disiapkan kalau nanti ada kirim pesan. `WA_OTP_ENABLED=1` hanya menampilkan tautan yang menjelaskan OTP belum disambungkan.
 
-Mockupnya ada di `mockups/screen.html?screen=verif`, `tunggu`, dan `waok`.
+Setelah login Google dan profil lengkap, pelanggan mengetuk **Verifikasi via WA**. Aplikasi membuka `wa.me` dengan teks `VERIF-XXXXXX`. Webhook `GET` dan `POST /webhook/whatsapp` menerima pesan masuk WhatsApp Cloud API, mencocokkan kode dan nomor pengirim, lalu menandai nomor itu terverifikasi. Kode berlaku 10 menit. Satu nomor hanya untuk satu akun. Di Meta, callback URL-nya `https://domain-kamu/webhook/whatsapp` dan verify token-nya sama dengan `WA_VERIFY_TOKEN`. Kalau `WA_APP_SECRET` diisi, POST tanpa tanda tangan yang cocok ditolak.
+
+## Poin hangus
+
+Poin Side Quest hangus 60 hari setelah didapat. Angkanya ada di dashboard, bagian Setting Program, dan bisa diubah. Pemakaian mengambil poin yang paling cepat hangus. Pengecekan jalan tiap hari jam 00.15 WIB, dan juga saat halaman dibuka. Kartu dan Side Quest menampilkan poin yang hangus paling dekat, plus lencana **Segera hangus** kalau itu dalam 14 hari. Poin yang kembali karena kode tukar hangus memakai tanggal asalnya. Detail member dan CSV punya kolom `poin_hangus`.
+
+## Tampilan merek
+
+Di **Setting Program**, tiap merek punya warna utama, warna lembut, warna tombol, warna latar, pilihan ikon stamp (pengocok matcha, mangkuk, piring, atau upload), plus upload logo header dan ikon aplikasi. Ikon aplikasi masuk ke `/app.webmanifest`. Loft25 memakai hijau matcha, Soto Oseng biru dan merah, Krispyporkk pink dan hitam.
 
 ## Cara pakai sehari-hari
 
@@ -180,7 +194,7 @@ Mockupnya ada di `mockups/screen.html?screen=verif`, `tunggu`, dan `waok`.
 - Satu pelanggan paling 2 stamp per merek per hari. Angka ini bisa diubah di Setting Program.
 - Stamp penuh: kasir tap **Tukar Reward**, pelanggan scan QR untuk setuju. Atau kasir cari nomor WA lalu tukar. Stamp yang lebih dari 10 tetap nyangkut.
 - Hadiah ulang tahun diatur di **Setting Program** (teks hadiah, sepanjang bulan, atau N hari di sekitar ulang tahun, nyala/mati). Pelanggan melihatnya di kartu kalau sedang berlaku. Kasir menukarnya sekali per tahun per merek, lewat QR atau nomor WA. Stamp tidak berkurang.
-- Side Quest memberi Poin, terpisah dari stamp. Di kartu, Poin tampil dengan koin daun. Owner mengatur quest di menu **Side Quest**: judul, penjelasan, poin seperti 0.5, ikon, tag NEW atau Limited, urutan, merek atau semua merek, bukti tangkapan layar dan/atau tautan, sekali saja atau sekali seminggu. Quest rahasia bisa dikunci sampai jumlah poin quest tertentu, dengan teks godaan. Lencana level (contoh Matcha Newbie, Matcha Regular, Matcha Master) juga diatur di halaman yang sama. Level dihitung dari poin quest yang pernah didapat, jadi menukar hadiah tidak menurunkan level. Minggu beruntun dengan stamp atau quest yang disetujui tampil sebagai streak. Pelanggan kirim bukti, statusnya menunggu, lalu owner setujui atau tolak di antrian yang sama. Poin masuk setelah disetujui.
+- Side Quest memberi Poin, terpisah dari stamp. Di kartu, Poin tampil dengan koin daun. Owner mengatur quest di **Kelola Side Quest**: judul, penjelasan, langkah, poin seperti 0.5, ikon, tag NEW atau Limited, urutan, merek atau semua merek, tanggal mulai dan selesai, bukti foto, tautan, atau pembelian yang dicek kasir, sekali saja atau sekali seminggu. Foto instruksi bisa beberapa, ada keterangan, dan urutannya bisa digeser. Quest rahasia bisa dikunci. Lencana level juga diatur di halaman yang sama. Bukti yang dikirim pelanggan langsung dapat poin, selama belum lewat batas. Owner bisa menarik poin itu; penarikannya tercatat. Quest kasir, misalnya "Makan ayam pakai kuah gulai", diberi dari meja kasir setelah member dicari.
 - Toko hadiah ada di menu **Hadiah**. Contoh awal di Loft25: Upsize 1, Coffee 2, Milk tea 2.5, Matcha 3. Tiap hadiah punya ikon, dan boleh ada stok.
 - Pelanggan tap **Tukar** di aplikasi. Poin (atau stamp, atau hadiah ultah) ditahan, lalu muncul kode 5 angka dan QR sekitar 10 menit. Kasir mengetik kode itu, atau scan QR yang membuka halaman kasir. Kalau hangus, poin atau stamp kembali. Kode cuma sekali, cuma untuk merek outlet itu, dan tebakan dibatasi. Kasir tetap bisa menukar dari sisi kasir kalau pelanggan tidak buka aplikasinya.
 - Tingkat stamp diatur di **Tingkat stamp**. Contoh Loft25: 5 stamp = free upsize, 10 stamp = free matcha. Pelanggan boleh tukar tingkat yang lebih rendah sekarang, atau lanjut kumpulin.

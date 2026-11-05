@@ -58,11 +58,11 @@ export function progressCopy(stamps: number, required: number, reward: string): 
     return {
       ready: true,
       left: 0,
-      headline: extra > 0 ? `Stamp penuh! ${reward} siap ditukar, ${extra} stamp ikut sisa.` : "Stamp penuh! Reward bisa ditukar sekarang",
+      headline: extra > 0 ? `Yeay, stamp penuh! ${reward} siap, sisa ${extra} stamp.` : "Yeay, stamp penuh! Reward-nya bisa ditukar sekarang",
     };
   }
   const left = required - stamps;
-  return { ready: false, left, headline: `${left} stamp lagi dapat ${reward}!` };
+  return { ready: false, left, headline: `Dikit lagi! ${left} stamp lagi dapet ${reward}` };
 }
 
 export function canCancel(input: { createdAt: number; now: number; sameSession: boolean; voided: boolean; isLast: boolean }): boolean {

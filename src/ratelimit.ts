@@ -12,6 +12,8 @@ export const LIMITS = {
   lookup: { windowMs: 10 * 60_000, limit: 20 },
   join: { windowMs: 15 * 60_000, limit: 40 },
   orderClick: { windowMs: 10 * 60_000, limit: 40 },
+  waHook: { windowMs: 60_000, limit: 60 },
+  waIssue: { windowMs: 10 * 60_000, limit: 5 },
 } as const satisfies Record<string, LimitRule>;
 
 export type LimitState = Map<string, { windowStart: number; count: number }>;

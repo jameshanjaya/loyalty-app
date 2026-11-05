@@ -54,7 +54,7 @@ describe("tukar reward dan sisa stamp", () => {
   });
 
   it("teks progres dan jendela batal", () => {
-    expect(progressCopy(6, 10, "free matcha").headline).toBe("4 stamp lagi dapat free matcha!");
+    expect(progressCopy(6, 10, "free matcha").headline).toBe("Dikit lagi! 4 stamp lagi dapet free matcha");
     expect(progressCopy(10, 10, "free matcha").ready).toBe(true);
     const now = 1_000_000;
     expect(canCancel({ createdAt: now - 60_000, now, sameSession: true, voided: false, isLast: true })).toBe(true);

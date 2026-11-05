@@ -17,6 +17,10 @@ export type Mission = {
   tease: string;
   unlock_points_tenths: number;
   sort_order: number;
+  proof_kind?: string;
+  starts_at?: number | null;
+  ends_at?: number | null;
+  steps?: string;
 };
 
 export type Submission = {
@@ -97,8 +101,8 @@ export async function insertMission(db: D1Database, row: Mission): Promise<void>
     .prepare(
       `INSERT INTO missions (
          id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at,
-         icon, tag, mystery, tease, unlock_points_tenths, sort_order
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         icon, tag, mystery, tease, unlock_points_tenths, sort_order, proof_kind, starts_at, ends_at, steps
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       row.id,
@@ -117,6 +121,41 @@ export async function insertMission(db: D1Database, row: Mission): Promise<void>
       row.tease || "",
       row.unlock_points_tenths || 0,
       row.sort_order || 0,
+      row.proof_kind || "",
+      row.starts_at ?? null,
+      row.ends_at ?? null,
+      row.steps || "",
+    )
+    .run();
+}
+
+export async function updateMission(db: D1Database, row: Mission): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE missions SET brand_id=?, title=?, description=?, points_tenths=?, proof_screenshot=?, proof_link=?,
+        limit_kind=?, active=?, icon=?, tag=?, mystery=?, tease=?, unlock_points_tenths=?, sort_order=?,
+        proof_kind=?, starts_at=?, ends_at=?, steps=? WHERE id=?`,
+    )
+    .bind(
+      row.brand_id,
+      row.title,
+      row.description,
+      row.points_tenths,
+      row.proof_screenshot,
+      row.proof_link,
+      row.limit_kind,
+      row.active,
+      row.icon || "🍃",
+      row.tag || "",
+      row.mystery ? 1 : 0,
+      row.tease || "",
+      row.unlock_points_tenths || 0,
+      row.sort_order || 0,
+      row.proof_kind || "",
+      row.starts_at ?? null,
+      row.ends_at ?? null,
+      row.steps || "",
+      row.id,
     )
     .run();
 }
@@ -141,14 +180,15 @@ export async function memberMissionState(db: D1Database, memberId: string, missi
 
 export async function insertSubmission(
   db: D1Database,
-  row: { id: string; missionId: string; memberId: string; link: string | null; r2Key: string | null; points: number; now: number },
+  row: { id: string; missionId: string; memberId: string; link: string | null; r2Key: string | null; points: number; now: number; status?: "pending" | "approved" },
 ): Promise<void> {
+  const status = row.status || "approved";
   await db
     .prepare(
       `INSERT INTO mission_submissions (id, mission_id, member_id, status, link_url, r2_key, points_tenths, reviewer_note, created_at, reviewed_at)
-       VALUES (?, ?, ?, 'pending', ?, ?, ?, '', ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?)`,
     )
-    .bind(row.id, row.missionId, row.memberId, row.link, row.r2Key, row.points, row.now)
+    .bind(row.id, row.missionId, row.memberId, status, row.link, row.r2Key, row.points, row.now, status === "approved" ? row.now : null)
     .run();
 }
 
@@ -168,6 +208,26 @@ export async function getSubmission(db: D1Database, id: string): Promise<Submiss
   return db.prepare(`SELECT * FROM mission_submissions WHERE id = ?`).bind(id).first<Submission>();
 }
 
+export async function markRevoked(db: D1Database, id: string, note: string, now: number): Promise<boolean> {
+  const result = await db
+    .prepare(`UPDATE mission_submissions SET status = 'revoked', reviewer_note = ?, reviewed_at = ? WHERE id = ? AND status = 'approved'`)
+    .bind(note, now, id)
+    .run();
+  return result.meta.changes === 1;
+}
+
+export async function listApproved(db: D1Database): Promise<Submission[]> {
+  return all<Submission>(
+    db.prepare(
+      `SELECT s.*, m.title AS title, mem.name AS member_name, mem.wa AS wa
+       FROM mission_submissions s
+       JOIN missions m ON m.id = s.mission_id
+       JOIN members mem ON mem.id = s.member_id
+       WHERE s.status = 'approved' ORDER BY s.reviewed_at DESC LIMIT 20`,
+    ),
+  );
+}
+
 export async function markSubmission(db: D1Database, id: string, status: "approved" | "rejected", note: string, now: number): Promise<boolean> {
   const result = await db
     .prepare(
@@ -183,14 +243,99 @@ export async function pointsBalance(db: D1Database, memberId: string): Promise<n
   return row?.n ?? 0;
 }
 
+export type LedgerEntry = {
+  id: string;
+  member_id: string;
+  delta_tenths: number;
+  reason: string;
+  ref_id: string | null;
+  created_at: number;
+  earned_at: number | null;
+  expires_at: number | null;
+  source_id: string | null;
+};
+
+export async function listMemberLedger(db: D1Database, memberId: string): Promise<LedgerEntry[]> {
+  return all<LedgerEntry>(db.prepare(`SELECT * FROM point_ledger WHERE member_id = ?`).bind(memberId));
+}
+
+export async function listAllLedger(db: D1Database): Promise<LedgerEntry[]> {
+  return all<LedgerEntry>(db.prepare(`SELECT * FROM point_ledger`));
+}
+
+export async function listRefLedger(db: D1Database, refId: string, reason: string): Promise<LedgerEntry[]> {
+  return all<LedgerEntry>(db.prepare(`SELECT * FROM point_ledger WHERE ref_id = ? AND reason = ?`).bind(refId, reason));
+}
+
+export async function membersWithDuePoints(db: D1Database, now: number): Promise<string[]> {
+  const rows = await all<{ member_id: string }>(
+    db.prepare(
+      `SELECT p.member_id AS member_id FROM point_ledger p
+       WHERE p.delta_tenths > 0 AND p.expires_at IS NOT NULL AND p.expires_at <= ? AND p.reason IN ('mission', 'refund')
+       AND p.delta_tenths + COALESCE((SELECT SUM(c.delta_tenths) FROM point_ledger c WHERE c.source_id = p.id), 0) > 0
+       LIMIT 40`,
+    ).bind(now),
+  );
+  return [...new Set(rows.map((row) => row.member_id))];
+}
+
 export async function addLedger(
   db: D1Database,
-  row: { id: string; memberId: string; brandId: string | null; delta: number; reason: string; refId: string | null; now: number },
+  row: {
+    id: string;
+    memberId: string;
+    brandId: string | null;
+    delta: number;
+    reason: string;
+    refId: string | null;
+    now: number;
+    earnedAt?: number | null;
+    expiresAt?: number | null;
+    sourceId?: string | null;
+  },
 ): Promise<void> {
   await db
-    .prepare(`INSERT INTO point_ledger (id, member_id, brand_id, delta_tenths, reason, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-    .bind(row.id, row.memberId, row.brandId, row.delta, row.reason, row.refId, row.now)
+    .prepare(
+      `INSERT OR IGNORE INTO point_ledger (id, member_id, brand_id, delta_tenths, reason, ref_id, created_at, earned_at, expires_at, source_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(row.id, row.memberId, row.brandId, row.delta, row.reason, row.refId, row.now, row.earnedAt ?? null, row.expiresAt ?? null, row.sourceId ?? null)
     .run();
+}
+
+export type MissionPhoto = {
+  id: string;
+  mission_id: string;
+  r2_key: string | null;
+  image_url: string | null;
+  caption: string;
+  sort_order: number;
+};
+
+export async function listMissionPhotos(db: D1Database, missionId: string): Promise<MissionPhoto[]> {
+  return all<MissionPhoto>(db.prepare(`SELECT * FROM mission_photos WHERE mission_id = ? ORDER BY sort_order, id`).bind(missionId));
+}
+
+export async function getMissionPhoto(db: D1Database, id: string): Promise<MissionPhoto | null> {
+  return db.prepare(`SELECT * FROM mission_photos WHERE id = ?`).bind(id).first<MissionPhoto>();
+}
+
+export async function insertMissionPhoto(
+  db: D1Database,
+  row: { id: string; missionId: string; r2Key: string | null; imageUrl: string | null; caption: string; sort: number },
+): Promise<void> {
+  await db
+    .prepare(`INSERT INTO mission_photos (id, mission_id, r2_key, image_url, caption, sort_order) VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(row.id, row.missionId, row.r2Key, row.imageUrl, row.caption, row.sort)
+    .run();
+}
+
+export async function deleteMissionPhoto(db: D1Database, id: string, missionId: string): Promise<void> {
+  await db.prepare(`DELETE FROM mission_photos WHERE id = ? AND mission_id = ?`).bind(id, missionId).run();
+}
+
+export async function saveMissionPhotoMeta(db: D1Database, id: string, missionId: string, caption: string, sort: number): Promise<void> {
+  await db.prepare(`UPDATE mission_photos SET caption = ?, sort_order = ? WHERE id = ? AND mission_id = ?`).bind(caption, sort, id, missionId).run();
 }
 
 export async function pointsTotals(db: D1Database, since: number): Promise<{ issued: number; redeemed: number }> {

@@ -1,10 +1,13 @@
 import { randomId } from "../crypto";
 import { birthdayStatus } from "../birthday";
 import { bookingTarget, bookingUrl, visibleOrderLinks } from "../orders";
+import { expiryCopy } from "../expiry";
 import { formatPoints, tierChoices } from "../points";
 import { LIMITS, enforceLimit } from "../ratelimit";
 import * as pdb from "../points-db";
-import { expireCodes } from "../points-flow";
+import { expireCodes, memberPointState } from "../points-flow";
+import { shortDate } from "../time";
+import { mustVerify, waReady } from "../wa";
 import { html, isPrefetch, readCookie, redirect, sameOrigin } from "../http";
 import { errText } from "../messages";
 import { safeNext } from "../format";
@@ -176,7 +179,12 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         );
       }
       await repo.deleteSession(db, signup.sessionId);
-      return redirect("/kartu", [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)]);
+      const cookies = [setSessionCookie(request, COOKIE.member, result.sessionId, MEMBER_SESSION_MS)];
+      if (waReady(env)) {
+        await repo.setPhoneVerified(db, result.member.id, 0);
+        return redirect("/verifikasi", cookies);
+      }
+      return redirect("/kartu", cookies);
     }
     if (!member) return redirect("/masuk");
     const saved = await setOwnBirthday(db, { member, birthdayRaw: String(form.get("lahir") || ""), now });
@@ -210,6 +218,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
   if (path === "/kartu" && request.method === "GET") {
     if (signup) return redirect("/profil");
     if (!member) return redirect("/masuk");
+    if (mustVerify(env, member)) return redirect("/verifikasi");
     await expireCodes(db, now);
     const brands = await repo.listBrands(db, true);
     if (!brands.length) return html(emptyDbPage());
@@ -243,6 +252,7 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const orderOutlets = named
       .filter((outlet) => chipIds.has(outlet.id))
       .map((outlet) => ({ id: outlet.id, name: outlet.name, on: outlet.id === selected }));
+    const pointState = await memberPointState(db, member.id, now);
     const tiers = await pdb.listTiers(db, brand.id);
     const choice = tierChoices(
       cards.get(brand.id)?.stamps ?? 0,
@@ -265,7 +275,10 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         now,
         params: url.searchParams,
         birthday: offer.open && !birthdayUsed ? brand.birthday_reward : null,
-        points: formatPoints(await pdb.pointsBalance(db, member.id)),
+        points: formatPoints(pointState.balance),
+        expiry: pointState.batch
+          ? expiryCopy({ points: formatPoints(pointState.batch.tenths), date: shortDate(pointState.batch.expiresAt), days: pointState.days, soon: pointState.batch.soon })
+          : null,
         tiers: tierView,
         orders,
         orderOutlets,

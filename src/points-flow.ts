@@ -1,6 +1,7 @@
 import { randomId } from "./crypto";
 import { birthdayRedeemAllowed, birthdayStatus } from "./birthday";
-import { CODE_TTL_MS, missionOpen, questLocked, randomRedeemCode, releaseExpired, spendPoints, tierRedeem } from "./points";
+import { allocateUpTo, expiresAtFor, splitLots, soonestBatch, type LedgerLike } from "./expiry";
+import { CODE_TTL_MS, missionInWindow, missionOpen, proofKind, questLocked, randomRedeemCode, releaseExpired, tierRedeem } from "./points";
 import * as pdb from "./points-db";
 import type { RedeemCode } from "./points-db";
 import * as repo from "./repo";
@@ -37,17 +38,7 @@ export async function expireCodes(db: D1Database, now: number): Promise<void> {
     if (!plan.changed) continue;
     const won = await pdb.markCodeExpired(db, row.id);
     if (!won) continue;
-    if (plan.points > 0) {
-      await pdb.addLedger(db, {
-        id: randomId(),
-        memberId: row.member_id,
-        brandId: row.brand_id,
-        delta: plan.points,
-        reason: "refund",
-        refId: row.id,
-        now,
-      });
-    }
+    if (plan.points > 0) await restoreRedeem(db, row, now);
     if (plan.stamps > 0) await pdb.refundStamps(db, row.member_id, row.brand_id, plan.stamps, now);
     if (row.stock_held && row.reward_ref) await pdb.returnStock(db, row.reward_ref);
     logEvent("code_expired", { code: row.id, kind: row.kind });
@@ -57,6 +48,7 @@ export async function expireCodes(db: D1Database, now: number): Promise<void> {
 async function saveCode(
   db: D1Database,
   input: {
+    id?: string;
     memberId: string;
     brandId: string;
     kind: string;
@@ -75,7 +67,7 @@ async function saveCode(
     code = randomRedeemCode();
   }
   const row: RedeemCode = {
-    id: randomId(),
+    id: input.id || randomId(),
     code,
     member_id: input.memberId,
     brand_id: input.brandId,
@@ -100,20 +92,23 @@ export async function redeemPointsReward(db: D1Database, member: Member, rewardI
   await expireCodes(db, now);
   const reward = await pdb.getReward(db, rewardId);
   if (!reward || !reward.active) return { ok: false, error: "umum" };
-  const balance = await pdb.pointsBalance(db, member.id);
-  if (!spendPoints(balance, reward.points_tenths).ok) return { ok: false, error: "poin" };
+  const codeId = randomId();
   const stock = await pdb.takeStock(db, reward.id);
   if (stock === "empty") return { ok: false, error: "stok" };
-  await pdb.addLedger(db, {
-    id: randomId(),
+  const spent = await spendPointsFifo(db, {
     memberId: member.id,
     brandId: reward.brand_id,
-    delta: -reward.points_tenths,
+    cost: reward.points_tenths,
     reason: "redeem",
-    refId: reward.id,
+    refId: codeId,
     now,
   });
+  if (!spent.ok) {
+    if (stock === "taken") await pdb.returnStock(db, reward.id);
+    return { ok: false, error: "poin" };
+  }
   const code = await saveCode(db, {
+    id: codeId,
     memberId: member.id,
     brandId: reward.brand_id,
     kind: "points",
@@ -241,28 +236,112 @@ export async function submitMission(
 ): Promise<Fail | { ok: true }> {
   const mission = await pdb.getMission(db, input.missionId);
   if (!mission || !mission.active) return { ok: false, error: "umum" };
+  if (!missionInWindow(mission.starts_at, mission.ends_at, input.now)) return { ok: false, error: "misi" };
+  const kind = proofKind(mission);
+  if (kind === "cashier") return { ok: false, error: "misi" };
   const earned = await pdb.lifetimeEarned(db, input.member.id);
   if (questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned })) {
     return { ok: false, error: "misi" };
   }
-  if (mission.proof_link && !input.link) return { ok: false, error: "bukti" };
-  if (mission.proof_screenshot && !input.r2Key) return { ok: false, error: "bukti" };
+  if (kind === "link" && !input.link) return { ok: false, error: "bukti" };
+  if (kind === "upload" && !input.r2Key) return { ok: false, error: "bukti" };
   const state = await pdb.memberMissionState(db, input.member.id, mission.id);
   const limit = mission.limit_kind === "week" ? "week" : "once";
   if (!missionOpen({ limit, hasPending: state.pending, lastApprovedAt: state.lastApprovedAt, now: input.now })) {
     return { ok: false, error: "misi" };
   }
+  const id = randomId();
   await pdb.insertSubmission(db, {
-    id: randomId(),
+    id,
     missionId: mission.id,
     memberId: input.member.id,
     link: input.link,
     r2Key: input.r2Key,
     points: mission.points_tenths,
     now: input.now,
+    status: "approved",
   });
-  logEvent("mission_submit", { mission: mission.id, member: input.member.id });
+  await grantEarned(db, {
+    memberId: input.member.id,
+    brandId: mission.brand_id,
+    delta: mission.points_tenths,
+    reason: "mission",
+    refId: id,
+    now: input.now,
+  });
+  await logMission(db, input.member.id, mission.brand_id, mission.title, input.now);
+  logEvent("mission_ok", { mission: mission.id, member: input.member.id });
   return { ok: true };
+}
+
+export async function grantCashierMission(
+  db: D1Database,
+  input: { member: Member; missionId: string; brandId: string; now: number },
+): Promise<Fail | { ok: true }> {
+  const mission = await pdb.getMission(db, input.missionId);
+  if (!mission || !mission.active || proofKind(mission) !== "cashier") return { ok: false, error: "misi" };
+  if (mission.brand_id && mission.brand_id !== input.brandId) return { ok: false, error: "misi" };
+  if (!missionInWindow(mission.starts_at, mission.ends_at, input.now)) return { ok: false, error: "misi" };
+  const earned = await pdb.lifetimeEarned(db, input.member.id);
+  if (questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned })) {
+    return { ok: false, error: "misi" };
+  }
+  const state = await pdb.memberMissionState(db, input.member.id, mission.id);
+  const limit = mission.limit_kind === "week" ? "week" : "once";
+  if (!missionOpen({ limit, hasPending: state.pending, lastApprovedAt: state.lastApprovedAt, now: input.now })) {
+    return { ok: false, error: "misi" };
+  }
+  const id = randomId();
+  await pdb.insertSubmission(db, {
+    id,
+    missionId: mission.id,
+    memberId: input.member.id,
+    link: null,
+    r2Key: null,
+    points: mission.points_tenths,
+    now: input.now,
+    status: "approved",
+  });
+  await grantEarned(db, {
+    memberId: input.member.id,
+    brandId: mission.brand_id || input.brandId,
+    delta: mission.points_tenths,
+    reason: "mission",
+    refId: id,
+    now: input.now,
+  });
+  await logMission(db, input.member.id, mission.brand_id || input.brandId, mission.title, input.now);
+  logEvent("mission_ok", { mission: mission.id, member: input.member.id, via: "kasir" });
+  return { ok: true };
+}
+
+export async function revokeMission(db: D1Database, id: string, now: number): Promise<Fail | { ok: true; taken: number }> {
+  const row = await pdb.getSubmission(db, id);
+  if (!row || row.status !== "approved") return { ok: false, error: "umum" };
+  await refreshMember(db, row.member_id, now);
+  const ledger = asLots(await pdb.listMemberLedger(db, row.member_id));
+  const { open } = splitLots(ledger, now, await expireDays(db));
+  const grants = await pdb.listRefLedger(db, row.id, "mission");
+  const plan = allocateUpTo(open, row.points_tenths, grants[0]?.id || null);
+  for (const take of plan.takes) {
+    await pdb.addLedger(db, {
+      id: `rv_${row.id}_${take.id}`,
+      memberId: row.member_id,
+      brandId: null,
+      delta: -take.amount,
+      reason: "revoke",
+      refId: row.id,
+      now,
+      earnedAt: take.earnedAt,
+      expiresAt: take.expiresAt,
+      sourceId: take.id,
+    });
+  }
+  const won = await pdb.markRevoked(db, row.id, "poin ditarik", now);
+  if (!won) return { ok: false, error: "umum" };
+  await repo.insertAdminLog(db, { id: randomId(), action: "tarik-poin", detail: `${row.id} ${plan.taken}`, now });
+  logEvent("mission_revoke", { id: row.id, taken: plan.taken });
+  return { ok: true, taken: plan.taken };
 }
 
 export async function reviewMission(db: D1Database, input: { id: string; approve: boolean; now: number }): Promise<Fail | { ok: true }> {
@@ -272,8 +351,7 @@ export async function reviewMission(db: D1Database, input: { id: string; approve
   const won = await pdb.markSubmission(db, row.id, input.approve ? "approved" : "rejected", "", input.now);
   if (!won) return { ok: false, error: "umum" };
   if (input.approve) {
-    await pdb.addLedger(db, {
-      id: randomId(),
+    await grantEarned(db, {
       memberId: row.member_id,
       brandId: mission?.brand_id ?? null,
       delta: row.points_tenths,
@@ -300,4 +378,165 @@ export async function reviewMission(db: D1Database, input: { id: string; approve
     logEvent("mission_no", { id: row.id });
   }
   return { ok: true };
+}
+
+function asLots(rows: pdb.LedgerEntry[]): LedgerLike[] {
+  return rows.map((row) => ({
+    id: row.id,
+    delta: row.delta_tenths,
+    reason: row.reason,
+    earnedAt: row.earned_at,
+    expiresAt: row.expires_at,
+    sourceId: row.source_id,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function expireDays(db: D1Database): Promise<number> {
+  const raw = Number(await repo.getSetting(db, "points_expire_days"));
+  if (!Number.isInteger(raw) || raw < 1 || raw > 3650) return 60;
+  return raw;
+}
+
+export async function refreshMember(db: D1Database, memberId: string, now: number): Promise<void> {
+  const days = await expireDays(db);
+  const { due } = splitLots(asLots(await pdb.listMemberLedger(db, memberId)), now, days);
+  for (const lot of due) {
+    await pdb.addLedger(db, {
+      id: `exp_${lot.id}`,
+      memberId,
+      brandId: null,
+      delta: -lot.remaining,
+      reason: "expired",
+      refId: lot.id,
+      now,
+      earnedAt: lot.earnedAt,
+      expiresAt: lot.expiresAt,
+      sourceId: lot.id,
+    });
+  }
+}
+
+export async function sweepExpiry(db: D1Database, now: number): Promise<void> {
+  for (const memberId of await pdb.membersWithDuePoints(db, now)) await refreshMember(db, memberId, now);
+}
+
+async function grantEarned(
+  db: D1Database,
+  input: { memberId: string; brandId: string | null; delta: number; reason: string; refId: string | null; now: number; earnedAt?: number | null; expiresAt?: number | null },
+) {
+  const earnedAt = input.earnedAt ?? input.now;
+  const expiresAt = input.expiresAt ?? expiresAtFor(earnedAt, await expireDays(db));
+  await pdb.addLedger(db, {
+    id: randomId(),
+    memberId: input.memberId,
+    brandId: input.brandId,
+    delta: input.delta,
+    reason: input.reason,
+    refId: input.refId,
+    now: input.now,
+    earnedAt,
+    expiresAt,
+  });
+}
+
+async function spendPointsFifo(
+  db: D1Database,
+  input: { memberId: string; brandId: string | null; cost: number; reason: string; refId: string; now: number; preferId?: string | null },
+): Promise<{ ok: true } | { ok: false }> {
+  await refreshMember(db, input.memberId, input.now);
+  const days = await expireDays(db);
+  const { open } = splitLots(asLots(await pdb.listMemberLedger(db, input.memberId)), input.now, days);
+  const plan = allocateUpTo(open, input.cost, input.preferId);
+  if (plan.taken !== input.cost) return { ok: false };
+  for (const take of plan.takes) {
+    await pdb.addLedger(db, {
+      id: randomId(),
+      memberId: input.memberId,
+      brandId: input.brandId,
+      delta: -take.amount,
+      reason: input.reason,
+      refId: input.refId,
+      now: input.now,
+      earnedAt: take.earnedAt,
+      expiresAt: take.expiresAt,
+      sourceId: take.id,
+    });
+  }
+  return { ok: true };
+}
+
+async function restoreRedeem(db: D1Database, row: pdb.RedeemCode, now: number): Promise<void> {
+  const slices = await pdb.listRefLedger(db, row.id, "redeem");
+  if (!slices.length) {
+    if (row.points_tenths > 0) {
+      await grantEarned(db, { memberId: row.member_id, brandId: row.brand_id, delta: row.points_tenths, reason: "refund", refId: row.id, now });
+    }
+    return;
+  }
+  for (const slice of slices) {
+    await pdb.addLedger(db, {
+      id: randomId(),
+      memberId: row.member_id,
+      brandId: row.brand_id,
+      delta: -slice.delta_tenths,
+      reason: "refund",
+      refId: row.id,
+      now,
+      earnedAt: slice.earned_at,
+      expiresAt: slice.expires_at,
+    });
+  }
+}
+
+async function logMission(db: D1Database, memberId: string, brandId: string | null, title: string, now: number) {
+  const brand = brandId || (await repo.listBrands(db, true))[0]?.id;
+  if (!brand) return;
+  await logActivity(db, {
+    type: "mission",
+    memberId,
+    brandId: brand,
+    outletId: null,
+    sessionId: null,
+    delta: 0,
+    after: (await repo.getCard(db, memberId, brand))?.stamps ?? 0,
+    note: title,
+    now,
+  });
+}
+
+export async function memberPointState(db: D1Database, memberId: string, now: number): Promise<{
+  balance: number;
+  days: number;
+  batch: { tenths: number; expiresAt: number; soon: boolean } | null;
+}> {
+  await refreshMember(db, memberId, now);
+  const days = await expireDays(db);
+  const { open } = splitLots(asLots(await pdb.listMemberLedger(db, memberId)), now, days);
+  return { balance: await pdb.pointsBalance(db, memberId), days, batch: soonestBatch(open, now) };
+}
+
+export async function expiryNotes(db: D1Database, now: number): Promise<Map<string, { tenths: number; expiresAt: number }>> {
+  await sweepExpiry(db, now);
+  const grouped = new Map<string, LedgerLike[]>();
+  for (const row of await pdb.listAllLedger(db)) {
+    const list = grouped.get(row.member_id) || [];
+    list.push({
+      id: row.id,
+      delta: row.delta_tenths,
+      reason: row.reason,
+      earnedAt: row.earned_at,
+      expiresAt: row.expires_at,
+      sourceId: row.source_id,
+      createdAt: row.created_at,
+    });
+    grouped.set(row.member_id, list);
+  }
+  const days = await expireDays(db);
+  const notes = new Map<string, { tenths: number; expiresAt: number }>();
+  for (const [memberId, rows] of grouped) {
+    const batch = soonestBatch(splitLots(rows, now, days).open, now);
+    if (batch) notes.set(memberId, { tenths: batch.tenths, expiresAt: batch.expiresAt });
+  }
+  return notes;
 }

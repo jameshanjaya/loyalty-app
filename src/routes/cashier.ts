@@ -8,7 +8,9 @@ import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { CASHIER_SESSION_MS, canCancel } from "../loyalty";
 import { LIMITS, enforceLimit } from "../ratelimit";
-import { confirmRedeemCode, expireCodes } from "../points-flow";
+import { confirmRedeemCode, expireCodes, grantCashierMission } from "../points-flow";
+import { formatPoints, missionInWindow, missionOpen, proofKind, questLocked } from "../points";
+import * as pdb from "../points-db";
 import { cancelOwn, giveBirthday, loginCashier, manualRedeem, manualStamp, openClaim } from "../service";
 import { clearCookie, COOKIE, loadCashier, setSessionCookie } from "../session";
 import { signClaim } from "../tokens";
@@ -84,7 +86,7 @@ export async function handleCashier(app: App): Promise<Response | null> {
     const last = await repo.latestOpenActivity(db, cashier.sessionId);
     const cancelId =
       last && canCancel({ createdAt: last.created_at, now, sameSession: true, voided: false, isLast: true }) ? last.id : null;
-    let found: { member: Member; stamps: number; birthday: string | null } | null = null;
+    let found: { member: Member; stamps: number; birthday: string | null; quests: Array<{ id: string; title: string; points: string }> } | null = null;
     const waRaw = url.searchParams.get("wa") || "";
     const wa = waRaw ? normalizeWa(waRaw) : null;
     if (wa) {
@@ -99,7 +101,19 @@ export async function handleCashier(app: App): Promise<Response | null> {
         days: cashier.brand.birthday_days,
       });
       const used = offer.open ? await repo.birthdayTaken(db, member.id, cashier.brand.id, offer.rewardYear) : true;
-      found = { member, stamps: card.stamps, birthday: offer.open && !used ? cashier.brand.birthday_reward : null };
+      const quests = [];
+      const earned = await pdb.lifetimeEarned(db, member.id);
+      for (const mission of await pdb.listMissions(db, true)) {
+        if (proofKind(mission) !== "cashier") continue;
+        if (mission.brand_id && mission.brand_id !== cashier.brand.id) continue;
+        if (!missionInWindow(mission.starts_at, mission.ends_at, now)) continue;
+        if (questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned })) continue;
+        const state = await pdb.memberMissionState(db, member.id, mission.id);
+        const limit = mission.limit_kind === "week" ? "week" : "once";
+        if (!missionOpen({ limit, hasPending: state.pending, lastApprovedAt: state.lastApprovedAt, now })) continue;
+        quests.push({ id: mission.id, title: mission.title, points: formatPoints(mission.points_tenths) });
+      }
+      found = { member, stamps: card.stamps, birthday: offer.open && !used ? cashier.brand.birthday_reward : null, quests };
     }
     return html(
       cashierDeskPage({
@@ -115,6 +129,17 @@ export async function handleCashier(app: App): Promise<Response | null> {
   }
 
   if (request.method === "POST" && !sameOrigin(request)) return html(messagePage("Ditolak", errText("csrf") || ""), 403);
+
+  if (path === "/kasir/misi" && request.method === "POST") {
+    const limited = await enforceLimit(db, `issue:${cashier.sessionId}`, now, LIMITS.cashierIssue);
+    if (!limited.ok) return go("/kasir/meja", "cepat");
+    const form = await request.formData();
+    const member = await repo.getMember(db, String(form.get("member_id") || ""));
+    if (!member) return go("/kasir/meja", "belum");
+    const result = await grantCashierMission(db, { member, missionId: String(form.get("mission_id") || ""), brandId: cashier.brand.id, now });
+    if (!result.ok) return go(`/kasir/meja?wa=${encodeURIComponent(member.wa)}`, result.error);
+    return redirect(`/kasir/meja?wa=${encodeURIComponent(member.wa)}&ok=misi`);
+  }
 
   if (path === "/kasir/stamp" && request.method === "POST") {
     const form = await request.formData();

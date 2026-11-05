@@ -9,3 +9,13 @@ PIN_PEPPER=ganti-dengan-acak-lain-jangan-diganti-sembarangan
 # Login Google. Kosongkan kalau belum dibuat. Jangan commit isinya.
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+
+# Verifikasi WhatsApp. Kosongkan semuanya untuk mematikan fiturnya.
+# WA_BUSINESS_NUMBER nomor bisnis (628...), WA_VERIFY_TOKEN untuk webhook,
+# WA_ACCESS_TOKEN untuk kirim pesan nanti, WA_APP_SECRET untuk cek tanda tangan.
+# WA_OTP_ENABLED=1 hanya menampilkan tautan cadangan. Pengiriman OTP belum disambungkan.
+WA_BUSINESS_NUMBER=
+WA_VERIFY_TOKEN=
+WA_ACCESS_TOKEN=
+WA_APP_SECRET=
+WA_OTP_ENABLED=

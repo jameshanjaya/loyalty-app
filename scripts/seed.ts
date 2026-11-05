@@ -134,6 +134,9 @@ const emails: Record<string, string> = {
   m_kevin: "kevin.t@gmail.com",
 };
 const lines: string[] = [
+  "DELETE FROM wa_codes;",
+  "DELETE FROM mission_photos;",
+  "DELETE FROM settings;",
   "DELETE FROM order_clicks;",
   "DELETE FROM order_links;",
   "DELETE FROM redeem_codes;",
@@ -161,8 +164,8 @@ const lines: string[] = [
 lines.push(
   `INSERT INTO brands (id, name, short_name, handle, emoji, accent, accent_soft, stamps_required, reward_text, condition_label, min_amount, max_stamps_per_day, reward_note, active, birthday_reward, birthday_active, birthday_window, birthday_days) VALUES
   ('loft25','Loft25 Matcha Studio','Loft25','@loft25.matchastudio','🍵','#143d28','#e4f0dc',10,'free matcha','Transaksi min Rp50.000',50000,2,'1 transaksi yang memenuhi syarat = 1 stamp.',1,'free matcha ulang tahun',1,'month',7),
-  ('soto-oseng','Soto Oseng Bang Jem','Soto Oseng','@sotooseng.bangjem','🍜','#9a3412','#f8e3d4',10,'Soto Oseng paket','Transaksi ada oseng babi',NULL,2,'Kasir pastikan nota ada oseng babi.',1,'es teh ulang tahun',1,'around',7),
-  ('krispyporkk','Krispyporkk','Krispyporkk','@krispyporkk','🍗','#f26b1d','#ffe1c7',10,'diskon 50%','Transaksi min Rp100.000',100000,2,'Diskon 50% dari tagihan, paling banyak Rp400.000. Kasir yang hitung di kasir.',1,'es krim ulang tahun',0,'around',3);`,
+  ('soto-oseng','Soto Oseng Bang Jem','Soto Oseng','@sotooseng.bangjem','🍜','#1e6a9a','#b3c9ee',10,'Soto Oseng paket','Transaksi ada oseng babi',NULL,2,'Kasir pastikan nota ada oseng babi.',1,'es teh ulang tahun',1,'around',7),
+  ('krispyporkk','Krispyporkk','Krispyporkk','@krispyporkk','🍗','#ff6fa8','#ffd0e4',10,'diskon 50%','Transaksi min Rp100.000',100000,2,'Diskon 50% dari tagihan, paling banyak Rp400.000. Kasir yang hitung di kasir.',1,'es krim ulang tahun',0,'around',3);`,
 );
 
 async function pinPair(plain: string): Promise<{ hash: string; salt: string }> {
@@ -271,8 +274,21 @@ lines.push(
   ('tier_loft_10', 'loft25', 10, 'free matcha', 2, 1),
   ('tier_soto_10', 'soto-oseng', 10, 'Soto Oseng paket', 1, 1),
   ('tier_kris_10', 'krispyporkk', 10, 'diskon 50%', 1, 1);
-  INSERT INTO point_ledger (id, member_id, brand_id, delta_tenths, reason, ref_id, created_at) VALUES
-  ('poin_rina', 'm_rina', 'loft25', 30, 'mission', NULL, ${now});`,
+  INSERT INTO point_ledger (id, member_id, brand_id, delta_tenths, reason, ref_id, created_at, earned_at, expires_at) VALUES
+  ('poin_rina', 'm_rina', 'loft25', 15, 'mission', 'sub_rina_review', ${now - 2 * DAY}, ${now - 2 * DAY}, ${now + 11 * DAY});
+  UPDATE brands SET cta='#143d28', page_bg='#f3eee4', stamp_icon='whisk' WHERE id='loft25';
+  UPDATE brands SET cta='#c93a26', page_bg='#e7eef8', stamp_icon='bowl' WHERE id='soto-oseng';
+  UPDATE brands SET cta='#111111', page_bg='#fff5f8', stamp_icon='plate' WHERE id='krispyporkk';
+  UPDATE missions SET proof_kind='upload', description='Foto struk atau minuman, terus review di Google. Lampirin screenshot-nya ya.', steps='Buka Google Maps.\nCari outlet-nya.\nKasih bintang dan tulis review.\nScreenshot, lalu kirim di sini.' WHERE id='misi_review';
+  UPDATE missions SET proof_kind='link', description='Post di Threads, tag kami, terus tempel tautannya.' WHERE id='misi_threads';
+  UPDATE missions SET proof_kind='upload', description='Story Instagram yang nge-tag kami. Lampirin screenshot-nya.' WHERE id='misi_story';
+  UPDATE missions SET proof_kind='link', description='Kejutan buat yang sudah rajin. Kirim tautan postingan favoritmu.' WHERE id='misi_rahasia';
+  INSERT INTO missions (id, brand_id, title, description, points_tenths, proof_screenshot, proof_link, limit_kind, active, created_at, icon, tag, mystery, tease, unlock_points_tenths, sort_order, proof_kind, starts_at, ends_at, steps) VALUES
+  ('misi_gulai', 'soto-oseng', 'Makan ayam pakai kuah gulai', 'Pesan ayam plus kuah gulai. Kasir yang kasih poinnya.', 10, 0, 0, 'once', 1, ${now}, '🍜', 'new', 0, '', 0, 4, 'cashier', NULL, NULL, 'Pesan ayam pakai kuah gulai.\nTunjukin ke kasir.\nKasir tap kasih poin.');
+  INSERT INTO mission_photos (id, mission_id, r2_key, image_url, caption, sort_order) VALUES
+  ('foto_gulai_1', 'misi_gulai', NULL, '/banners/soto-1.jpg', 'Ayamnya disiram kuah gulai', 1),
+  ('foto_gulai_2', 'misi_gulai', NULL, '/banners/soto-2.jpg', 'Sajikan panas', 2);
+  INSERT INTO settings (key, value) VALUES ('points_expire_days', '60');`,
 );
 
 writeFileSync(".seed.tmp.sql", lines.join("\n"));

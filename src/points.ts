@@ -142,8 +142,27 @@ export function questProgress(input: {
   if (input.limit === "week" && input.lastApprovedAt != null && input.lastApprovedAt >= startOfWibWeek(input.now)) {
     return { pct: 100, done: true, label: "Minggu ini beres" };
   }
-  if (input.pending) return { pct: 50, done: false, label: "Menunggu review" };
+  if (input.pending) return { pct: 50, done: false, label: "Lagi dicek" };
   return { pct: 0, done: false, label: input.limit === "week" ? "Belum minggu ini" : "Belum mulai" };
+}
+
+export function proofKind(row: { proof_kind?: string; proof_screenshot: number; proof_link: number }): "upload" | "link" | "cashier" {
+  if (row.proof_kind === "upload" || row.proof_kind === "link" || row.proof_kind === "cashier") return row.proof_kind;
+  if (row.proof_link && !row.proof_screenshot) return "link";
+  if (!row.proof_link && !row.proof_screenshot) return "cashier";
+  return "upload";
+}
+
+export function flagsForProof(kind: "upload" | "link" | "cashier"): { shot: number; link: number } {
+  if (kind === "link") return { shot: 0, link: 1 };
+  if (kind === "cashier") return { shot: 0, link: 0 };
+  return { shot: 1, link: 0 };
+}
+
+export function missionInWindow(starts: number | null | undefined, ends: number | null | undefined, now: number): boolean {
+  if (starts != null && now < starts) return false;
+  if (ends != null && now > ends) return false;
+  return true;
 }
 
 /** Minggu beruntun (WIB, Senin) yang ada stamp atau quest disetujui. Minggu ini kosong tetap menghitung dari minggu lalu. */

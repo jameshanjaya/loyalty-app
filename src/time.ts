@@ -32,6 +32,11 @@ export function clock(ms: number): string {
   return `${String(p.hh).padStart(2, "0")}:${String(p.mm).padStart(2, "0")}`;
 }
 
+export function shortDate(ms: number): string {
+  const p = wibParts(ms);
+  return `${p.d} ${MONTHS[p.m]}`;
+}
+
 export function feedTime(ms: number, now: number): string {
   if (ms >= startOfWibDay(now)) return clock(ms);
   const p = wibParts(ms);

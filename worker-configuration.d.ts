@@ -10,6 +10,11 @@ interface __BaseEnv_Env {
 	PIN_PEPPER: string;
 	GOOGLE_CLIENT_ID: string;
 	GOOGLE_CLIENT_SECRET: string;
+	WA_BUSINESS_NUMBER: string;
+	WA_VERIFY_TOKEN: string;
+	WA_ACCESS_TOKEN: string;
+	WA_APP_SECRET: string;
+	WA_OTP_ENABLED: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

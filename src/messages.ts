@@ -36,13 +36,13 @@ export const ERR: Record<string, string> = {
   besar: "Filenya kebesaran. Maksimal 2 MB.",
   poin: "Poin kamu belum cukup.",
   stok: "Hadiah ini lagi habis.",
-  kode: "Kode tidak berlaku. Cek merek outlet dan masa berlakunya.",
-  bukti: "Bukti misi belum lengkap.",
-  misi: "Misi ini sudah kamu kirim, atau masih menunggu.",
+  kode: "Kodenya tidak berlaku. Cek merek outlet dan masa berlakunya.",
+  bukti: "Buktinya belum lengkap, ya.",
+  misi: "Quest ini sudah kamu kirim, atau lagi dikunci.",
 };
 
 export const OK: Record<string, string> = {
-  stamp: "Stamp masuk.",
+  stamp: "Yeay, stamp kamu nambah!",
   redeem: "Reward berhasil ditukar.",
   batal: "Entri terakhir dibatalkan.",
   simpan: "Tersimpan.",
@@ -53,8 +53,9 @@ export const OK: Record<string, string> = {
   telepon: "Nomor WA diganti.",
   lahirsimpan: "Tanggal lahir disimpan.",
   "member-hapus": "Member dihapus. Catatannya tersimpan.",
-  misi: "Bukti terkirim. Tunggu disetujui.",
+  misi: "Yeay, poin kamu masuk!",
   setuju: "Misi disetujui. Poin masuk.",
+  tarik: "Poin quest ditarik balik.",
   tolak: "Misi ditolak.",
   kode: "Kode dikonfirmasi.",
 };

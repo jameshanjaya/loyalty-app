@@ -36,6 +36,16 @@
       "bucket_name": "loyalty-banners"
     }
   ],
+  "triggers": {
+    "crons": ["15 17 * * *"]
+  },
+  "vars": {
+    "WA_BUSINESS_NUMBER": "",
+    "WA_VERIFY_TOKEN": "",
+    "WA_ACCESS_TOKEN": "",
+    "WA_APP_SECRET": "",
+    "WA_OTP_ENABLED": ""
+  },
   "secrets": {
     "required": ["OWNER_PASSWORD", "TOKEN_SECRET", "PIN_PEPPER", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]
   }

@@ -17,6 +17,12 @@ export type Brand = {
   birthday_active: number;
   birthday_window: string;
   birthday_days: number;
+  cta?: string;
+  page_bg?: string;
+  logo_key?: string | null;
+  icon_key?: string | null;
+  stamp_icon?: string;
+  stamp_key?: string | null;
 };
 
 export type Outlet = {
@@ -42,6 +48,7 @@ export type Member = {
   birthday: string | null;
   google_sub: string | null;
   join_method: string;
+  wa_verified?: number;
 };
 
 export type Card = {

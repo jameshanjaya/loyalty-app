@@ -8,9 +8,10 @@ import { normalizeWa, validOutletPin, weakPin } from "../phone";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
 import { OWNER_SESSION_MS } from "../loyalty";
-import { formatPoints, parsePoints, parsePointsOrZero } from "../points";
+import { formatPoints, flagsForProof, parsePoints, parsePointsOrZero, proofKind } from "../points";
 import * as pdb from "../points-db";
-import { expireCodes, reviewMission } from "../points-flow";
+import { expireCodes, expireDays, expiryNotes, memberPointState, reviewMission, revokeMission } from "../points-flow";
+import { shortDate } from "../time";
 import { loginOwner, ownerDeleteMember, ownerSetBirthday, ownerSetPhone, setOutletPinHash } from "../service";
 import { clearCookie, COOKIE, loadOwner, setSessionCookie } from "../session";
 import { WIB_MS, feedTime, memberSince, parseWibDate, parseWibLocal, startOfWibDay, startOfWibMonth, wibDayIndex } from "../time";
@@ -21,6 +22,7 @@ import {
   bannersPage,
   adminCatalogPage,
   adminMissionsPage,
+  adminMissionEditPage,
   adminTiersPage,
   dashboardPage,
   deleteMemberPage,
@@ -113,6 +115,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
         pointsIssued: formatPoints(points.issued),
         pointsRedeemed: formatPoints(points.redeemed),
         pendingMissions,
+        expireDays: await expireDays(db),
         orderClicks: (await repo.orderClickCounts(db, startOfWibMonth(now), brandId)).map((row) => ({
           brand: brands.find((b) => b.id === row.brand_id)?.short_name || row.brand_id,
           platform: orderLabel(row.platform, row.platform),
@@ -124,7 +127,8 @@ export async function handleAdmin(app: App): Promise<Response | null> {
 
   if ((path === "/admin/member.csv" || path === "/admin/member.xlsx") && request.method === "GET") {
     const listed = await repo.listMemberRows(db, memberQuery(url));
-    const exported = listed.map((m) => toExport(m, now));
+    const notes = await expiryNotes(db, now);
+    const exported = listed.map((m) => toExport(m, now, notes.get(m.id)));
     if (path.endsWith(".xlsx")) {
       const bytes = membersXlsx(exported);
       return new Response(Uint8Array.from(bytes), {
@@ -186,7 +190,11 @@ export async function handleAdmin(app: App): Promise<Response | null> {
     const member = await repo.getMember(db, id);
     if (!member) return back("/admin/member", "belum");
     const cards = await repo.memberCards(db, id);
-    return html(memberDetailPage({ member, cards, params: url.searchParams }));
+    const state = await memberPointState(db, member.id, now);
+    const pointsNote = state.batch
+      ? `${formatPoints(state.balance)} poin · ${formatPoints(state.batch.tenths)} hangus ${shortDate(state.batch.expiresAt)}${state.batch.soon ? " · segera hangus" : ""}`
+      : `${formatPoints(state.balance)} poin`;
+    return html(memberDetailPage({ member, cards, params: url.searchParams, pointsNote }));
   }
 
   if (path === "/admin/reward" && request.method === "GET") {
@@ -411,6 +419,7 @@ export async function handleAdmin(app: App): Promise<Response | null> {
           points: formatPoints(m.points_tenths),
           limit: m.limit_kind === "week" ? "seminggu" : "sekali",
           active: m.active === 1,
+          proof: proofKind(m) === "cashier" ? "kasir" : proofKind(m) === "link" ? "tautan" : "foto",
           brand: brands.find((b) => b.id === m.brand_id)?.short_name || "Semua",
           icon: m.icon || "🍃",
           tag: m.tag || "",
@@ -433,6 +442,33 @@ export async function handleAdmin(app: App): Promise<Response | null> {
           icon: level.icon || "🌱",
           brand: brands.find((b) => b.id === level.brand_id)?.short_name || "Semua merek",
         })),
+        approved: (await pdb.listApproved(db)).map((row) => ({
+          id: row.id,
+          title: row.title || "",
+          member: row.member_name || "",
+          points: formatPoints(row.points_tenths),
+        })),
+        params: url.searchParams,
+      }),
+    );
+  }
+
+  if (path.startsWith("/admin/misi/quest/") && request.method === "GET") {
+    const id = decodeURIComponent(path.slice("/admin/misi/quest/".length).split("/")[0] || "");
+    const mission = await pdb.getMission(db, id);
+    if (!mission) return back("/admin/misi", "umum");
+    const brands = await repo.listBrands(db, false);
+    const photos = await pdb.listMissionPhotos(db, mission.id);
+    return html(
+      adminMissionEditPage({
+        mission,
+        brands: brands.map((b) => ({ id: b.id, name: b.short_name })),
+        photos: photos.map((photo) => ({
+          id: photo.id,
+          caption: photo.caption,
+          sort: photo.sort_order,
+          src: photo.r2_key ? `/media/panduan/${photo.id}` : photo.image_url || "",
+        })),
         params: url.searchParams,
       }),
     );
@@ -440,37 +476,12 @@ export async function handleAdmin(app: App): Promise<Response | null> {
 
   if (path === "/admin/misi" && request.method === "POST") {
     const form = await request.formData();
-    const points = parsePoints(String(form.get("points") || ""));
-    const title = clip(String(form.get("title") || ""), 80);
-    const shot = form.get("shot") === "on";
-    const link = form.get("link") === "on";
-    if (!title || points == null || (!shot && !link)) return back("/admin/misi", "aturan");
-    const brandId = String(form.get("brand_id") || "") || null;
-    if (brandId && !(await repo.getBrand(db, brandId))) return back("/admin/misi", "aturan");
-    const tagRaw = String(form.get("tag") || "");
-    const tag = tagRaw === "new" || tagRaw === "limited" ? tagRaw : "";
-    const unlock = parsePointsOrZero(String(form.get("unlock") || "0"));
-    const sort = Number(form.get("sort") || 0);
-    if (unlock == null || !Number.isInteger(sort) || sort < 0 || sort > 999) return back("/admin/misi", "aturan");
-    await pdb.insertMission(db, {
-      id: randomId(),
-      brand_id: brandId,
-      title,
-      description: clip(String(form.get("description") || ""), 240),
-      points_tenths: points,
-      proof_screenshot: shot ? 1 : 0,
-      proof_link: link ? 1 : 0,
-      limit_kind: String(form.get("limit_kind") || "") === "week" ? "week" : "once",
-      active: 1,
-      created_at: now,
-      icon: markIcon(String(form.get("icon") || ""), "🍃"),
-      tag,
-      mystery: form.get("mystery") === "on" ? 1 : 0,
-      tease: clip(String(form.get("tease") || ""), 140),
-      unlock_points_tenths: unlock,
-      sort_order: sort,
-    });
-    return ok("/admin/misi", "simpan");
+    const built = readMission(form);
+    if (!built) return back("/admin/misi", "aturan");
+    if (built.brand_id && !(await repo.getBrand(db, built.brand_id))) return back("/admin/misi", "aturan");
+    const id = randomId();
+    await pdb.insertMission(db, { ...built, id, active: 1, created_at: now });
+    return redirect(`/admin/misi/quest/${id}?ok=simpan`);
   }
 
   if (path === "/admin/misi/level" && request.method === "POST") {
@@ -493,13 +504,99 @@ export async function handleAdmin(app: App): Promise<Response | null> {
 
   if (path.startsWith("/admin/misi/") && request.method === "POST") {
     const rest = path.slice("/admin/misi/".length);
+    if (rest.startsWith("quest/")) {
+      const bits = rest.split("/");
+      const id = decodeURIComponent(bits[1] || "");
+      const mission = await pdb.getMission(db, id);
+      if (!mission) return back("/admin/misi", "umum");
+      const action = bits[2] || "";
+      if (action === "simpan") {
+        const form = await request.formData();
+        const built = readMission(form);
+        if (!built) return back(`/admin/misi/quest/${id}`, "aturan");
+        if (built.brand_id && !(await repo.getBrand(db, built.brand_id))) return back(`/admin/misi/quest/${id}`, "aturan");
+        await pdb.updateMission(db, { ...built, id, active: form.get("active") === "on" ? 1 : 0, created_at: mission.created_at });
+        return ok(`/admin/misi/quest/${id}`, "simpan");
+      }
+      if (action === "foto" && bits.length === 3) {
+        const form = await request.formData();
+        const saved = await storeImage(env, form.get("gambar"), `guides/${randomId()}`);
+        if (!saved) return back(`/admin/misi/quest/${id}`, "gambar");
+        const photos = await pdb.listMissionPhotos(db, id);
+        await pdb.insertMissionPhoto(db, {
+          id: randomId(),
+          missionId: id,
+          r2Key: saved.key,
+          imageUrl: null,
+          caption: clip(String(form.get("caption") || ""), 80),
+          sort: photos.length + 1,
+        });
+        return ok(`/admin/misi/quest/${id}`, "simpan");
+      }
+      if (action === "foto" && bits[4] === "buang") {
+        const photoId = decodeURIComponent(bits[3] || "");
+        const photo = await pdb.getMissionPhoto(db, photoId);
+        if (photo?.r2_key) await env.BANNERS.delete(photo.r2_key);
+        await pdb.deleteMissionPhoto(db, photoId, id);
+        return ok(`/admin/misi/quest/${id}`, "hapus");
+      }
+      if (action === "urut") {
+        const form = await request.formData();
+        const photos = await pdb.listMissionPhotos(db, id);
+        for (const photo of photos) {
+          const sort = Number(form.get(`sort_${photo.id}`));
+          const caption = clip(String(form.get(`caption_${photo.id}`) || ""), 80);
+          if (!Number.isInteger(sort) || sort < 0 || sort > 99) return back(`/admin/misi/quest/${id}`, "aturan");
+          await pdb.saveMissionPhotoMeta(db, photo.id, id, caption, sort);
+        }
+        return ok(`/admin/misi/quest/${id}`, "simpan");
+      }
+      return back("/admin/misi", "umum");
+    }
     const approve = rest.endsWith("/setuju");
     const reject = rest.endsWith("/tolak");
-    if (!approve && !reject) return back("/admin/misi", "umum");
+    const pull = rest.endsWith("/tarik");
+    const toggle = rest.endsWith("/aktif");
     const id = decodeURIComponent(rest.slice(0, rest.lastIndexOf("/")));
+    if (pull) {
+      const result = await revokeMission(db, id, now);
+      if (!result.ok) return back("/admin/misi", result.error);
+      return ok("/admin/misi", "tarik");
+    }
+    if (toggle) {
+      const mission = await pdb.getMission(db, id);
+      if (!mission) return back("/admin/misi", "umum");
+      await pdb.setMissionActive(db, id, mission.active ? 0 : 1);
+      return ok("/admin/misi", "simpan");
+    }
+    if (!approve && !reject) return back("/admin/misi", "umum");
     const result = await reviewMission(db, { id, approve, now });
     if (!result.ok) return back("/admin/misi", result.error);
     return ok("/admin/misi", approve ? "setuju" : "tolak");
+  }
+
+  if (path === "/admin/poin" && request.method === "POST") {
+    const form = await request.formData();
+    const days = Number(form.get("days"));
+    if (!Number.isInteger(days) || days < 1 || days > 3650) return back("/admin/dasbor", "aturan");
+    await repo.setSetting(db, "points_expire_days", String(days));
+    return ok("/admin/dasbor", "simpan");
+  }
+
+  if (path.startsWith("/admin/merek/") && path.endsWith("/logo") && request.method === "POST") {
+    const id = decodeURIComponent(path.slice("/admin/merek/".length, -"/logo".length));
+    if (!(await repo.getBrand(db, id))) return back("/admin/aturan", "aturan");
+    const form = await request.formData();
+    const logo = await storeImage(env, form.get("logo"), `logos/${id}`);
+    const icon = await storeImage(env, form.get("ikon"), `icons/${id}`);
+    const stamp = await storeImage(env, form.get("stamp"), `stamps/${id}`);
+    if (form.get("logo") instanceof File && (form.get("logo") as File).size > 0 && !logo) return back("/admin/aturan", "gambar");
+    if (form.get("ikon") instanceof File && (form.get("ikon") as File).size > 0 && !icon) return back("/admin/aturan", "gambar");
+    if (form.get("stamp") instanceof File && (form.get("stamp") as File).size > 0 && !stamp) return back("/admin/aturan", "gambar");
+    if (logo) await repo.setBrandAsset(db, id, "logo", logo.key);
+    if (icon) await repo.setBrandAsset(db, id, "icon", icon.key);
+    if (stamp) await repo.setBrandAsset(db, id, "stamp", stamp.key);
+    return ok("/admin/aturan", "simpan");
   }
 
   if (path === "/admin/katalog" && request.method === "GET") {
@@ -645,6 +742,11 @@ function readBrand(form: FormData) {
   const birthday_window = String(form.get("birthday_window") || "") === "around" ? "around" : "month";
   const birthday_days = Number(form.get("birthday_days") || 7);
   if (!Number.isInteger(birthday_days) || birthday_days < 0 || birthday_days > 30) return null;
+  const cta = hexOrEmpty(String(form.get("cta") || ""));
+  const page_bg = hexOrEmpty(String(form.get("page_bg") || ""));
+  const stamp_icon = String(form.get("stamp_icon") || "whisk");
+  if (cta == null || page_bg == null) return null;
+  if (!["whisk", "bowl", "plate", "custom"].includes(stamp_icon)) return null;
   return {
     name,
     short_name,
@@ -663,7 +765,64 @@ function readBrand(form: FormData) {
     birthday_active: form.get("birthday_active") === "on" ? 1 : 0,
     birthday_window,
     birthday_days,
+    cta,
+    page_bg,
+    stamp_icon,
   };
+}
+
+function hexOrEmpty(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return "";
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : null;
+}
+
+function readMission(form: FormData) {
+  const title = clip(String(form.get("title") || ""), 80);
+  const points = parsePoints(String(form.get("points") || ""));
+  const kindRaw = String(form.get("proof") || "");
+  const kind = kindRaw === "link" || kindRaw === "cashier" ? kindRaw : kindRaw === "upload" ? "upload" : "";
+  if (!title || points == null || !kind) return null;
+  const brandId = String(form.get("brand_id") || "") || null;
+  const tagRaw = String(form.get("tag") || "");
+  const tag = tagRaw === "new" || tagRaw === "limited" ? tagRaw : "";
+  const unlock = parsePointsOrZero(String(form.get("unlock") || "0"));
+  const sort = Number(form.get("sort") || 0);
+  if (unlock == null || !Number.isInteger(sort) || sort < 0 || sort > 999) return null;
+  const startRaw = String(form.get("starts") || "").trim();
+  const endRaw = String(form.get("ends") || "").trim();
+  const starts = startRaw ? parseWibDate(startRaw) : null;
+  const ends = endRaw ? parseWibDate(endRaw) : null;
+  if (startRaw && starts == null) return null;
+  if (endRaw && ends == null) return null;
+  const flags = flagsForProof(kind);
+  return {
+    brand_id: brandId,
+    title,
+    description: clip(String(form.get("description") || ""), 240),
+    points_tenths: points,
+    proof_screenshot: flags.shot,
+    proof_link: flags.link,
+    proof_kind: kind,
+    limit_kind: String(form.get("limit_kind") || "") === "week" ? "week" : "once",
+    icon: markIcon(String(form.get("icon") || ""), "🍃"),
+    tag,
+    mystery: form.get("mystery") === "on" ? 1 : 0,
+    tease: clip(String(form.get("tease") || ""), 140),
+    unlock_points_tenths: unlock,
+    sort_order: sort,
+    starts_at: starts,
+    ends_at: ends == null ? null : ends + 86_400_000 - 1,
+    steps: clip(String(form.get("steps") || ""), 800),
+  };
+}
+
+async function storeImage(env: Env, value: unknown, key: string): Promise<{ key: string } | null> {
+  if (!(value instanceof File) || value.size <= 0) return null;
+  const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+  if (value.size > 2_000_000 || !allowed.has(value.type)) return null;
+  await env.BANNERS.put(key, value.stream(), { httpMetadata: { contentType: value.type } });
+  return { key };
 }
 
 function memberQuery(url: URL) {
@@ -671,7 +830,11 @@ function memberQuery(url: URL) {
   return { q: (url.searchParams.get("q") || "").trim(), brandId: url.searchParams.get("merek") || "", sort };
 }
 
-function toExport(m: { name: string; wa: string; email: string | null; birthday: string | null; created_at: number; join_method: string; stamps_label: string; rewards: number; last_seen_at: number }, now: number): ExportRow {
+function toExport(
+  m: { id: string; name: string; wa: string; email: string | null; birthday: string | null; created_at: number; join_method: string; stamps_label: string; rewards: number; last_seen_at: number },
+  now: number,
+  note?: { tenths: number; expiresAt: number },
+): ExportRow {
   return {
     name: m.name,
     wa: prettyWa(m.wa),
@@ -682,5 +845,6 @@ function toExport(m: { name: string; wa: string; email: string | null; birthday:
     stamps: m.stamps_label,
     rewards: String(m.rewards),
     lastVisit: feedTime(m.last_seen_at, now),
+    pointsExpiry: note ? `${formatPoints(note.tenths)} poin · ${shortDate(note.expiresAt)}` : "",
   };
 }

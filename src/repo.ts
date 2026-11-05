@@ -39,13 +39,17 @@ export async function saveBrand(
     birthday_active: number;
     birthday_window: string;
     birthday_days: number;
+    cta: string;
+    page_bg: string;
+    stamp_icon: string;
   },
 ): Promise<void> {
   await db
     .prepare(
       `UPDATE brands SET name=?, short_name=?, handle=?, emoji=?, accent=?, accent_soft=?,
         stamps_required=?, reward_text=?, condition_label=?, min_amount=?, max_stamps_per_day=?,
-        reward_note=?, active=?, birthday_reward=?, birthday_active=?, birthday_window=?, birthday_days=? WHERE id=?`,
+        reward_note=?, active=?, birthday_reward=?, birthday_active=?, birthday_window=?, birthday_days=?,
+        cta=?, page_bg=?, stamp_icon=? WHERE id=?`,
     )
     .bind(
       patch.name,
@@ -65,9 +69,30 @@ export async function saveBrand(
       patch.birthday_active,
       patch.birthday_window,
       patch.birthday_days,
+      patch.cta,
+      patch.page_bg,
+      patch.stamp_icon,
       id,
     )
     .run();
+}
+
+export async function setBrandAsset(db: D1Database, id: string, kind: "logo" | "icon" | "stamp", key: string): Promise<void> {
+  const column = kind === "logo" ? "logo_key" : kind === "icon" ? "icon_key" : "stamp_key";
+  await db.prepare(`UPDATE brands SET ${column} = ? WHERE id = ?`).bind(key, id).run();
+}
+
+export async function setPhoneVerified(db: D1Database, id: string, verified: number): Promise<void> {
+  await db.prepare(`UPDATE members SET wa_verified = ? WHERE id = ?`).bind(verified ? 1 : 0, id).run();
+}
+
+export async function getSetting(db: D1Database, key: string): Promise<string | null> {
+  const row = await db.prepare(`SELECT value FROM settings WHERE key = ?`).bind(key).first<{ value: string }>();
+  return row?.value ?? null;
+}
+
+export async function setSetting(db: D1Database, key: string, value: string): Promise<void> {
+  await db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).bind(key, value).run();
 }
 
 export async function listOutlets(db: D1Database): Promise<Outlet[]> {
