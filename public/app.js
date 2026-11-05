@@ -117,10 +117,37 @@ function bootScan() {
   });
 }
 
+function bootBirthday() {
+  document.querySelectorAll("[data-bday]").forEach((el) => {
+    const target = Number(el.getAttribute("data-bday"));
+    const label = el.querySelector("[data-bday-label]");
+    if (!label || !Number.isFinite(target)) return;
+    let reloaded = false;
+    const tick = () => {
+      const left = target - Date.now();
+      if (left <= 0) {
+        if (!reloaded) {
+          reloaded = true;
+          location.reload();
+        }
+        return;
+      }
+      const total = Math.floor(left / 60000);
+      const days = Math.floor(total / 1440);
+      const hours = Math.floor((total % 1440) / 60);
+      const minutes = total % 60;
+      label.textContent = `Claim your gift in ${days} days ${hours} hours ${minutes} minutes`;
+    };
+    tick();
+    setInterval(tick, 60000);
+  });
+}
+
 function boot() {
   bootPoll();
   bootReel();
   bootScan();
+  bootBirthday();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {

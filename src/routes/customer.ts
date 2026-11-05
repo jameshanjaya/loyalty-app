@@ -1,5 +1,5 @@
 import { randomId } from "../crypto";
-import { birthdayStatus } from "../birthday";
+import { birthdayNotice, type BirthdayNotice } from "../birthday";
 import { bookingTarget, bookingUrl, hiddenOrderPlatform, visibleOrderLinks } from "../orders";
 import { expiryCopy } from "../expiry";
 import { formatPoints, tierChoices } from "../points";
@@ -229,12 +229,17 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     const cards = new Map((await repo.listCards(db, member.id)).map((c) => [c.brand_id, c]));
     const banners = await repo.listBanners(db, brand.id);
     const history = await repo.memberHistory(db, member.id, brand.id);
-    const offer = birthdayStatus(member.birthday, now, {
+    const birthdayRule = {
       active: brand.birthday_active === 1,
-      window: brand.birthday_window === "around" ? "around" : "month",
+      window: brand.birthday_window === "around" ? ("around" as const) : ("month" as const),
       days: brand.birthday_days,
-    });
-    const birthdayUsed = offer.open ? await repo.birthdayTaken(db, member.id, brand.id, offer.rewardYear) : true;
+    };
+    let claimedYears = new Set<number>();
+    if (member.birthday && birthdayRule.active) {
+      const wibYear = new Date(now + 7 * 60 * 60 * 1000).getUTCFullYear();
+      claimedYears = new Set(await repo.birthdayClaimedYears(db, member.id, brand.id, wibYear - 1, wibYear + 2));
+    }
+    const birthday: BirthdayNotice = birthdayNotice(member.birthday, now, birthdayRule, claimedYears);
     const links = await repo.listOrderLinks(db, brand.id);
     const named = (await repo.listOutlets(db)).filter((outlet) => outlet.brand_id === brand.id && outlet.active);
     const outletParam = url.searchParams.get("outlet") || "";
@@ -274,7 +279,8 @@ export async function handleCustomer(app: App): Promise<Response | null> {
         history,
         now,
         params: url.searchParams,
-        birthday: offer.open && !birthdayUsed ? brand.birthday_reward : null,
+        birthday,
+        birthdayReward: brand.birthday_reward,
         points: formatPoints(pointState.balance),
         expiry: pointState.batch
           ? expiryCopy({ points: formatPoints(pointState.batch.tenths), date: shortDate(pointState.batch.expiresAt), days: pointState.days, soon: pointState.batch.soon })

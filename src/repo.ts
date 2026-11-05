@@ -855,6 +855,16 @@ export async function deleteMemberCascade(db: D1Database, id: string): Promise<v
   ]);
 }
 
+export async function birthdayClaimedYears(db: D1Database, memberId: string, brandId: string, fromYear: number, toYear: number): Promise<number[]> {
+  const result = await db
+    .prepare(
+      `SELECT reward_year FROM birthday_redemptions WHERE member_id = ? AND brand_id = ? AND reward_year >= ? AND reward_year <= ?`,
+    )
+    .bind(memberId, brandId, fromYear, toYear)
+    .all<{ reward_year: number }>();
+  return (result.results ?? []).map((row) => row.reward_year);
+}
+
 export async function birthdayTaken(db: D1Database, memberId: string, brandId: string, year: number): Promise<boolean> {
   const row = await db
     .prepare(`SELECT 1 AS n FROM birthday_redemptions WHERE member_id = ? AND brand_id = ? AND reward_year = ?`)

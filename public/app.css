@@ -105,6 +105,7 @@ h1, h2, h3, p { margin: 0; }
 .bday { margin-top: 14px; border-radius: 22px; padding: 16px 18px; background: linear-gradient(105deg, #f6d7a8, #f3b4c6); }
 .bday .kicker { font-size: .72rem; letter-spacing: .08em; font-weight: 800; }
 .bday h3 { margin: 4px 0; }
+.bday-note { font-weight: 800; margin: 4px 0; }
 .btn svg { width: 18px; height: 18px; }
 
 .checkline { display: flex; gap: 10px; align-items: flex-start; font-weight: 800; margin: 12px 0 4px; }

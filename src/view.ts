@@ -1,5 +1,6 @@
 import { esc, formatInt, maskName, maskWa, prettyWa } from "./format";
 import { hiddenOrderPlatform, orderLabel, type OrderLink } from "./orders";
+import { countdownText, type BirthdayNotice } from "./birthday";
 import { progressCopy } from "./loyalty";
 import { errText, okText } from "./messages";
 import { bannerLive } from "./repo";
@@ -203,6 +204,15 @@ function orderBlock(
   </section>`;
 }
 
+function birthdayBlock(notice: BirthdayNotice, reward: string, brandId: string, now: number): string {
+  if (!notice.show) return "";
+  if (notice.phase === "open") {
+    return `<section class="bday"><div class="kicker">ULANG TAHUN</div><h3>Hadiah: ${esc(reward)}</h3><p>Sekali setahun. Tukar di sini, kasir masukkan kodenya.</p><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(brandId)}" /><button class="btn btn-solid">Tukar hadiah ultah</button></form></section>`;
+  }
+  const note = notice.phase === "claimed" ? `<p class="bday-note">Udah diklaim, see you next year</p>` : "";
+  return `<section class="bday" data-bday="${notice.target}"><div class="kicker">ULANG TAHUN</div>${note}<p data-bday-label>${esc(countdownText(notice.target, now))}</p></section>`;
+}
+
 function tabbar(on: "kartu" | "quest" | "hadiah" | "profil", brandId: string): string {
   const q = brandId ? `?merek=${esc(brandId)}` : "";
   const links: Array<["kartu" | "quest" | "hadiah" | "profil", string, string, string]> = [
@@ -328,7 +338,8 @@ export function cardPage(input: {
   history: ActivityRow[];
   now: number;
   params: URLSearchParams;
-  birthday?: string | null;
+  birthday: BirthdayNotice;
+  birthdayReward: string;
   points?: string;
   tiers?: Array<{ id: string; stamps: number; reward: string; ready: boolean }>;
   orders?: OrderLink[];
@@ -392,7 +403,7 @@ export function cardPage(input: {
           .join("")}
       </section>
       ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id, input.booking || null, Boolean(input.pickBooking))}
-      ${input.birthday ? `<section class="bday"><div class="kicker">ULANG TAHUN</div><h3>Hadiah: ${esc(input.birthday)}</h3><p>Sekali setahun. Tukar di sini, kasir masukkan kodenya.</p><form method="post" action="/tukar/ultah"><input type="hidden" name="merek" value="${esc(input.brand.id)}" /><button class="btn btn-solid">Tukar hadiah ultah</button></form></section>` : ""}
+      ${birthdayBlock(input.birthday, input.birthdayReward, input.brand.id, input.now)}
       <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
       <div class="scan-sheet" data-scanner hidden>
         <div class="scan-top">
