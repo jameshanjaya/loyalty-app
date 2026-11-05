@@ -204,20 +204,38 @@ function bootRail() {
     return best;
   };
   rail.addEventListener("scroll", () => mark(), { passive: true });
+  const show = (id) => {
+    if (!id) return;
+    document.querySelectorAll("[data-pane]").forEach((pane) => {
+      pane.hidden = pane.getAttribute("data-pane") !== id;
+    });
+    const skin = document.querySelector(`.stage[data-pane="${id}"]`);
+    const root = document.querySelector("[data-brand-root]");
+    if (skin && root) {
+      root.setAttribute("style", skin.getAttribute("data-skin") || "");
+      root.classList.toggle("skin-dark", skin.getAttribute("data-dark") === "1");
+      root.classList.add(reduced ? "theme-fade" : "theme-shift");
+    }
+    document.querySelectorAll(".tabbar a").forEach((link) => {
+      const url = new URL(link.getAttribute("href"), location.origin);
+      url.searchParams.set("merek", id);
+      link.setAttribute("href", `${url.pathname}${url.search}`);
+    });
+    const here = new URL(location.href);
+    if (here.searchParams.get("merek") !== id) {
+      here.searchParams.set("merek", id);
+      history.replaceState({}, "", `${here.pathname}${here.search}`);
+    }
+  };
   let timer = 0;
   rail.addEventListener("scrollend", () => {
     const card = mark();
-    if (!card || card.getAttribute("data-brand") === document.querySelector(".stampcard.on")?.getAttribute("data-brand")) {
-      const href = card && card.getAttribute("data-href");
-      const here = new URL(location.href);
-      if (href && here.searchParams.get("merek") !== new URL(href, location.origin).searchParams.get("merek") && cards.length > 1) {
-        window.clearTimeout(timer);
-        timer = window.setTimeout(() => {
-          location.href = href;
-        }, reduced ? 0 : 180);
-      }
-    }
+    if (!card || cards.length < 2) return;
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => show(card.getAttribute("data-brand")), reduced ? 0 : 160);
   });
+  const active = rail.querySelector(".stampcard.on");
+  if (active && cards.length > 1) active.scrollIntoView({ inline: "center", block: "nearest" });
   mark();
 }
 
@@ -256,6 +274,69 @@ function bootWa() {
   });
 }
 
+function bootCrop() {
+  document.querySelectorAll("[data-crop]").forEach((form) => {
+    const file = form.querySelector("[data-crop-file]");
+    const canvas = form.querySelector("[data-crop-canvas]");
+    if (!file || !canvas) return;
+    let image = null;
+    let offsetX = 0;
+    let offsetY = 0;
+    let drag = null;
+    const draw = () => {
+      if (!image) return;
+      const width = 640;
+      const height = 320;
+      canvas.width = width;
+      canvas.height = height;
+      const scale = Math.max(width / image.width, height / image.height);
+      const dw = image.width * scale;
+      const dh = image.height * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#111";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(image, (width - dw) / 2 + offsetX, (height - dh) / 2 + offsetY, dw, dh);
+    };
+    file.addEventListener("change", () => {
+      const picked = file.files && file.files[0];
+      if (!picked) return;
+      const next = new Image();
+      next.onload = () => {
+        image = next;
+        offsetX = 0;
+        offsetY = 0;
+        canvas.hidden = false;
+        draw();
+      };
+      next.src = URL.createObjectURL(picked);
+    });
+    canvas.addEventListener("pointerdown", (event) => {
+      drag = { x: event.clientX, y: event.clientY, offsetX, offsetY };
+      canvas.setPointerCapture(event.pointerId);
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (!drag) return;
+      offsetX = drag.offsetX + (event.clientX - drag.x);
+      offsetY = drag.offsetY + (event.clientY - drag.y);
+      draw();
+    });
+    canvas.addEventListener("pointerup", () => {
+      drag = null;
+    });
+    form.addEventListener("submit", (event) => {
+      if (!image) return;
+      event.preventDefault();
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const data = new FormData(form);
+        data.set("gambar", new File([blob], "crop.jpg", { type: "image/jpeg" }));
+        const response = await fetch(form.action, { method: "POST", body: data, credentials: "same-origin" });
+        location.href = response.url || "/admin/banner?ok=simpan";
+      }, "image/jpeg", 0.9);
+    });
+  });
+}
+
 function boot() {
   bootPoll();
   bootReel();
@@ -264,6 +345,7 @@ function boot() {
   bootWa();
   bootRail();
   bootVerify();
+  bootCrop();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {

@@ -225,7 +225,47 @@ export async function handleAdmin(app: App): Promise<Response | null> {
   }
 
   if (path === "/admin/banner" && request.method === "GET") {
-    return html(bannersPage(await repo.listBanners(db, null), await repo.listBrands(db, true), url.searchParams));
+    const brands = await repo.listBrands(db, false);
+    const news = await repo.listAllNews(db);
+    return html(bannersPage({ banners: await repo.listEveryBanner(db), news, brands, params: url.searchParams }));
+  }
+
+  if (path === "/admin/banner/jeda" && request.method === "POST") {
+    const form = await request.formData();
+    const brand = await repo.getBrand(db, String(form.get("brand_id") || ""));
+    if (!brand) return back("/admin/banner", "merek");
+    const seconds = Number(form.get("seconds") || 3);
+    if (!Number.isFinite(seconds) || seconds < 2 || seconds > 20) return back("/admin/banner", "aturan");
+    await repo.setBannerDelay(db, brand.id, Math.round(seconds * 1000));
+    return ok("/admin/banner", "simpan");
+  }
+
+  if ((path === "/admin/banner/slot" || path === "/admin/news/slot") && request.method === "POST") {
+    const len = Number(request.headers.get("content-length") || "0");
+    if (len > 2_500_000) return back("/admin/banner", "besar");
+    const form = await request.formData();
+    const brand = await repo.getBrand(db, String(form.get("brand_id") || ""));
+    if (!brand) return back("/admin/banner", "merek");
+    const slot = Number(form.get("slot") || 0);
+    if (slot < 1 || slot > 3) return back("/admin/banner", "aturan");
+    const title = clip(String(form.get("title") || ""), 40);
+    const subtitle = clip(String(form.get("subtitle") || ""), 80);
+    const file = form.get("gambar");
+    let r2Key: string | null = null;
+    if (file instanceof File && file.size > 0) {
+      const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+      if (file.size > 2_000_000 || !allowed.has(file.type)) return back("/admin/banner", "gambar");
+      const id = randomId();
+      r2Key = path.endsWith("/news/slot") ? `news/${id}` : `banners/${id}`;
+      await env.BANNERS.put(r2Key, file.stream(), { httpMetadata: { contentType: file.type } });
+    }
+    if (path.endsWith("/news/slot")) {
+      const kind = ["NEWS", "PROMO", "MENU"].includes(String(form.get("kind") || "")) ? String(form.get("kind")) : "NEWS";
+      await repo.upsertNews(db, { id: randomId(), brandId: brand.id, slot, kind, title, subtitle, imageUrl: null, r2Key, active: 1 });
+    } else {
+      await repo.upsertBannerSlot(db, { id: randomId(), brandId: brand.id, slot, title: title || brand.short_name, subtitle, imageUrl: null, r2Key, now });
+    }
+    return ok("/admin/banner", "simpan");
   }
 
   if (path === "/admin/banner" && request.method === "POST") {

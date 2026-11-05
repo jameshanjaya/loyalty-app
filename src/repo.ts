@@ -146,6 +146,10 @@ export async function listNews(db: D1Database, brandId: string): Promise<NewsCar
   return rows<NewsCard>(db.prepare(`SELECT * FROM news_cards WHERE brand_id = ? ORDER BY slot`).bind(brandId));
 }
 
+export async function listAllNews(db: D1Database): Promise<NewsCard[]> {
+  return rows<NewsCard>(db.prepare(`SELECT * FROM news_cards ORDER BY brand_id, slot`));
+}
+
 export async function upsertNews(
   db: D1Database,
   card: { id: string; brandId: string; slot: number; kind: string; title: string; subtitle: string; imageUrl: string | null; r2Key: string | null; active: number },
@@ -157,7 +161,7 @@ export async function upsertNews(
   if (existing) {
     await db
       .prepare(
-        `UPDATE news_cards SET kind=?, title=?, subtitle=?, image_url=?, r2_key=COALESCE(?, r2_key), active=? WHERE id=?`,
+        `UPDATE news_cards SET kind=?, title=?, subtitle=?, image_url=COALESCE(?, image_url), r2_key=COALESCE(?, r2_key), active=? WHERE id=?`,
       )
       .bind(card.kind, card.title, card.subtitle, card.imageUrl, card.r2Key, card.active, existing.id)
       .run();
@@ -181,7 +185,7 @@ export async function upsertBannerSlot(
     .first<{ id: string }>();
   if (existing) {
     await db
-      .prepare(`UPDATE banners SET title=?, subtitle=?, image_url=?, r2_key=COALESCE(?, r2_key), active=1, sort_order=? WHERE id=?`)
+      .prepare(`UPDATE banners SET title=?, subtitle=?, image_url=COALESCE(?, image_url), r2_key=COALESCE(?, r2_key), active=1, sort_order=? WHERE id=?`)
       .bind(banner.title, banner.subtitle, banner.imageUrl, banner.r2Key, banner.slot, existing.id)
       .run();
     return;
@@ -741,6 +745,10 @@ export async function recentFlags(db: D1Database, since: number): Promise<FlagRo
       )
       .bind(since),
   );
+}
+
+export async function listEveryBanner(db: D1Database): Promise<Banner[]> {
+  return rows<Banner>(db.prepare(`SELECT * FROM banners ORDER BY brand_id, sort_order, created_at DESC`));
 }
 
 export async function listBanners(db: D1Database, brandId: string | null): Promise<Banner[]> {

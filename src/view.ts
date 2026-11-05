@@ -8,7 +8,7 @@ import { bannerLive } from "./repo";
 import { clock, feedTime, memberSince, toWibDateInput } from "./time";
 import type { DashNumbers, Lapsed, TopMember } from "./repo";
 import { brandArt, defaultStampIcon, nextRewardLine, pickHeroBanners, resolveStampIcon, rewardFace, stampFill, stampIconSrc } from "./brand-visual";
-import type { ActivityRow, Banner, Brand, Card, FlagRow, Member, Outlet } from "./types";
+import type { ActivityRow, Banner, Brand, Card, FlagRow, Member, NewsCard, Outlet } from "./types";
 
 const CUP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8h8v5a4 4 0 0 1-8 0V8z"/><path d="M15 9.5h1.8a2.2 2.2 0 0 1 0 4.4H15"/><path d="M8 20h6"/></svg>`;
 const CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 9.2 17 19 7"/></svg>`;
@@ -421,20 +421,52 @@ export function cardPage(input: {
   pickBooking?: boolean;
   missions?: Array<{ id: string; title: string; blurb: string; kind: string; status: string; reason: string }>;
   waLock?: boolean;
+  slices?: Array<{
+    brand: Brand;
+    banners: Banner[];
+    history: ActivityRow[];
+    birthday: BirthdayNotice;
+    birthdayReward: string;
+    tiers: Array<{ id: string; stamps: number; reward: string; ready: boolean; icon?: string }>;
+    orders: OrderLink[];
+    orderOutlets: Array<{ id: string; name: string; on: boolean }>;
+    booking: { id: string; name: string; url: string } | null;
+    pickBooking: boolean;
+    missions: Array<{ id: string; title: string; blurb: string; kind: string; status: string; reason: string }>;
+    quarters: number;
+  }>;
 }): string {
-  const card = input.cards.get(input.brand.id);
   const skin = customerSkin(input.brand);
-  const rows = input.history
-    .map((row) => {
-      const when = feedTime(row.created_at, input.now);
-      if (row.type === "redeem") return `<div class="row"><div><b class="reward">Tukar ${esc(row.reward_text)}</b><div class="small muted">${esc(row.outlet_name || row.short_name)}</div></div><div class="muted">${esc(when)}</div></div>`;
-      if (row.type === "cancel") return `<div class="row"><div><b class="muted">Dibatalkan</b></div><div class="muted">${esc(when)}</div></div>`;
-      if (row.type === "join") return `<div class="row"><div><b>Gabung kartu</b></div><div class="muted">${esc(when)}</div></div>`;
-      if (row.type === "birthday") return `<div class="row"><div><b class="reward">Birthday Freebies</b><div class="small muted">${esc(row.note)}</div></div><div class="muted">${esc(when)}</div></div>`;
-      const label = row.voided ? "Stamp dibatalkan" : "+1 stamp";
-      return `<div class="row"><div><b class="${row.voided ? "muted" : "plus"}">${label}</b><div class="small muted">${esc(row.outlet_name || "")}</div></div><div class="muted">${esc(when)}</div></div>`;
-    })
-    .join("");
+  const historyRows = (rowsIn: ActivityRow[]) =>
+    rowsIn
+      .map((row) => {
+        const when = feedTime(row.created_at, input.now);
+        if (row.type === "redeem") return `<div class="row"><div><b class="reward">Tukar ${esc(row.reward_text)}</b><div class="small muted">${esc(row.outlet_name || row.short_name)}</div></div><div class="muted">${esc(when)}</div></div>`;
+        if (row.type === "cancel") return `<div class="row"><div><b class="muted">Dibatalkan</b></div><div class="muted">${esc(when)}</div></div>`;
+        if (row.type === "join") return `<div class="row"><div><b>Gabung kartu</b></div><div class="muted">${esc(when)}</div></div>`;
+        if (row.type === "birthday") return `<div class="row"><div><b class="reward">Birthday Freebies</b><div class="small muted">${esc(row.note)}</div></div><div class="muted">${esc(when)}</div></div>`;
+        const label = row.voided ? "Stamp dibatalkan" : "+1 stamp";
+        return `<div class="row"><div><b class="${row.voided ? "muted" : "plus"}">${label}</b><div class="small muted">${esc(row.outlet_name || "")}</div></div><div class="muted">${esc(when)}</div></div>`;
+      })
+      .join("");
+  const slices = input.slices?.length
+    ? input.slices
+    : [
+        {
+          brand: input.brand,
+          banners: input.banners,
+          history: input.history,
+          birthday: input.birthday,
+          birthdayReward: input.birthdayReward,
+          tiers: input.tiers || [],
+          orders: input.orders || [],
+          orderOutlets: input.orderOutlets || [],
+          booking: input.booking || null,
+          pickBooking: Boolean(input.pickBooking),
+          missions: input.missions || [],
+          quarters: input.cards.get(input.brand.id)?.remainder_quarters || 0,
+        },
+      ];
   const first = input.member.name.split(" ")[0] || input.member.name;
   const celebrate = input.params.get("ok") === "stampquest";
   const locked = Boolean(input.waLock);
@@ -445,15 +477,17 @@ export function cardPage(input: {
       const tone = customerSkin(brand);
       const art = brandArt(brand);
       const active = brand.id === input.brand.id;
-      const veil = locked && active
+      const slice = slices.find((item) => item.brand.id === brand.id);
+      const brandGifts = (slice?.tiers || (active ? gifts : [])).map((tier) => ({ stamps: tier.stamps, icon: tier.icon || "🎁" }));
+      const veil = locked
         ? `<div class="lockveil"><div class="lockbadge">🔒</div><b>Verifikasi WhatsApp dulu</b><span>Biar stamp lu aman &amp; gak ketuker</span><button type="button" class="lockbtn" data-open-verify>Verifikasi dulu</button></div>`
         : "";
       const cardBg = brand.id === "krispyporkk" ? "#111111" : brand.accent || "#143d28";
-      return `<article class="stampcard${active ? " on" : ""}" data-brand="${esc(brand.id)}" data-href="/kartu?merek=${esc(brand.id)}" style="${tone.style};background:${esc(cardBg)};color:#fff${brand.id === "krispyporkk" ? ";border:1.5px solid #F27BA6" : ""}">
+      return `<article class="stampcard${active ? " on" : ""}" data-brand="${esc(brand.id)}" data-href="/kartu?merek=${esc(brand.id)}" data-skin="${tone.style}" data-dark="${tone.dark ? "1" : "0"}" style="${tone.style};background:${esc(cardBg)};color:#fff${brand.id === "krispyporkk" ? ";border:1.5px solid #F27BA6" : ""}">
         ${veil}
-        <div class="stamphead"><img src="${esc(art.full)}" alt="${esc(brand.short_name)}" /><b>${count}/${brand.stamps_required}</b></div>
-        ${stampGrid(count, brand.stamps_required, stampMark(brand), active ? gifts : [], brand.id)}
-        <p class="stampnote">${esc(nextRewardLine(count, (active ? input.tiers : []) || []))}</p>
+        <div class="stamphead"><span class="logo-chip" style="background:${esc(art.chip)}"><img src="${esc(art.mark)}" alt="${esc(brand.short_name)}" /></span><b>${count}/${brand.stamps_required}</b></div>
+        ${stampGrid(count, brand.stamps_required, stampMark(brand), brandGifts, brand.id)}
+        <p class="stampnote">${esc(nextRewardLine(count, slice?.tiers || []))}</p>
       </article>`;
     })
     .join("");
@@ -461,10 +495,33 @@ export function cardPage(input: {
     .map((brand) => `<i class="${brand.id === input.brand.id ? "on" : ""}" data-dot-brand="${esc(brand.id)}"></i>`)
     .join("");
   const phone = input.member.wa.startsWith("62") ? `+${input.member.wa}` : input.member.wa;
+  const stages = slices
+    .map((slice) => {
+      const on = slice.brand.id === input.brand.id;
+      const tone = customerSkin(slice.brand);
+      const banner =
+        carousel(slice.banners, input.now, slice.brand.banner_ms || 3000, slice.brand.non_halal === 1) ||
+        `<section class="reel"><div class="reel-track"><div class="slide"><div class="slide-fallback"></div><div class="slide-copy"><h3>${esc(slice.brand.name)}</h3><p>${esc(slice.brand.handle)}</p></div></div></div></section>`;
+      return `<div class="stage" data-pane="${esc(slice.brand.id)}" data-skin="${tone.style}" data-dark="${tone.dark ? "1" : "0"}"${on ? "" : " hidden"}>${banner}<p class="fine igline">${esc(slice.brand.ig_handle || slice.brand.handle)}</p></div>`;
+    })
+    .join("");
+  const rests = slices
+    .map((slice) => {
+      const on = slice.brand.id === input.brand.id;
+      const rows = historyRows(slice.history);
+      return `<div class="rest" data-pane="${esc(slice.brand.id)}"${on ? "" : " hidden"}>
+        ${questProgressLabel(slice.quarters) ? `<p class="fine center">${esc(questProgressLabel(slice.quarters))}</p>` : ""}
+        ${birthdayBlock(slice.birthday, slice.birthdayReward, slice.brand.id, input.now)}
+        ${orderBlock(slice.orders, slice.orderOutlets, slice.brand.id, slice.booking, slice.pickBooking)}
+        ${bonusStamp(slice.missions, slice.brand.id)}
+        <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
+      </div>`;
+    })
+    .join("");
   return doc(
     input.brand.short_name,
     `${celebrate ? confetti() : ""}<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}" data-brand-root>
-      ${carousel(input.banners, input.now, input.brand.banner_ms || 3000, input.brand.non_halal === 1) || `<section class="reel"><div class="reel-track"><div class="slide"><div class="slide-fallback"></div><div class="slide-copy"><h3>${esc(input.brand.name)}</h3><p>${esc(input.brand.handle)}</p></div></div></div></section>`}
+      ${stages}
       <section class="hello">
         <h1 class="display">Hai, ${esc(first)} 👋</h1>
         <p class="fine">Member dari ${esc(memberSince(input.member.created_at))}</p>
@@ -474,11 +531,7 @@ export function cardPage(input: {
       <div class="raildots" aria-hidden="true">${dots}</div>
       <button type="button" class="btn btn-solid"${locked ? " data-open-verify" : " data-scan"}>${locked ? "🔒 Collect Stamps" : "Collect Stamps"}</button>
       <p class="fine center">${locked ? "Verifikasi dulu biar stamp-nya kebuka." : "Arahin kamera ke QR di kasir ya"}</p>
-      ${questProgressLabel(card?.remainder_quarters || 0) ? `<p class="fine center">${esc(questProgressLabel(card?.remainder_quarters || 0))}</p>` : ""}
-      ${birthdayBlock(input.birthday, input.birthdayReward, input.brand.id, input.now)}
-      ${orderBlock(input.orders || [], input.orderOutlets || [], input.brand.id, input.booking || null, Boolean(input.pickBooking))}
-      ${bonusStamp(input.missions || [], input.brand.id)}
-      <section class="card"><h2>Riwayat</h2>${rows || `<p class="fine">Belum ada stamp di merek ini.</p>`}</section>
+      ${rests}
       <div class="dimmer" data-verify-dim hidden></div>
       <section class="sheet" data-verify-sheet hidden>
         <div class="grab"></div>
@@ -649,7 +702,7 @@ export function cashierDeskPage(input: {
           (quest) => `<form method="post" action="/kasir/misi">
             <input type="hidden" name="member_id" value="${esc(input.found?.member.id || "")}" />
             <input type="hidden" name="mission_id" value="${esc(quest.id)}" />
-            <button class="btn btn-line">Kasih poin: ${esc(quest.title)} · ${esc(quest.points)}</button>
+            <button class="btn btn-line">Kasih stamp: ${esc(quest.title)}</button>
           </form>`,
         )
         .join("")}
@@ -666,30 +719,27 @@ export function cashierDeskPage(input: {
         <div class="badge">${CHECK} Login PIN outlet</div>
       </header>
       ${input.params.get("ok") === "stamp" && input.params.get("siapa") ? `<div class="flash good">✓ Stamp masuk ke ${esc(input.params.get("siapa") || "")}${input.cancelId ? `<form method="post" action="/kasir/batal/${esc(input.cancelId)}"><button class="textlink">Batalkan</button></form>` : ""}</div>` : flashes(input.params)}
+      <section class="kasir-col">
       <section class="card">
         <h2>Kasih stamp ke customer</h2>
-        <p class="fine">Customer scan QR pakai kamera HP, stamp langsung masuk</p>
+        <p class="fine">Customer scan QR pakai kamera HP. Kalau QR susah, ketik nomor WA. Satu centang, tetap kena batas harian.</p>
         <form method="post" action="/kasir/stamp">
           <label class="checkline"><input type="checkbox" name="syarat" value="on" required /> ${esc(input.brand.condition_label)}</label>
           <button class="btn btn-solid">${CUP} Buka QR stamp</button>
+          <label class="lbl" for="wa">Nomor WA customer</label>
+          <input id="wa" name="wa" inputmode="tel" placeholder="0812 3456 4567" value="${esc(input.params.get("wa") || "")}" />
+          <button class="btn btn-line" formaction="/kasir/stamp/manual">+1 stamp ke nomor ini</button>
+          <button class="btn btn-line" formaction="/kasir/cari" formnovalidate>Cari member</button>
         </form>
         <a class="btn btn-line" href="/kasir/kode">Masukkan kode customer</a>
       </section>
-      <section class="card">
-        <h2>QR susah kebaca?</h2>
-        <p class="fine">Ketik nomor WA sebagai cadangan. Tetap 1 stamp, tetap kena batas harian.</p>
-        <form method="post" action="/kasir/stamp/manual">
-          <label class="lbl" for="wa">Nomor WA customer</label>
-          <input id="wa" name="wa" inputmode="tel" placeholder="0812 3456 4567" required value="${esc(input.params.get("wa") || "")}" />
-          <label class="checkline"><input type="checkbox" name="syarat" value="on" /> ${esc(input.brand.condition_label)}</label>
-          <button class="btn btn-solid">+1 Stamp ke nomor ini</button>
-          <button class="btn btn-line" formaction="/kasir/cari">Cari member</button>
-        </form>
-      </section>
       ${found}
+      </section>
+      <section class="kasir-col">
       <section class="card">
-        <h2>Aktivitas terakhir (otomatis)</h2>
+        <h2>Aktivitas terakhir</h2>
         ${rows || `<p class="fine">Belum ada aktivitas di outlet ini.</p>`}
+      </section>
       </section>
       <form method="post" action="/kasir/keluar"><button class="linkbtn">Keluar kasir</button></form>
     </main>`,
@@ -867,8 +917,6 @@ export function dashboardPage(input: {
       <article class="kpi"><span>Reward ditukar (bulan ini)</span><b>${input.numbers.redeemsMonth}</b><span>${esc(program?.reward_text || "semua merek")}</span></article>
       <article class="kpi"><span>Member aktif 30 hari</span><b>${input.numbers.active30}</b><span>${activePct}% dari total</span></article>
       <article class="kpi"><span>Birthday Freebies bulan ini</span><b>${input.birthdayRedeems}</b><span>yang sudah diklaim</span></article>
-      <article class="kpi"><span>Poin masuk bulan ini</span><b>${input.pointsIssued}</b><span>poin disetujui</span></article>
-      <article class="kpi"><span>Poin ditukar bulan ini</span><b>${input.pointsRedeemed}</b><span>dari katalog</span></article>
       <article class="kpi"><span>Misi menunggu</span><b>${input.pendingMissions}</b><span><a href="/admin/misi">Kelola Misi</a></span></article>
     </section>
     <section class="grid-2">
@@ -1126,43 +1174,66 @@ export function rewardsPage(rows: ActivityRow[], brands: Brand[], brandId: strin
   );
 }
 
-export function bannersPage(banners: Banner[], brands: Brand[], params: URLSearchParams): string {
-  const options = brands.map((b) => `<option value="${esc(b.id)}">${esc(b.short_name)}</option>`).join("");
-  const list = banners
-    .map(
-      (b) => {
-        const img = b.r2_key ? `/media/${b.r2_key}` : b.image_url || "";
-        const when = [b.starts_at ? `mulai ${esc(feedTime(b.starts_at, Date.now()))}` : "", b.ends_at ? `sampai ${esc(feedTime(b.ends_at, Date.now()))}` : ""]
-          .filter(Boolean)
-          .join(" · ");
-        return `<form class="banner-row" method="post" action="/admin/banner/${esc(b.id)}/hapus">
-        ${img ? `<img src="${esc(img)}" alt="" />` : ""}
-        <div><b>${esc(b.title)}</b> · ${esc(b.brand_id)} · urutan ${b.sort_order} · ${b.active ? "aktif" : "mati"}${b.cta ? ` · ${esc(b.cta)}` : ""}
-        <div class="small muted">${esc(b.subtitle)}${when ? ` · ${when}` : ""}</div></div>
-        <button class="textlink">Hapus</button>
-      </form>`;
-      },
-    )
+function cropFields(name: string): string {
+  return `<label class="lbl">Foto 2:1</label>
+    <input name="${name}" type="file" accept="image/*" data-crop-file />
+    <canvas class="cropbox" data-crop-canvas hidden></canvas>
+    <p class="fine">Geser fotonya di kotak 2:1. Yang ke-crop ini yang tersimpan.</p>`;
+}
+
+export function bannersPage(input: { banners: Banner[]; news: NewsCard[]; brands: Brand[]; params: URLSearchParams }): string {
+  const blocks = input.brands
+    .map((brand) => {
+      const slots = [1, 2, 3].map((slot) => {
+        const row = input.banners.find((banner) => banner.brand_id === brand.id && banner.slot === slot);
+        const img = row?.r2_key ? `/media/${row.r2_key}` : row?.image_url || "";
+        return `<form class="panel" style="margin-top:12px" data-crop method="post" action="/admin/banner/slot" enctype="multipart/form-data">
+          <h3>Banner slot ${slot}</h3>
+          <input type="hidden" name="brand_id" value="${esc(brand.id)}" />
+          <input type="hidden" name="slot" value="${slot}" />
+          ${img ? `<img class="croppreview" src="${esc(img)}" alt="" />` : `<p class="fine">Slot kosong.</p>`}
+          <label class="lbl">Judul pendek</label><input name="title" maxlength="40" value="${esc(row?.title || "")}" />
+          <label class="lbl">Satu baris</label><input name="subtitle" maxlength="80" value="${esc(row?.subtitle || "")}" />
+          ${cropFields("gambar")}
+          <button class="btn btn-solid">Simpan slot ${slot}</button>
+        </form>`;
+      });
+      const news = [1, 2, 3].map((slot) => {
+        const row = input.news.find((item) => item.brand_id === brand.id && item.slot === slot);
+        const img = row?.r2_key ? `/media/news/${row.id}` : row?.image_url || "";
+        return `<form class="panel" style="margin-top:12px" data-crop method="post" action="/admin/news/slot" enctype="multipart/form-data">
+          <h3>News slot ${slot}</h3>
+          <input type="hidden" name="brand_id" value="${esc(brand.id)}" />
+          <input type="hidden" name="slot" value="${slot}" />
+          ${img ? `<img class="croppreview" src="${esc(img)}" alt="" />` : `<p class="fine">Kosong. Kartu pelanggan pakai foto menu bawaan.</p>`}
+          <label class="lbl">Label</label>
+          <select name="kind">
+            ${["NEWS", "PROMO", "MENU"].map((kind) => `<option value="${kind}" ${row?.kind === kind ? "selected" : ""}>${kind}</option>`).join("")}
+          </select>
+          <label class="lbl">Judul</label><input name="title" maxlength="40" value="${esc(row?.title || "")}" />
+          <label class="lbl">Teks pendek</label><input name="subtitle" maxlength="80" value="${esc(row?.subtitle || "")}" />
+          ${cropFields("gambar")}
+          <button class="btn btn-solid">Simpan news ${slot}</button>
+        </form>`;
+      });
+      return `<section style="margin-top:22px">
+        <h2>${esc(brand.emoji)} ${esc(brand.short_name)}</h2>
+        <form class="panel" method="post" action="/admin/banner/jeda">
+          <input type="hidden" name="brand_id" value="${esc(brand.id)}" />
+          <label class="lbl">Jeda geser banner (detik)</label>
+          <div class="actions"><input name="seconds" type="number" min="2" max="20" step="1" value="${Math.round((brand.banner_ms || 3000) / 1000)}" required /><button class="btn btn-solid">Simpan jeda</button></div>
+          <p class="fine">Bawaan 3 detik. Berhenti pas disentuh.</p>
+        </form>
+        ${slots.join("")}
+        ${news.join("")}
+      </section>`;
+    })
     .join("");
   return adminShell(
     "/admin/banner",
-    `<h1>Banner promo</h1>${flashes(params)}
-     <p class="fine">Satu merek boleh punya beberapa foto. Urutan kecil tampil lebih dulu. Tanggal mulai dan selesai mengatur kapan foto itu muncul di carousel.</p>
-     <form class="panel" style="margin-top:12px" method="post" action="/admin/banner" enctype="multipart/form-data">
-       <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
-       <label class="lbl">Judul di atas foto</label><input name="title" required maxlength="80" />
-       <label class="lbl">Subjudul</label><input name="subtitle" maxlength="140" />
-       <label class="lbl">Teks tombol (opsional)</label><input name="cta" maxlength="24" placeholder="Lihat menu" />
-       <label class="lbl">Tautan tombol (opsional, https)</label><input name="link_url" type="url" placeholder="https://" />
-       <label class="lbl">URL gambar (opsional, https)</label><input name="image_url" type="url" placeholder="https://" />
-       <label class="lbl">atau upload gambar (maks 2 MB)</label><input name="gambar" type="file" accept="image/*" />
-       <label class="lbl">Mulai (WIB, opsional)</label><input name="starts_at" type="datetime-local" />
-       <label class="lbl">Selesai (WIB, opsional)</label><input name="ends_at" type="datetime-local" />
-       <label class="lbl">Urutan</label><input name="sort_order" type="number" value="1" />
-       <label class="checkline"><input type="checkbox" name="active" value="on" checked /> Tampilkan</label>
-       <button class="btn btn-solid">Simpan banner</button>
-     </form>
-     <article class="panel" style="margin-top:12px"><h2>Yang sudah ada</h2>${list || `<p class="fine">Kosong.</p>`}</article>`,
+    `<h1>Kelola Banner</h1>${flashes(input.params)}
+     <p class="fine">Tiga foto banner dan tiga kabar per merek. Kotak crop-nya 2:1. Slot news yang kosong jatuh ke foto menu bawaan.</p>
+     ${blocks}`,
   );
 }
 
@@ -1414,7 +1485,7 @@ export function catalogPage(input: {
       const action = reward.ready
         ? `<form method="post" action="/tukar/stamp"><input type="hidden" name="tier" value="${esc(reward.id)}" /><input type="hidden" name="dari" value="hadiah" /><button class="textlink go">Tukar</button></form>`
         : `<span class="soon">${reward.soldOut ? "Habis" : "Kurang<br>dikit lagi"}</span>`;
-      return `<article class="redeemrow"><span class="ic">${reward.image ? `<img src="${esc(reward.image)}" alt="" />` : esc(reward.icon || "🎁")}</span><div><b>${esc(face.title)}</b><small>${esc(face.badge)} · ${esc(reward.cost)}</small></div>${action}</article>`;
+      return `<article class="redeemrow"><span class="ic">${reward.image ? `<img src="${esc(reward.image)}" alt="" />` : esc(reward.icon || "🎁")}</span><div><b>${esc(face.title)}</b> <span class="freebadge">${esc(face.badge)}</span><small>${esc(reward.cost)}</small></div>${action}</article>`;
     })
     .join("");
   const news = (input.news || []).slice(0, 3).map((item) => {
@@ -1575,7 +1646,7 @@ export function adminTiersPage(input: {
   return adminShell(
     "/admin/tingkat",
     `<h1>Redeem</h1>${flashes(input.params)}
-     <p class="fine">Hadiah ditukar pakai stamp utuh. 5 dan 10 cuma pintasan. Kosongkan stok kalau tidak dibatasi. Kode kasir tetap 5 angka, sekitar 10 menit. Kalau hangus, stamp kembali.</p>
+     <p class="fine">Reward ditukar pakai stamp utuh. 5 dan 10 cuma pintasan. Kosongkan stok kalau tidak dibatasi. Kode kasir tetap 5 angka, sekitar 10 menit. Kalau hangus, stamp kembali.</p>
      <form class="panel" style="margin-top:12px" method="post" action="/admin/tingkat" enctype="multipart/form-data">
        <label class="lbl">Merek</label><select name="brand_id" required>${options}</select>
        <label class="lbl">Nama hadiah</label><input name="reward_text" required maxlength="80" placeholder="Free upsize" />

@@ -40,6 +40,64 @@ function errQuery(code: string): URLSearchParams {
   return new URLSearchParams({ err: code });
 }
 
+async function brandSlice(db: D1Database, member: NonNullable<Awaited<ReturnType<typeof loadMember>>>, brand: NonNullable<Awaited<ReturnType<typeof repo.getBrand>>>, now: number, outletParam: string) {
+  const earned = await pdb.lifetimeEarned(db, member.id);
+  const missions = [];
+  for (const mission of (await pdb.listMissions(db, true)).filter((item) => item.brand_id === brand.id && missionInWindow(item.starts_at, item.ends_at, now))) {
+    const state = await pdb.memberMissionState(db, member.id, mission.id);
+    const locked = questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned });
+    const progress = questProgress({ limit: "once", pending: state.pending, lastApprovedAt: state.lastApprovedAt, now });
+    const status = progress.done ? "done" : state.pending ? "wait" : locked ? "locked" : state.rejectedNote ? "no" : "open";
+    missions.push({
+      id: mission.id,
+      title: mission.title,
+      blurb: (mission.description || "").split("\n")[0] || "",
+      kind: mission.check_kind || "",
+      status,
+      reason: status === "no" ? state.rejectedNote || "" : "",
+    });
+  }
+  const named = (await repo.listOutlets(db)).filter((outlet) => outlet.brand_id === brand.id && outlet.active);
+  const selected = named.some((outlet) => outlet.id === outletParam) ? outletParam : "";
+  const orders = visibleOrderLinks(await repo.listOrderLinks(db, brand.id), selected || null);
+  const bookable = named.filter((outlet) => bookingUrl(brand.name, outlet.name, outlet.wa || ""));
+  const target = bookingTarget(
+    brand.name,
+    named.map((outlet) => ({ id: outlet.id, name: outlet.name, wa: outlet.wa || "" })),
+    selected || null,
+  );
+  const chipIds = new Set<string>([
+    ...orders.flatMap((link) => (link.outlet_id ? [link.outlet_id] : [])),
+    ...(bookable.length > 1 ? bookable.map((outlet) => outlet.id) : []),
+  ]);
+  const tiers = await pdb.listTiers(db, brand.id);
+  const card = await repo.getCard(db, member.id, brand.id);
+  const choice = tierChoices(
+    card?.stamps ?? 0,
+    tiers.map((tier) => ({ stamps: tier.stamps, reward: tier.reward_text })),
+  );
+  return {
+    brand,
+    banners: await repo.listBanners(db, brand.id),
+    history: await repo.memberHistory(db, member.id, brand.id),
+    birthday: await loadBirthdayNotice(db, member, brand, now),
+    birthdayReward: brand.birthday_reward,
+    tiers: tiers.map((tier) => ({
+      id: tier.id,
+      stamps: tier.stamps,
+      reward: tier.reward_text,
+      icon: tier.icon || "🎁",
+      ready: choice.available.some((item) => item.stamps === tier.stamps && item.reward === tier.reward_text),
+    })),
+    orders,
+    orderOutlets: named.filter((outlet) => chipIds.has(outlet.id)).map((outlet) => ({ id: outlet.id, name: outlet.name, on: outlet.id === selected })),
+    booking: target,
+    pickBooking: bookable.length > 1 && !target,
+    missions,
+    quarters: card?.remainder_quarters || 0,
+  };
+}
+
 export async function handleCustomer(app: App): Promise<Response | null> {
   const { request, env, url, now, ip } = app;
   const db = env.DB;
@@ -240,7 +298,6 @@ export async function handleCustomer(app: App): Promise<Response | null> {
   if (path === "/kartu" && request.method === "GET") {
     if (signup) return redirect("/profil");
     if (!member) return redirect("/masuk");
-    if (mustVerify(env, member)) return redirect("/verifikasi");
     await expireCodes(db, now);
     const brands = await repo.listBrands(db, true);
     if (!brands.length) return html(emptyDbPage());
@@ -248,75 +305,32 @@ export async function handleCustomer(app: App): Promise<Response | null> {
     if (!brand) return html(emptyDbPage());
     for (const item of brands) await repo.ensureCard(db, member.id, item.id, now);
     const cards = new Map((await repo.listCards(db, member.id)).map((c) => [c.brand_id, c]));
-    const banners = await repo.listBanners(db, brand.id);
-    const history = await repo.memberHistory(db, member.id, brand.id);
-    const birthday = await loadBirthdayNotice(db, member, brand, now);
-    const earned = await pdb.lifetimeEarned(db, member.id);
-    const missions = [];
-    for (const mission of (await pdb.listMissions(db, true)).filter((item) => item.brand_id === brand.id && missionInWindow(item.starts_at, item.ends_at, now))) {
-      const state = await pdb.memberMissionState(db, member.id, mission.id);
-      const locked = questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned });
-      const progress = questProgress({ limit: "once", pending: state.pending, lastApprovedAt: state.lastApprovedAt, now });
-      const status = progress.done ? "done" : state.pending ? "wait" : locked ? "locked" : state.rejectedNote ? "no" : "open";
-      missions.push({
-        id: mission.id,
-        title: mission.title,
-        blurb: (mission.description || "").split("\n")[0] || "",
-        kind: mission.check_kind || "",
-        status,
-        reason: status === "no" ? state.rejectedNote || "" : "",
-      });
-    }
-    const links = await repo.listOrderLinks(db, brand.id);
-    const named = (await repo.listOutlets(db)).filter((outlet) => outlet.brand_id === brand.id && outlet.active);
     const outletParam = url.searchParams.get("outlet") || "";
-    const selected = named.some((outlet) => outlet.id === outletParam) ? outletParam : "";
-    const orders = visibleOrderLinks(links, selected || null);
-    const bookable = named.filter((outlet) => bookingUrl(brand.name, outlet.name, outlet.wa || ""));
-    const target = bookingTarget(
-      brand.name,
-      named.map((outlet) => ({ id: outlet.id, name: outlet.name, wa: outlet.wa || "" })),
-      selected || null,
-    );
-    const chipIds = new Set<string>([
-      ...orders.flatMap((link) => (link.outlet_id ? [link.outlet_id] : [])),
-      ...(bookable.length > 1 ? bookable.map((outlet) => outlet.id) : []),
-    ]);
-    const orderOutlets = named
-      .filter((outlet) => chipIds.has(outlet.id))
-      .map((outlet) => ({ id: outlet.id, name: outlet.name, on: outlet.id === selected }));
-    const tiers = await pdb.listTiers(db, brand.id);
-    const choice = tierChoices(
-      cards.get(brand.id)?.stamps ?? 0,
-      tiers.map((tier) => ({ stamps: tier.stamps, reward: tier.reward_text })),
-    );
-    const tierView = tiers.map((tier) => ({
-      id: tier.id,
-      stamps: tier.stamps,
-      reward: tier.reward_text,
-      icon: tier.icon || "🎁",
-      ready: choice.available.some((item) => item.stamps === tier.stamps && item.reward === tier.reward_text),
-    }));
-    const waLock = (await repo.getSetting(db, "wa_verify_lock")) === "1" && member.wa_verified !== 1;
+    const slices = [];
+    for (const item of brands) slices.push(await brandSlice(db, member, item, now, item.id === brand.id ? outletParam : ""));
+    const active = slices.find((slice) => slice.brand.id === brand.id) || slices[0];
+    const lockOn = (await repo.getSetting(db, "wa_verify_lock")) === "1";
+    if (!lockOn && mustVerify(env, member)) return redirect("/verifikasi");
     return html(
       cardPage({
         member,
         brands,
         cards,
         brand,
-        banners,
-        history,
+        banners: active.banners,
+        history: active.history,
         now,
         params: url.searchParams,
-        birthday,
-        birthdayReward: brand.birthday_reward,
-        tiers: tierView,
-        orders,
-        orderOutlets,
-        booking: target,
-        pickBooking: bookable.length > 1 && !target,
-        missions,
-        waLock,
+        birthday: active.birthday,
+        birthdayReward: active.birthdayReward,
+        tiers: active.tiers,
+        orders: active.orders,
+        orderOutlets: active.orderOutlets,
+        booking: active.booking,
+        pickBooking: active.pickBooking,
+        missions: active.missions,
+        waLock: lockOn && member.wa_verified !== 1,
+        slices,
       }),
     );
   }
