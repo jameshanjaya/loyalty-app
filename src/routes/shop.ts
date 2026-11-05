@@ -6,6 +6,8 @@ import { formatPoints, missionInWindow, missionOpen, proofKind, questLocked, que
 import * as pdb from "../points-db";
 import { expireCodes, redeemBirthdayCode, redeemPointsReward, redeemTier, submitMission } from "../points-flow";
 import { formatAward, missionQuarters, questProgressLabel } from "../quest-stamp";
+import { loadBirthdayNotice } from "../birthday-gate";
+import { brandOpen, pickLiveBrand } from "../brands";
 import { mustVerify } from "../wa";
 import { qrSvg } from "../qr";
 import * as repo from "../repo";
@@ -41,11 +43,11 @@ export async function handleShop(app: App): Promise<Response | null> {
 
   if (path === "/misi" && request.method === "GET") {
     const missions = (await pdb.listMissions(db, true)).filter((mission) => missionInWindow(mission.starts_at, mission.ends_at, now));
-    const brands = await repo.listBrands(db, false);
+    const brands = await repo.listBrands(db, true);
     const earned = await pdb.lifetimeEarned(db, member.id);
     const streak = weekStreak(await pdb.visitMarks(db, member.id), now);
     const celebrate = url.searchParams.get("ok") === "stampquest";
-    const picked = brands.find((b) => b.id === url.searchParams.get("merek")) || brands[0] || null;
+    const picked = pickLiveBrand(brands, url.searchParams.get("merek"));
     const card = picked ? await repo.getCard(db, member.id, picked.id) : null;
     const view = [];
     for (const mission of missions) {
@@ -98,7 +100,8 @@ export async function handleShop(app: App): Promise<Response | null> {
   if (missionDetail && !missionDetail.includes("/")) {
     const mission = await pdb.getMission(db, missionDetail);
     if (!mission || !mission.active || !missionInWindow(mission.starts_at, mission.ends_at, now)) return go("/misi", "umum");
-    const brands = await repo.listBrands(db, false);
+    if (!brandOpen(mission.brand_id ? await repo.getBrand(db, mission.brand_id) : null)) return go("/misi", "merek");
+    const brands = await repo.listBrands(db, true);
     const earned = await pdb.lifetimeEarned(db, member.id);
     const state = await pdb.memberMissionState(db, member.id, mission.id);
     const locked = questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned });
@@ -149,11 +152,12 @@ export async function handleShop(app: App): Promise<Response | null> {
 
   if (path === "/hadiah" && request.method === "GET") {
     const brands = await repo.listBrands(db, true);
-    const brand = brands.find((b) => b.id === url.searchParams.get("merek")) || brands[0];
+    const brand = pickLiveBrand(brands, url.searchParams.get("merek"));
     if (!brand) return html(messagePage("Kosong", "Belum ada merek."));
     const card = await repo.getCard(db, member.id, brand.id);
     const stamps = card?.stamps || 0;
     const rewards = await pdb.listTiers(db, brand.id);
+    const birthday = await loadBirthdayNotice(db, member, brand, now);
     return html(
       catalogPage({
         stamps,
@@ -171,6 +175,9 @@ export async function handleShop(app: App): Promise<Response | null> {
           soldOut: r.stock === 0,
         })),
         params: url.searchParams,
+        birthday,
+        birthdayReward: brand.birthday_reward,
+        now,
       }),
     );
   }

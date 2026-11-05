@@ -23,7 +23,7 @@ function bootPoll() {
       if (wait) wait.textContent = "QR hangus. Tap Kasih Stamp lagi.";
       return;
     }
-    setTimeout(tick, 250);
+    setTimeout(tick, 1000);
   };
   tick();
 
@@ -61,7 +61,23 @@ function bootReel() {
     const go = (index) => {
       track.scrollTo({ left: width() * index, behavior: reduced ? "auto" : "smooth" });
     };
-    track.addEventListener("scroll", mark, { passive: true });
+    const warm = (index) => {
+      const slide = track.children[index];
+      const img = slide && slide.querySelector("img[data-src]");
+      if (!img) return;
+      img.src = img.getAttribute("data-src");
+      img.removeAttribute("data-src");
+    };
+    track.addEventListener(
+      "scroll",
+      () => {
+        mark();
+        warm(current());
+        warm(current() + 1);
+      },
+      { passive: true },
+    );
+    warm(1);
     dots.forEach((dot) => {
       dot.addEventListener("click", () => go(Number(dot.getAttribute("data-dot") || "0")));
     });
@@ -136,10 +152,19 @@ function bootBirthday() {
       const days = Math.floor(total / 1440);
       const hours = Math.floor((total % 1440) / 60);
       const minutes = total % 60;
-      label.textContent = `Claim your gift in ${days} days ${hours} hours ${minutes} minutes`;
+      label.textContent = `Claim your birthday freebies in ${days} days ${hours} hours ${minutes} minutes`;
     };
     tick();
     setInterval(tick, 60000);
+  });
+}
+
+function bootWa() {
+  document.querySelectorAll("[data-track]").forEach((link) => {
+    link.addEventListener("click", () => {
+      const track = link.getAttribute("data-track");
+      if (track && navigator.sendBeacon) navigator.sendBeacon(track);
+    });
   });
 }
 
@@ -148,6 +173,7 @@ function boot() {
   bootReel();
   bootScan();
   bootBirthday();
+  bootWa();
 }
 
 document.querySelectorAll("[data-print]").forEach((el) => {

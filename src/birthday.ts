@@ -1,8 +1,17 @@
+export type BirthdayWindowKind = "day" | "month" | "around";
+
 export type BirthdayRule = {
   active: boolean;
-  window: "month" | "around";
+  window: BirthdayWindowKind;
   days: number;
 };
+
+export const BIRTHDAY_LOCK_MS = 30 * 86_400_000;
+
+export function toBirthdayRule(brand: { birthday_active: number; birthday_window: string; birthday_days: number }): BirthdayRule {
+  const window: BirthdayWindowKind = brand.birthday_window === "month" || brand.birthday_window === "around" ? brand.birthday_window : "day";
+  return { active: brand.birthday_active === 1, window, days: brand.birthday_days };
+}
 
 export type BirthdayHit = { open: true; rewardYear: number } | { open: false };
 
@@ -26,30 +35,10 @@ function wibParts(now: number): { y: number; m: number; d: number } {
   return { y: w.getUTCFullYear(), m: w.getUTCMonth() + 1, d: w.getUTCDate() };
 }
 
-function dayNumber(year: number, month: number, day: number): number {
-  const dim = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const clamped = Math.min(day, dim);
-  return Math.floor(Date.UTC(year, month - 1, clamped) / 86_400_000);
-}
-
-/** Hadiah ultah aktif di bulan ulang tahun, atau N hari sebelum/sesudah. */
+/** Window is open only inside the chosen range. Default is the birthday date itself, Asia/Jakarta. */
 export function birthdayStatus(birthday: string | null, now: number, rule: BirthdayRule): BirthdayHit {
-  if (!birthday || !rule.active) return { open: false };
-  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthday);
-  if (!parts) return { open: false };
-  const month = Number(parts[2]);
-  const day = Number(parts[3]);
-  const today = wibParts(now);
-  if (rule.window === "month") {
-    if (today.m !== month) return { open: false };
-    return { open: true, rewardYear: today.y };
-  }
-  const span = Math.max(0, Math.min(30, rule.days));
-  const todayNum = dayNumber(today.y, today.m, today.d);
-  for (const year of [today.y - 1, today.y, today.y + 1]) {
-    const target = dayNumber(year, month, day);
-    if (Math.abs(todayNum - target) <= span) return { open: true, rewardYear: year };
-  }
+  const notice = birthdayNotice(birthday, now, rule, new Set());
+  if (notice.show && notice.phase === "open") return { open: true, rewardYear: notice.rewardYear };
   return { open: false };
 }
 
@@ -86,7 +75,7 @@ function birthdayWindow(year: number, month: number, day: number, rule: Birthday
   if (rule.window === "month") {
     return { rewardYear: year, start: wibStamp(year, month, 1), end: wibStamp(year, month + 1, 1) };
   }
-  const span = Math.max(0, Math.min(30, rule.days));
+  const span = rule.window === "around" ? Math.max(0, Math.min(30, rule.days)) : 0;
   const on = clampDay(year, month, day);
   const start = shiftDay(year, month, on, -span);
   const end = shiftDay(year, month, on, span + 1);
@@ -125,5 +114,35 @@ export function countdownText(target: number, now: number): string {
   const days = Math.floor(total / 1440);
   const hours = Math.floor((total % 1440) / 60);
   const minutes = total % 60;
-  return `Claim your gift in ${days} days ${hours} hours ${minutes} minutes`;
+  return `Claim your birthday freebies in ${days} days ${hours} hours ${minutes} minutes`;
+}
+
+export type BirthdayDeny = "ok" | "missing" | "closed" | "used" | "fresh" | "off";
+
+/** One decision for the customer button, the kasir button, and every claim path. */
+export function birthdayClaimDecision(input: {
+  birthday: string | null;
+  now: number;
+  rule: BirthdayRule;
+  alreadyRedeemed: boolean;
+  setAt: number | null;
+  overrideYear: number | null;
+}): BirthdayDeny {
+  if (!input.rule.active) return "off";
+  if (!input.birthday) return "missing";
+  const hit = birthdayStatus(input.birthday, input.now, input.rule);
+  if (!hit.open) return "closed";
+  if (input.alreadyRedeemed) return "used";
+  if (input.overrideYear === hit.rewardYear) return "ok";
+  if (input.setAt != null && input.now - input.setAt < BIRTHDAY_LOCK_MS) return "fresh";
+  return "ok";
+}
+
+export function birthdayWaitLine(birthday: string, now: number, rule: BirthdayRule, claimedYears: ReadonlySet<number>): string {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthday);
+  const stamp = parts ? `${parts[3]}/${parts[2]}` : birthday;
+  const notice = birthdayNotice(birthday, now, rule, claimedYears);
+  const target = notice.show && notice.phase !== "open" ? notice.target : now;
+  const days = Math.max(1, Math.ceil(Math.max(0, target - now) / 86_400_000));
+  return `Birthday Freebies: ${stamp} · bisa klaim dalam ${days} hari`;
 }

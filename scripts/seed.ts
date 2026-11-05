@@ -164,9 +164,9 @@ const lines: string[] = [
 
 lines.push(
   `INSERT INTO brands (id, name, short_name, handle, emoji, accent, accent_soft, stamps_required, reward_text, condition_label, min_amount, max_stamps_per_day, reward_note, active, birthday_reward, birthday_active, birthday_window, birthday_days) VALUES
-  ('loft25','Loft25 Matcha Studio','Loft25','@loft25.matchastudio','🍵','#143d28','#e4f0dc',10,'free matcha','Transaksi min Rp50.000',50000,2,'1 transaksi yang memenuhi syarat = 1 stamp.',1,'free matcha ulang tahun',1,'month',7),
-  ('soto-oseng','Soto Oseng Bang Jem','Soto Oseng','@sotooseng.bangjem','🍜','#1e6a9a','#b3c9ee',10,'Soto Oseng paket','Transaksi ada oseng babi',NULL,2,'Kasir pastikan nota ada oseng babi.',1,'es teh ulang tahun',1,'around',7),
-  ('krispyporkk','Krispyporkk','Krispyporkk','@krispyporkk','🍗','#ff6fa8','#ffd0e4',10,'diskon 50%','Transaksi min Rp100.000',100000,2,'Diskon 50% dari tagihan, paling banyak Rp400.000. Kasir yang hitung di kasir.',1,'es krim ulang tahun',0,'around',3);`,
+  ('loft25','Loft25 Matcha Studio','Loft25','@loft25.matchastudio','🍵','#143d28','#e4f0dc',10,'free matcha','Transaksi min Rp50.000',50000,2,'1 transaksi yang memenuhi syarat = 1 stamp.',1,'free matcha ulang tahun',1,'day',0),
+  ('soto-oseng','Soto Oseng Bang Jem','Soto Oseng','@sotooseng.bangjem','🍜','#1e6a9a','#b3c9ee',10,'Soto Oseng paket','Transaksi ada oseng babi',NULL,2,'Kasir pastikan nota ada oseng babi.',1,'es teh ulang tahun',1,'day',0),
+  ('krispyporkk','Krispyporkk','Krispyporkk','@krispyporkk','🍗','#ff6fa8','#ffd0e4',10,'diskon 50%','Transaksi min Rp100.000',100000,2,'Diskon 50% dari tagihan, paling banyak Rp400.000. Kasir yang hitung di kasir.',1,'es krim ulang tahun',0,'day',0);`,
 );
 
 async function pinPair(plain: string): Promise<{ hash: string; salt: string }> {

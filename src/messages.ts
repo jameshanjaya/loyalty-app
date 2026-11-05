@@ -23,8 +23,9 @@ export const ERR: Record<string, string> = {
   gambar: "Gambar harus berupa file di bawah 2 MB, atau tautan https.",
   csrf: "Form-nya ditolak. Muat ulang halaman, lalu coba lagi.",
   umum: "Ada yang kurang pas. Coba lagi.",
-  ultah: "Hadiah ulang tahunnya belum aktif untuk member ini.",
-  "ultah-sudah": "Hadiah ulang tahun tahun ini sudah ditukar.",
+  ultah: "Birthday Freebies-nya belum bisa diklaim.",
+  "ultah-sudah": "Birthday Freebies tahun ini sudah diklaim.",
+  "ultah-baru": "Tanggal lahirnya baru disimpan. Birthday Freebies bisa diklaim 30 hari lagi.",
   punya: "Nomor ini sudah punya kartu. Masukkan PIN-nya untuk menghubungkan Google.",
   "google-lain": "Nomor ini sudah terhubung ke akun Google lain.",
   lahir: "Tanggal lahirnya belum beres.",
@@ -43,6 +44,7 @@ export const ERR: Record<string, string> = {
   passbeda: "Password baru dan ulangi-nya belum sama.",
   passsalah: "Password sekarang kurang tepat.",
   sendiri: "Gak bisa kasih stamp ke akun sendiri ya",
+  merek: "Merek ini lagi belum aktif",
 };
 
 export const OK: Record<string, string> = {

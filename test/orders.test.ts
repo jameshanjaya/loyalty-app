@@ -31,18 +31,18 @@ describe("tautan pesan", () => {
   });
 
   it("order / booking memakai nomor outlet, dan disembunyikan kalau kosong", () => {
-    const url = bookingUrl("Loft25 Senopati", "0812 1111 2580");
-    expect(url).toBe("https://wa.me/6281211112580?text=Halo%2C%20mau%20order%2Fbooking%20di%20Loft25%20Senopati");
-    expect(bookingUrl("Senopati", "")).toBeNull();
-    expect(bookingUrl("Senopati", "123")).toBeNull();
+    const url = bookingUrl("Loft25", "Senopati", "0812 1111 2580");
+    expect(url).toBe("https://wa.me/6281211112580?text=Halo%2C%20mau%20booking%20%2F%20order%20di%20Loft25%2C%20Senopati");
+    expect(bookingUrl("Loft25", "Senopati", "")).toBeNull();
+    expect(bookingUrl("Loft25", "Senopati", "123")).toBeNull();
     const outlets = [
       { id: "a", name: "Senopati", wa: "081211112580" },
       { id: "b", name: "Kemang", wa: "081311113691" },
       { id: "c", name: "Kosong", wa: "" },
     ];
-    expect(bookingTarget(outlets, null)).toBeNull();
-    expect(bookingTarget(outlets, "b")?.id).toBe("b");
-    expect(bookingTarget(outlets, "c")).toBeNull();
-    expect(bookingTarget([outlets[0]!], null)?.id).toBe("a");
+    expect(bookingTarget("Loft25", outlets, null)).toBeNull();
+    expect(bookingTarget("Loft25", outlets, "b")?.id).toBe("b");
+    expect(bookingTarget("Loft25", outlets, "c")).toBeNull();
+    expect(bookingTarget("Loft25", [outlets[0]!], null)?.url.startsWith("https://wa.me/")).toBe(true);
   });
 });

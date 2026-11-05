@@ -91,9 +91,10 @@ async function all<T>(stmt: D1PreparedStatement): Promise<T[]> {
 }
 
 export async function listMissions(db: D1Database, activeOnly = false): Promise<Mission[]> {
+  const live = `JOIN brands b ON b.id = m.brand_id AND b.active = 1`;
   const sql = activeOnly
-    ? `SELECT * FROM missions WHERE active = 1 ORDER BY sort_order, points_tenths, title`
-    : `SELECT * FROM missions ORDER BY sort_order, active DESC, title`;
+    ? `SELECT m.* FROM missions m ${live} WHERE m.active = 1 ORDER BY m.sort_order, m.points_tenths, m.title`
+    : `SELECT m.* FROM missions m ${live} ORDER BY m.sort_order, m.active DESC, m.title`;
   return all<Mission>(db.prepare(sql));
 }
 
@@ -205,6 +206,7 @@ export async function listPending(db: D1Database): Promise<Submission[]> {
       `SELECT s.*, m.title AS title, mem.name AS member_name, mem.wa AS wa
        FROM mission_submissions s
        JOIN missions m ON m.id = s.mission_id
+       JOIN brands b ON b.id = m.brand_id AND b.active = 1
        JOIN members mem ON mem.id = s.member_id
        WHERE s.status = 'pending' ORDER BY s.created_at ASC LIMIT 50`,
     ),
@@ -229,6 +231,7 @@ export async function listApproved(db: D1Database): Promise<Submission[]> {
       `SELECT s.*, m.title AS title, mem.name AS member_name, mem.wa AS wa
        FROM mission_submissions s
        JOIN missions m ON m.id = s.mission_id
+       JOIN brands b ON b.id = m.brand_id AND b.active = 1
        JOIN members mem ON mem.id = s.member_id
        WHERE s.status = 'approved' ORDER BY s.reviewed_at DESC LIMIT 20`,
     ),
@@ -279,6 +282,7 @@ export async function membersWithDuePoints(db: D1Database, now: number): Promise
     db.prepare(
       `SELECT p.member_id AS member_id FROM point_ledger p
        WHERE p.delta_tenths > 0 AND p.expires_at IS NOT NULL AND p.expires_at <= ? AND p.reason IN ('mission', 'refund')
+       AND (p.brand_id IS NULL OR p.brand_id IN (SELECT id FROM brands WHERE active = 1))
        AND p.delta_tenths + COALESCE((SELECT SUM(c.delta_tenths) FROM point_ledger c WHERE c.source_id = p.id), 0) > 0
        LIMIT 40`,
     ).bind(now),
@@ -414,7 +418,11 @@ export async function listTiers(db: D1Database, brandId: string): Promise<StampT
 }
 
 export async function listAllTiers(db: D1Database): Promise<StampTier[]> {
-  return all<StampTier>(db.prepare(`SELECT * FROM stamp_tiers ORDER BY brand_id, stamps`));
+  return all<StampTier>(
+    db.prepare(
+      `SELECT t.* FROM stamp_tiers t JOIN brands b ON b.id = t.brand_id AND b.active = 1 ORDER BY t.brand_id, t.stamps`,
+    ),
+  );
 }
 
 export async function insertTier(db: D1Database, row: StampTier): Promise<void> {

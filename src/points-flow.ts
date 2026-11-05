@@ -1,5 +1,7 @@
 import { randomId } from "./crypto";
-import { birthdayRedeemAllowed, birthdayStatus } from "./birthday";
+import { birthdayStatus, toBirthdayRule } from "./birthday";
+import { birthdayError, birthdayGate } from "./birthday-gate";
+import { brandOpen } from "./brands";
 import { allocateUpTo, expiresAtFor, splitLots, soonestBatch, type LedgerLike } from "./expiry";
 import { CODE_TTL_MS, missionInWindow, missionOpen, proofKind, questLocked, randomRedeemCode, releaseExpired, tierRedeem } from "./points";
 import * as pdb from "./points-db";
@@ -132,6 +134,7 @@ export async function redeemTier(db: D1Database, member: Member, tierId: string,
   await expireCodes(db, now);
   const tier = await pdb.getTier(db, tierId);
   if (!tier || !tier.active) return { ok: false, error: "umum" };
+  if (!brandOpen(await repo.getBrand(db, tier.brand_id))) return { ok: false, error: "merek" };
   const card = await repo.ensureCard(db, member.id, tier.brand_id, now);
   if (!tierRedeem(card.stamps, tier.stamps).ok) return { ok: false, error: "kurang" };
   const stock = await pdb.takeTierStock(db, tier.id);
@@ -157,14 +160,12 @@ export async function redeemTier(db: D1Database, member: Member, tierId: string,
 }
 
 export async function redeemBirthdayCode(db: D1Database, member: Member, brand: Brand, now: number): Promise<{ ok: true; code: RedeemCode } | Fail> {
+  if (!brandOpen(brand)) return { ok: false, error: "merek" };
   await expireCodes(db, now);
-  const offer = birthdayStatus(member.birthday, now, {
-    active: brand.birthday_active === 1,
-    window: brand.birthday_window === "around" ? "around" : "month",
-    days: brand.birthday_days,
-  });
-  const taken = offer.open ? await repo.birthdayTaken(db, member.id, brand.id, offer.rewardYear) : true;
-  if (birthdayRedeemAllowed(offer.open, taken) !== "ok" || !offer.open) return { ok: false, error: taken ? "ultah-sudah" : "ultah" };
+  const blocked = birthdayError(await birthdayGate(db, member, brand, now));
+  if (blocked) return { ok: false, error: blocked };
+  const offer = birthdayStatus(member.birthday, now, toBirthdayRule(brand));
+  if (!offer.open) return { ok: false, error: "ultah" };
   const code = await saveCode(db, {
     memberId: member.id,
     brandId: brand.id,
@@ -202,6 +203,12 @@ export async function confirmRedeemCode(
     });
     logEvent("staff_block", { outlet: input.outletId, member: member.id });
     return { ok: false, error: "sendiri" };
+  }
+  if (row.kind === "birthday") {
+    const brand = await repo.getBrand(db, row.brand_id);
+    if (!brandOpen(brand)) return { ok: false, error: "merek" };
+    const blocked = birthdayError(await birthdayGate(db, member, brand, input.now));
+    if (blocked) return { ok: false, error: blocked };
   }
   const won = await pdb.confirmCodeRow(db, row.id, input.outletId, input.sessionId, input.now);
   if (!won) return { ok: false, error: "kode" };
@@ -260,6 +267,7 @@ export async function submitMission(
 ): Promise<Fail | { ok: true; stampsAdded: number }> {
   const mission = await pdb.getMission(db, input.missionId);
   if (!mission || !mission.active || !mission.brand_id) return { ok: false, error: "umum" };
+  if (!brandOpen(await repo.getBrand(db, mission.brand_id))) return { ok: false, error: "merek" };
   if (!missionInWindow(mission.starts_at, mission.ends_at, input.now)) return { ok: false, error: "misi" };
   const earned = await pdb.lifetimeEarned(db, input.member.id);
   if (questLocked({ mystery: mission.mystery === 1, unlockTenths: mission.unlock_points_tenths, lifetimeTenths: earned })) {

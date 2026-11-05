@@ -186,6 +186,8 @@ Side Quest menambah stamp di kartu merek itu, bukan saldo poin terpisah. Hadiah 
 
 Di **Setting Program**, tiap merek punya warna utama, warna lembut, warna tombol, warna latar, pilihan ikon stamp (pengocok matcha, mangkuk, piring, atau upload), plus upload logo header dan ikon aplikasi. Ikon aplikasi masuk ke `/app.webmanifest`. Loft25 memakai hijau matcha, Soto Oseng biru dan merah, Krispyporkk pink dan hitam.
 
+Merek dengan `active = 0` disembunyikan dari pelanggan, kasir, dan dashboard. Datanya tidak dihapus. Di **Setting Program**, bagian **Merek disembunyiin** punya tombol **Merek aktif** untuk menyalakan satu merek lagi. Kasir merek yang mati melihat “Merek ini lagi belum aktif”.
+
 ## Cara pakai sehari-hari
 
 - Pelanggan scan QR stan, isi nama, nomor WA, dan PIN. Login di HP itu bertahan 365 hari. Kalau mereka membuka aplikasi lagi setelah sekitar sehari, cookie diperpanjang 365 hari dari kunjungan itu. Keluar tetap menghapus cookie. Di HP lain, mereka masuk dengan nomor WA + PIN.
@@ -195,7 +197,8 @@ Di **Setting Program**, tiap merek punya warna utama, warna lembut, warna tombol
 - Satu transaksi paling satu stamp. Kasir harus mencentang syarat. Teks centangnya diatur di **Setting Program**.
 - Satu pelanggan paling 2 stamp per merek per hari. Angka ini bisa diubah di Setting Program.
 - Stamp penuh: kasir tap **Tukar Reward**, pelanggan scan QR untuk setuju. Atau kasir cari nomor WA lalu tukar. Stamp yang lebih dari 10 tetap nyangkut.
-- Hadiah ulang tahun diatur di **Setting Program** (teks hadiah, sepanjang bulan, atau N hari di sekitar ulang tahun, nyala/mati). Pelanggan melihatnya di kartu kalau sedang berlaku. Kasir menukarnya sekali per tahun per merek, lewat QR atau nomor WA. Stamp tidak berkurang.
+- Birthday Freebies diatur di **Setting Program**. Default-nya **Hari H aja** (tanggal lahir, WIB). Bisa diganti ke bulan ultah atau ± N hari. Hitung mundurnya menarget awal jendela itu, di kartu dan di Redeem. Di luar jendela tidak ada tombol klaim. Kasir dan pelanggan dicek di server: tanggal lahir ada, hari ini masuk jendela, sekali per merek per tahun, merek aktif, dan tanggal lahir tidak baru disimpan (30 hari), kecuali owner mencentang boleh klaim tahun ini. Stamp tidak berkurang.
+- Tombol **Booking / Order via WA** di kartu langsung membuka `https://wa.me/<nomor>?text=...` dengan nama merek dan outlet. Nomornya satu per outlet, di **Outlet & PIN**. Ketukan tetap tercatat lewat beacon, tanpa halaman perantara.
 - Side Quest menambah pecahan stamp ke kartu merek itu. Owner mengatur quest di **Kelola Side Quest**: judul, penjelasan, langkah, stamp 0,25 / 0,5 / 0,75 / 1, ikon, tag, urutan, merek (wajib), dan tanggal. Buktinya foto, dan tiap pelanggan cuma sekali. Foto instruksi boleh beberapa. Bukti yang dikirim langsung masuk. Owner bisa menarik quest yang sudah disetujui; stamp utuh dan pecahannya balik, tercatat di buku. Kalau stamp itu sudah dipakai, kartu tidak jadi minus.
 - Menu **Redeem** menukar stamp utuh. Owner mengaturnya di **Redeem**: nama, ikon atau foto, biaya stamp (pintasan 5 dan 10, atau angka lain), aktif, dan stok opsional. Pelanggan tap **Tukar**, stamp ditahan, lalu muncul kode 5 angka dan QR sekitar 10 menit. Kalau hangus, stamp kembali dan stok ikut kembali. Kasir mengetik kode itu, atau scan QR. Kode cuma sekali, cuma untuk merek outlet itu, dan tebakan dibatasi.
 - Daftar pelanggan ada di **Member**: cari, filter merek, urutkan, buka detail, ganti nomor, hapus (dengan halaman konfirmasi, dan tercatat). Unduh CSV atau Excel.
