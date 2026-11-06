@@ -118,6 +118,9 @@ describe("salinan dan logo", () => {
       missions: [{ id: `m-${item.id}`, title: `Misi ${item.short_name}`, blurb: item.handle, kind: "google", status: "open", reason: "" }],
       quarters: 0,
     });
+    loft.ig_handle = "@loft25.matchastudio";
+    kris.ig_handle = "@krispyporkk";
+    soto.ig_handle = "@sotooseng.bangjem";
     const html = cardPage({
       member: person(),
       brands: [loft, kris, soto],
@@ -150,6 +153,15 @@ describe("salinan dan logo", () => {
     expect(html).toContain("/banners/loft-1.jpg");
     expect(html).toContain("/banners/krispy-1.jpg");
     expect(html).toContain("/banners/soto-1.jpg");
+    expect(html).toContain("Follow us on IG @loft25.matchastudio");
+    expect(html).toContain('href="https://instagram.com/loft25.matchastudio"');
+    expect(html).toContain("Follow us on IG @krispyporkk");
+    expect(html).toContain('href="https://instagram.com/krispyporkk"');
+    expect(html).toContain("Follow us on IG @sotooseng.bangjem");
+    expect(html).toContain('href="https://instagram.com/sotooseng.bangjem"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener"');
+    expect(html).toContain('class="igfollow">Follow<');
     expect(html).toContain("Misi Krispyporkk");
     expect(html).toContain("Misi Soto Oseng");
     expect(orderLabel("booking", "")).toBe(RESERVASI_LABEL);
@@ -231,5 +243,13 @@ describe("salinan dan logo", () => {
     expect(css).toMatch(/\.skin \.hello\s*\{[^}]*background:\s*transparent[^}]*border:\s*0[^}]*box-shadow:\s*none/);
     expect(css).not.toMatch(/\.stampbal\s*\{[^}]*space-between/);
     expect(css).toMatch(/\.stampbal b\s*\{[^}]*vertical-align:\s*baseline/);
+    expect(css).toMatch(/\.igfollow\s*\{[^}]*border-radius:\s*999px/);
+    const mark = readFileSync(new URL("../public/brands/loft-mark.svg", import.meta.url), "utf8");
+    expect(mark).not.toContain("<text");
+    expect(mark).toContain('aria-label="Loft25"');
+    const favicon = readFileSync(new URL("../public/favicon.svg", import.meta.url), "utf8");
+    expect(favicon).toContain("#f4efe4");
+    const manifest = readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8");
+    expect(manifest).toContain("maskable");
   });
 });

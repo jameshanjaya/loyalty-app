@@ -77,9 +77,9 @@ function doc(title: string, inner: string, theme = "#6ea564", brandId = ""): str
 <meta name="apple-mobile-web-app-title" content="Loyalty Bos" />
 <title>${esc(title)}</title>
 <link rel="manifest" href="${manifest}" />
-<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-<link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/app.css?v=15" />
+<link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png?v=2" />
+<link rel="stylesheet" href="/app.css?v=16" />
 <script src="/brand.js?v=13"></script>
 </head>
 <body>
@@ -561,7 +561,7 @@ export function cardPage(input: {
       const banner =
         carousel(slice.banners, input.now, slice.brand.banner_ms || 3000, slice.brand.non_halal === 1, on) ||
         `<section class="reel"><div class="reel-track"><div class="slide"><div class="slide-fallback"></div><div class="slide-copy"><h3>${esc(slice.brand.name)}</h3><p>${esc(slice.brand.handle)}</p></div></div></div></section>`;
-      return `<div class="stage" data-pane="${esc(slice.brand.id)}" data-skin="${tone.style}" data-dark="${tone.dark ? "1" : "0"}"${on ? "" : " hidden"}>${banner}<p class="fine igline">${esc(slice.brand.ig_handle || slice.brand.handle)}</p></div>`;
+      return `<div class="stage" data-pane="${esc(slice.brand.id)}" data-skin="${tone.style}" data-dark="${tone.dark ? "1" : "0"}"${on ? "" : " hidden"}>${banner}${igFollow(slice.brand.ig_handle || slice.brand.handle)}</div>`;
     })
     .join("");
   const rests = slices
@@ -1594,6 +1594,13 @@ function stampChoices(selected: number): string {
     ["1", 4],
   ];
   return opts.map(([label, quarters]) => `<option value="${label}"${selected === quarters ? " selected" : ""}>${label} stamp</option>`).join("");
+}
+
+function igFollow(raw: string | null | undefined): string {
+  const handle = (raw || "").trim().replace(/^@+/, "");
+  if (!handle) return "";
+  const href = `https://instagram.com/${encodeURIComponent(handle)}`;
+  return `<a class="igline" href="${esc(href)}" target="_blank" rel="noopener"><span>Follow us on IG @${esc(handle)}</span><span class="igfollow">Follow</span></a>`;
 }
 
 function rewardTitle(stored: string): string {
