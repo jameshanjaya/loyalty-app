@@ -134,6 +134,8 @@ describe("salinan dan logo", () => {
       slices: [slice(loft, "/banners/loft-1.jpg", "free matcha"), slice(kris, "/banners/krispy-1.jpg", "es krim"), slice(soto, "/banners/soto-1.jpg", "es teh")],
     });
     expect(html).toContain("Collect Stamps");
+    expect(html).toContain("Arahin kamera ke QR di kasir ya");
+    expect(html).not.toContain("menuju stamp berikutnya");
     expect(html).not.toContain("Kumpulin Stamp");
     expect(html).toContain(RESERVASI_LABEL);
     expect(html).not.toContain("Booking / Order via WA");
@@ -164,15 +166,27 @@ describe("salinan dan logo", () => {
       brands: [{ id: "loft25", name: "Loft25", on: true }],
       rewards: [
         { id: "a", title: "Filter Coffee", stamps: 3, cost: "3 stamp", note: "", ready: true, icon: "☕", image: "", soldOut: false },
-        { id: "b", title: "Upsize", stamps: 6, cost: "6 stamp", note: "", ready: false, icon: "🎁", image: "", soldOut: false },
+        { id: "b", title: "UPSIZE", stamps: 6, cost: "6 stamp", note: "", ready: false, icon: "🎁", image: "", soldOut: false },
         { id: "c", title: "Matcha GUMOH", stamps: 10, cost: "10 stamp", note: "", ready: false, icon: "🍵", image: "", soldOut: false },
+        { id: "d", title: "Es teh", stamps: 1, cost: "1 stamp", note: "", ready: true, icon: "🥤", image: "", soldOut: false },
       ],
       params: new URLSearchParams(),
     });
+    expect(html).toContain("Stamps kamu udah <b>3</b> nih");
+    expect(html).not.toContain("> stamp<");
     expect(html).toContain(">Tukar<");
     expect(html).toContain("Kurang 3 lagi");
     expect(html).toContain("Kurang 7 lagi");
     expect(html).not.toContain("dikit");
+    expect(html).toContain('class="freelabel">Free<');
+    expect(html).toContain(">Filter Coffee<");
+    expect(html).toContain(">UPSIZE<");
+    expect(html).toContain(">Matcha GUMOH<");
+    expect(html).toContain("On 3 stamps");
+    expect(html).toContain("On 6 stamps");
+    expect(html).toContain("On 1 stamp");
+    expect(html).not.toContain("freebadge");
+    expect(html).not.toContain(">FREE<");
     const open = profilePage({ mode: "member", name: "Agus Salim", email: null, params: new URLSearchParams(), wa: "6281812340011" });
     expect(open).toContain("Januari");
     expect(open).toContain("Desember");
@@ -207,5 +221,8 @@ describe("salinan dan logo", () => {
     expect(css).toContain("min-height: 40px");
     expect(css).toContain("white-space: nowrap");
     expect(css).toContain(".hero-plain");
+    expect(css).toContain(".skin .hello");
+    expect(css).not.toMatch(/\.skin \.hello[^{]*\{[^}]*var\(--glass\)/);
+    expect(css).toMatch(/\.skin \.hello\s*\{[^}]*background:\s*transparent[^}]*border:\s*0[^}]*box-shadow:\s*none/);
   });
 });
