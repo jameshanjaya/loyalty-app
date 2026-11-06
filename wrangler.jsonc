@@ -25,9 +25,9 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "loyalty-bos",
-      // ONLY place the D1 id lives. Swap this one value for the APAC database at deploy. Binding name stays DB.
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_name": "loyalty-bos-apac",
+      // ONLY place the D1 id lives. Binding name stays DB.
+      "database_id": "f01a6901-748c-4a67-a714-426bc22c54a0",
       "migrations_dir": "migrations"
     }
   ],
