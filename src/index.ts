@@ -55,13 +55,14 @@ async function attachMemberRenewal(request: Request, db: D1Database, now: number
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-function imageResponse(object: R2ObjectBody): Response {
+function imageResponse(object: R2ObjectBody, url: URL): Response {
   const type = object.httpMetadata?.contentType || "application/octet-stream";
   if (!type.startsWith("image/") || type === "image/svg+xml") return new Response("Tidak ketemu", { status: 404 });
+  const versioned = url.searchParams.has("v");
   return new Response(object.body, {
     headers: {
       "content-type": type,
-      "cache-control": "public, max-age=86400",
+      "cache-control": versioned ? "public, max-age=31536000, immutable" : "public, max-age=86400",
       "x-content-type-options": "nosniff",
     },
   });
@@ -74,35 +75,35 @@ async function serveMedia(env: Env, url: URL): Promise<Response | null> {
     const row = await env.DB.prepare(`SELECT ${kind} AS key FROM brands WHERE id = ?`).bind(brandMedia[2]).first<{ key: string | null }>();
     if (!row?.key) return new Response("Tidak ketemu", { status: 404 });
     const object = await env.BANNERS.get(row.key);
-    return object ? imageResponse(object) : new Response("Tidak ketemu", { status: 404 });
+    return object ? imageResponse(object, url) : new Response("Tidak ketemu", { status: 404 });
   }
   const guide = url.pathname.match(/^\/media\/panduan\/([A-Za-z0-9_-]{8,80})$/);
   if (guide) {
     const row = await env.DB.prepare(`SELECT r2_key FROM mission_photos WHERE id = ?`).bind(guide[1]).first<{ r2_key: string | null }>();
     if (!row?.r2_key) return new Response("Tidak ketemu", { status: 404 });
     const object = await env.BANNERS.get(row.r2_key);
-    return object ? imageResponse(object) : new Response("Tidak ketemu", { status: 404 });
+    return object ? imageResponse(object, url) : new Response("Tidak ketemu", { status: 404 });
   }
   const news = url.pathname.match(/^\/media\/news\/([A-Za-z0-9_-]{8,80})$/);
   if (news) {
     const row = await env.DB.prepare(`SELECT r2_key FROM news_cards WHERE id = ?`).bind(news[1]).first<{ r2_key: string | null }>();
     if (!row?.r2_key) return new Response("Tidak ketemu", { status: 404 });
     const object = await env.BANNERS.get(row.r2_key);
-    return object ? imageResponse(object) : new Response("Tidak ketemu", { status: 404 });
+    return object ? imageResponse(object, url) : new Response("Tidak ketemu", { status: 404 });
   }
   const redeem = url.pathname.match(/^\/media\/redeem\/([A-Za-z0-9_-]{8,80})$/);
   if (redeem) {
     const row = await env.DB.prepare(`SELECT r2_key FROM stamp_tiers WHERE id = ?`).bind(redeem[1]).first<{ r2_key: string | null }>();
     if (!row?.r2_key) return new Response("Tidak ketemu", { status: 404 });
     const object = await env.BANNERS.get(row.r2_key);
-    return object ? imageResponse(object) : new Response("Tidak ketemu", { status: 404 });
+    return object ? imageResponse(object, url) : new Response("Tidak ketemu", { status: 404 });
   }
   if (!url.pathname.startsWith("/media/banners/")) return null;
   const id = url.pathname.slice("/media/banners/".length);
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(id)) return new Response("Tidak ketemu", { status: 404 });
   const object = await env.BANNERS.get(`banners/${id}`);
   if (!object) return new Response("Tidak ketemu", { status: 404 });
-  return imageResponse(object);
+  return imageResponse(object, url);
 }
 
 async function appManifest(env: Env, url: URL): Promise<Response> {

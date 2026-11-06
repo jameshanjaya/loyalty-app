@@ -363,15 +363,11 @@ export async function saveMissionPhotoMeta(db: D1Database, id: string, missionId
 }
 
 export async function pointsTotals(db: D1Database, since: number): Promise<{ issued: number; redeemed: number }> {
-  const issued = await db
-    .prepare(`SELECT COALESCE(SUM(delta_tenths), 0) AS n FROM point_ledger WHERE reason = 'mission' AND created_at >= ?`)
-    .bind(since)
-    .first<{ n: number }>();
-  const redeemed = await db
-    .prepare(`SELECT COALESCE(SUM(-delta_tenths), 0) AS n FROM point_ledger WHERE reason = 'redeem' AND created_at >= ?`)
-    .bind(since)
-    .first<{ n: number }>();
-  return { issued: issued?.n ?? 0, redeemed: redeemed?.n ?? 0 };
+  const [issued, redeemed] = await db.batch<{ n: number }>([
+    db.prepare(`SELECT COALESCE(SUM(delta_tenths), 0) AS n FROM point_ledger WHERE reason = 'mission' AND created_at >= ?`).bind(since),
+    db.prepare(`SELECT COALESCE(SUM(-delta_tenths), 0) AS n FROM point_ledger WHERE reason = 'redeem' AND created_at >= ?`).bind(since),
+  ]);
+  return { issued: issued.results[0]?.n ?? 0, redeemed: redeemed.results[0]?.n ?? 0 };
 }
 
 export async function countPending(db: D1Database): Promise<number> {

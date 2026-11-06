@@ -547,6 +547,20 @@ nav.tabbar > a.on { color: var(--accent); box-shadow: inset 0 -3px 0 var(--accen
 .igline { margin: 0 0 8px; font-weight: 800; }
 .freebadge { display: inline-block; margin-left: 6px; padding: 2px 6px; border-radius: 99px; background: var(--accent-soft, #eee); color: var(--accent); font-size: .68rem; letter-spacing: .04em; vertical-align: 2px; }
 .rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 8px 80px 4px 16px; margin: 0 -16px; scroll-padding-inline: 16px; }
+.rail.solo { overflow: visible; padding-right: 16px; scroll-snap-type: none; }
+.rail.solo .stampcard { flex-basis: 100%; }
+.raildots[hidden] { display: none; }
+main.phone.is-tabbing > :not(nav.tabbar) { opacity: .45; }
+main.phone.is-tabbing::after {
+  content: "";
+  position: fixed; left: 16px; right: 16px; top: 88px; height: 180px; z-index: 5;
+  border-radius: 24px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 12%, transparent), transparent);
+  background-size: 200% 100%;
+  animation: tabskel 1s linear infinite;
+  pointer-events: none;
+}
+@keyframes tabskel { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 .stampcard { position: relative; flex: 0 0 86%; scroll-snap-align: center; border-radius: 24px; padding: 16px; min-width: 0; overflow: hidden; }
 .stampcard:not(.on) { opacity: .72; }
 .rail.can-blur.is-swiping .stampcard.side { filter: blur(2.5px); }
@@ -634,6 +648,7 @@ nav.tabbar > a.on { color: var(--accent); box-shadow: inset 0 -3px 0 var(--accen
   .stampcard:not(.on) { opacity: .55; }
   .rail.can-blur.is-swiping .stampcard.side { filter: none; }
   .page-swap, .page-swap.is-blurring { filter: none; opacity: 1; transition: none; }
+  main.phone.is-tabbing::after { animation: none; }
   .theme-shift .stage, .theme-shift .rest, .stamp.tepok, canvas.confetti { animation: none; }
   .raildots .logo-chip { transition: none; }
 }

@@ -79,12 +79,12 @@ function doc(title: string, inner: string, theme = "#6ea564", brandId = ""): str
 <link rel="manifest" href="${manifest}" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/app.css?v=13" />
+<link rel="stylesheet" href="/app.css?v=15" />
 <script src="/brand.js?v=13"></script>
 </head>
 <body>
 ${inner}
-<script src="/app.js?v=14" defer></script>
+<script src="/app.js?v=15" defer></script>
 </body>
 </html>`;
 }
@@ -541,15 +541,18 @@ export function cardPage(input: {
       </article>`;
     })
     .join("");
-  const dots = input.brands
-    .map((brand) =>
-      logoSlot(brand, {
-        decorative: true,
-        extra: brand.id === input.brand.id ? "on" : "",
-        attrs: ` data-dot-brand="${esc(brand.id)}"`,
-      }),
-    )
-    .join("");
+  const many = input.brands.length > 1;
+  const dots = many
+    ? input.brands
+        .map((brand) =>
+          logoSlot(brand, {
+            decorative: true,
+            extra: brand.id === input.brand.id ? "on" : "",
+            attrs: ` data-dot-brand="${esc(brand.id)}"`,
+          }),
+        )
+        .join("")
+    : "";
   const phone = input.member.wa.startsWith("62") ? `+${input.member.wa}` : input.member.wa;
   const stages = slices
     .map((slice) => {
@@ -584,8 +587,8 @@ export function cardPage(input: {
         <p class="fine">Member dari ${esc(memberSince(input.member.created_at))}</p>
       </section>
       ${flashes(input.params)}
-      <div class="rail" data-rail>${rail}</div>
-      <div class="raildots" aria-hidden="true">${dots}</div>
+      <div class="rail${many ? "" : " solo"}" data-rail>${rail}</div>
+      <div class="raildots" aria-hidden="true"${many ? "" : " hidden"}>${dots}</div>
       <button type="button" class="btn btn-solid"${locked ? " data-open-verify" : " data-scan"}>${locked ? "🔒 Collect Stamps" : "Collect Stamps"}</button>
       <p class="fine center">${locked ? "Verifikasi dulu biar stamp-nya kebuka." : "Arahin kamera ke QR di kasir ya"}</p>
       ${rests}

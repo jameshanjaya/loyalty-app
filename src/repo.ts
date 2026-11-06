@@ -897,25 +897,17 @@ export async function dashStory(
   const since30 = now - 30 * day;
   const brandCard = brandId ? `AND EXISTS (SELECT 1 FROM cards c WHERE c.member_id = m.id AND c.brand_id = ?)` : "";
   const brandAct = brandId ? `AND brand_id = ?` : `AND brand_id ${LIVE_BRAND}`;
-  const newCount = async (since: number) => {
-    const stmt = brandId
-      ? db.prepare(`SELECT COUNT(*) AS n FROM members m WHERE m.created_at >= ? ${brandCard}`).bind(since, brandId)
-      : db.prepare(`SELECT COUNT(*) AS n FROM members m WHERE m.created_at >= ?`).bind(since);
-    const row = await stmt.first<{ n: number }>();
-    return row?.n ?? 0;
-  };
-  const stamps = await db
-    .prepare(`SELECT COUNT(*) AS n FROM activities WHERE type = 'stamp' AND voided = 0 AND created_at >= ? ${brandAct}`)
-    .bind(...(brandId ? [since30, brandId] : [since30]))
-    .first<{ n: number }>();
-  const base = await db
-    .prepare(
-      `SELECT COUNT(DISTINCT member_id) AS n FROM activities WHERE type = 'stamp' AND voided = 0 AND created_at < ? ${brandAct}`,
-    )
-    .bind(...(brandId ? [since30, brandId] : [since30]))
-    .first<{ n: number }>();
-  const cameBack = await db
-    .prepare(
+  const nOf = (part: D1Result<{ n: number }>) => part.results[0]?.n ?? 0;
+  const [fresh7, fresh30, stamps, base, cameBack, signed, qualified, rewards] = await db.batch<{ n: number } | { label: string; n: number }>([
+    brandId
+      ? db.prepare(`SELECT COUNT(*) AS n FROM members m WHERE m.created_at >= ? ${brandCard}`).bind(since7, brandId)
+      : db.prepare(`SELECT COUNT(*) AS n FROM members m WHERE m.created_at >= ?`).bind(since7),
+    brandId
+      ? db.prepare(`SELECT COUNT(*) AS n FROM members m WHERE m.created_at >= ? ${brandCard}`).bind(since30, brandId)
+      : db.prepare(`SELECT COUNT(*) AS n FROM members m WHERE m.created_at >= ?`).bind(since30),
+    db.prepare(`SELECT COUNT(*) AS n FROM activities WHERE type = 'stamp' AND voided = 0 AND created_at >= ? ${brandAct}`).bind(...(brandId ? [since30, brandId] : [since30])),
+    db.prepare(`SELECT COUNT(DISTINCT member_id) AS n FROM activities WHERE type = 'stamp' AND voided = 0 AND created_at < ? ${brandAct}`).bind(...(brandId ? [since30, brandId] : [since30])),
+    db.prepare(
       `SELECT COUNT(DISTINCT a.member_id) AS n FROM activities a
        WHERE a.type = 'stamp' AND a.voided = 0 AND a.created_at >= ? ${brandId ? "AND a.brand_id = ?" : `AND a.brand_id ${LIVE_BRAND}`}
        AND EXISTS (
@@ -923,32 +915,21 @@ export async function dashStory(
          WHERE older.member_id = a.member_id AND older.type = 'stamp' AND older.voided = 0 AND older.created_at < ?
          ${brandId ? "AND older.brand_id = ?" : `AND older.brand_id ${LIVE_BRAND}`}
        )`,
-    )
-    .bind(...(brandId ? [since30, brandId, since30, brandId] : [since30, since30]))
-    .first<{ n: number }>();
-  const signed = await db
-    .prepare(`SELECT COUNT(*) AS n FROM referrals ${brandId ? "WHERE brand_id = ?" : ""}`)
-    .bind(...(brandId ? [brandId] : []))
-    .first<{ n: number }>();
-  const qualified = await db
-    .prepare(`SELECT COUNT(*) AS n FROM referrals WHERE qualified = 1 ${brandId ? "AND brand_id = ?" : ""}`)
-    .bind(...(brandId ? [brandId] : []))
-    .first<{ n: number }>();
-  const rewards = await db
-    .prepare(
-      `SELECT note AS label, COUNT(*) AS n FROM activities WHERE type = 'redeem' AND voided = 0 ${brandAct} GROUP BY note ORDER BY n DESC LIMIT 5`,
-    )
-    .bind(...(brandId ? [brandId] : []))
-    .all<{ label: string; n: number }>();
-  const earlier = base?.n ?? 0;
+    ).bind(...(brandId ? [since30, brandId, since30, brandId] : [since30, since30])),
+    db.prepare(`SELECT COUNT(*) AS n FROM referrals ${brandId ? "WHERE brand_id = ?" : ""}`).bind(...(brandId ? [brandId] : [])),
+    db.prepare(`SELECT COUNT(*) AS n FROM referrals WHERE qualified = 1 ${brandId ? "AND brand_id = ?" : ""}`).bind(...(brandId ? [brandId] : [])),
+    db.prepare(`SELECT note AS label, COUNT(*) AS n FROM activities WHERE type = 'redeem' AND voided = 0 ${brandAct} GROUP BY note ORDER BY n DESC LIMIT 5`).bind(...(brandId ? [brandId] : [])),
+  ]);
+  const earlier = nOf(base as D1Result<{ n: number }>);
+  const returned = nOf(cameBack as D1Result<{ n: number }>);
   return {
-    new7: await newCount(since7),
-    new30: await newCount(since30),
-    returnPct: earlier ? Math.round(((cameBack?.n ?? 0) / earlier) * 100) : 0,
-    stamps30: stamps?.n ?? 0,
-    referralSigned: signed?.n ?? 0,
-    referralQualified: qualified?.n ?? 0,
-    topRewards: rewards.results || [],
+    new7: nOf(fresh7 as D1Result<{ n: number }>),
+    new30: nOf(fresh30 as D1Result<{ n: number }>),
+    returnPct: earlier ? Math.round((returned / earlier) * 100) : 0,
+    stamps30: nOf(stamps as D1Result<{ n: number }>),
+    referralSigned: nOf(signed as D1Result<{ n: number }>),
+    referralQualified: nOf(qualified as D1Result<{ n: number }>),
+    topRewards: (rewards.results || []) as Array<{ label: string; n: number }>,
   };
 }
 

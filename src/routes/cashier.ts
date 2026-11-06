@@ -37,7 +37,7 @@ function go(path: string, code: string, extra = ""): Response {
 }
 
 export async function handleCashier(app: App): Promise<Response | null> {
-  const { request, env, url, now, ip } = app;
+  const { request, env, url, now, ip, ctx } = app;
   const db = env.DB;
   const path = url.pathname;
   if (path !== "/kasir" && !path.startsWith("/kasir/")) return null;
@@ -45,8 +45,12 @@ export async function handleCashier(app: App): Promise<Response | null> {
   if (path === "/kasir" && request.method === "GET") {
     const parked = readCookie(request.headers.get("cookie"), COOKIE.cashier);
     if (parked && !url.searchParams.get("err") && (await hiddenCashierBrand(db, parked))) return redirect("/kasir?err=merek");
-    const outlets = await repo.listOutlets(db);
-    const brands = await repo.listBrands(db, true);
+    const [outletRows, brandRows] = await db.batch([
+      db.prepare(`SELECT * FROM outlets`),
+      db.prepare(`SELECT * FROM brands WHERE active = 1 ORDER BY name`),
+    ]);
+    const outlets = (outletRows.results || []) as Awaited<ReturnType<typeof repo.listOutlets>>;
+    const brands = (brandRows.results || []) as Awaited<ReturnType<typeof repo.listBrands>>;
     if (!brands.length) return html(emptyDbPage());
     const view = outlets
       .filter((o) => o.active && brandOpen(brands.find((b) => b.id === o.brand_id)))
@@ -99,9 +103,31 @@ export async function handleCashier(app: App): Promise<Response | null> {
   if (!cashier) return redirect("/kasir");
 
   if (path === "/kasir/meja" && request.method === "GET") {
-    await expireCodes(db, now);
-    const feed = await repo.outletFeed(db, cashier.outlet.id);
-    const last = await repo.latestOpenActivity(db, cashier.sessionId);
+    ctx.waitUntil(expireCodes(db, now).catch(() => undefined));
+    const [feedRows, lastRows] = await db.batch([
+      db.prepare(
+        `SELECT a.*, m.name AS member_name, m.wa AS wa, b.name AS brand_name, b.short_name AS short_name,
+                o.name AS outlet_name, b.reward_text AS reward_text
+         FROM activities a
+         JOIN members m ON m.id = a.member_id
+         JOIN brands b ON b.id = a.brand_id
+         LEFT JOIN outlets o ON o.id = a.outlet_id
+         WHERE a.outlet_id = ? AND a.type IN ('stamp', 'redeem')
+         ORDER BY a.created_at DESC LIMIT 10`,
+      ).bind(cashier.outlet.id),
+      db.prepare(
+        `SELECT a.*, m.name AS member_name, m.wa AS wa, b.name AS brand_name, b.short_name AS short_name,
+                o.name AS outlet_name, b.reward_text AS reward_text
+         FROM activities a
+         JOIN members m ON m.id = a.member_id
+         JOIN brands b ON b.id = a.brand_id
+         LEFT JOIN outlets o ON o.id = a.outlet_id
+         WHERE a.session_id = ? AND a.type IN ('stamp', 'redeem') AND a.voided = 0
+         ORDER BY a.created_at DESC LIMIT 1`,
+      ).bind(cashier.sessionId),
+    ]);
+    const feed = (feedRows.results || []) as Awaited<ReturnType<typeof repo.outletFeed>>;
+    const last = ((lastRows.results || [])[0] || null) as Awaited<ReturnType<typeof repo.latestOpenActivity>>;
     const cancelId =
       last && canCancel({ createdAt: last.created_at, now, sameSession: true, voided: false, isLast: true }) ? last.id : null;
     let found: { member: Member; stamps: number; birthdayOpen: boolean; birthdayLine: string | null; quests: Array<{ id: string; title: string; points: string }> } | null = null;
