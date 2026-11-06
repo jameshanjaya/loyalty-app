@@ -614,12 +614,14 @@ main.phone.is-tabbing::after {
 .btn-wa { background: #25D366; color: #fff; }
 .brandchip { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; border-radius: 99px; padding: 6px 14px 6px 8px; background: var(--accent); color: #fff; font-weight: 800; }
 .stampbal {
-  display: flex; align-items: baseline; justify-content: space-between;
-  width: 100%; margin: 14px 0 2px; gap: 8px;
-  font-weight: 800; font-size: 1.2rem; letter-spacing: -0.03em; line-height: 1;
-  color: var(--ink);
+  margin: 14px 0 2px;
+  font-weight: 800; font-size: 1.2rem; letter-spacing: -0.02em; line-height: 1.25;
+  text-align: left; color: var(--ink);
 }
-.stampbal b { font-size: 2rem; letter-spacing: -0.05em; line-height: .9; color: var(--ink); }
+.stampbal b {
+  display: inline; font-size: 1.7em; font-weight: 800;
+  letter-spacing: -0.04em; line-height: 1; vertical-align: baseline; color: var(--ink);
+}
 .sectiontitle { margin: 16px 0 8px; font-size: 1.15rem; }
 .redeemlist { display: flex; flex-direction: column; gap: 8px; }
 .redeemrow { display: flex; align-items: center; gap: 10px; background: var(--card, #fff); color: var(--ink); border-radius: 16px; padding: 12px; }

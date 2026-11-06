@@ -1596,6 +1596,13 @@ function stampChoices(selected: number): string {
   return opts.map(([label, quarters]) => `<option value="${label}"${selected === quarters ? " selected" : ""}>${label} stamp</option>`).join("");
 }
 
+function rewardTitle(stored: string): string {
+  const stripped = stored.replace(/^free\s+/i, "").trim();
+  const name = stripped || stored.trim();
+  if (!name) return name;
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
 export function catalogPage(input: {
   stamps: number;
   brandName: string;
@@ -1617,7 +1624,7 @@ export function catalogPage(input: {
       const action = reward.ready
         ? `<form class="redeemact" method="post" action="/tukar/stamp"><input type="hidden" name="tier" value="${esc(reward.id)}" /><input type="hidden" name="dari" value="hadiah" /><button class="textlink go" type="submit">Tukar</button></form>`
         : `<span class="soon">${reward.soldOut ? "Habis" : `Kurang ${gap} lagi`}</span>`;
-      return `<article class="redeemrow"><span class="ic">${reward.image ? `<img src="${esc(reward.image)}" alt="" />` : esc(reward.icon || "🎁")}</span><div class="redeemcopy"><span class="freelabel">Free</span><b>${esc(reward.title)}</b><small>${esc(onStamps)}</small></div>${action}</article>`;
+      return `<article class="redeemrow"><span class="ic">${reward.image ? `<img src="${esc(reward.image)}" alt="" />` : esc(reward.icon || "🎁")}</span><div class="redeemcopy"><span class="freelabel">Free</span><b>${esc(rewardTitle(reward.title))}</b><small>${esc(onStamps)}</small></div>${action}</article>`;
     })
     .join("");
   const news = (input.news || []).slice(0, 3).map((item) => {

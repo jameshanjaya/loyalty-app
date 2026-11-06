@@ -166,7 +166,8 @@ describe("salinan dan logo", () => {
       brands: [{ id: "loft25", name: "Loft25", on: true }],
       rewards: [
         { id: "a", title: "Filter Coffee", stamps: 3, cost: "3 stamp", note: "", ready: true, icon: "☕", image: "", soldOut: false },
-        { id: "b", title: "UPSIZE", stamps: 6, cost: "6 stamp", note: "", ready: false, icon: "🎁", image: "", soldOut: false },
+        { id: "b", title: "free upsize", stamps: 6, cost: "6 stamp", note: "", ready: false, icon: "🎁", image: "", soldOut: false },
+        { id: "e", title: "FREE matcha", stamps: 8, cost: "8 stamp", note: "", ready: false, icon: "🍵", image: "", soldOut: false },
         { id: "c", title: "Matcha GUMOH", stamps: 10, cost: "10 stamp", note: "", ready: false, icon: "🍵", image: "", soldOut: false },
         { id: "d", title: "Es teh", stamps: 1, cost: "1 stamp", note: "", ready: true, icon: "🥤", image: "", soldOut: false },
       ],
@@ -180,8 +181,12 @@ describe("salinan dan logo", () => {
     expect(html).not.toContain("dikit");
     expect(html).toContain('class="freelabel">Free<');
     expect(html).toContain(">Filter Coffee<");
-    expect(html).toContain(">UPSIZE<");
+    expect(html).toContain(">Upsize<");
+    expect(html).toContain(">Matcha<");
     expect(html).toContain(">Matcha GUMOH<");
+    expect(html).toContain(">Es teh<");
+    expect(html).not.toContain(">free upsize<");
+    expect(html).not.toContain(">FREE matcha<");
     expect(html).toContain("On 3 stamps");
     expect(html).toContain("On 6 stamps");
     expect(html).toContain("On 1 stamp");
@@ -224,5 +229,7 @@ describe("salinan dan logo", () => {
     expect(css).toContain(".skin .hello");
     expect(css).not.toMatch(/\.skin \.hello[^{]*\{[^}]*var\(--glass\)/);
     expect(css).toMatch(/\.skin \.hello\s*\{[^}]*background:\s*transparent[^}]*border:\s*0[^}]*box-shadow:\s*none/);
+    expect(css).not.toMatch(/\.stampbal\s*\{[^}]*space-between/);
+    expect(css).toMatch(/\.stampbal b\s*\{[^}]*vertical-align:\s*baseline/);
   });
 });
