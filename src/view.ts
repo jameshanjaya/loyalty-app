@@ -2,12 +2,12 @@ import { esc, formatInt, maskName, maskWa, prettyWa } from "./format";
 import { RESERVASI_LABEL, hiddenOrderPlatform, orderLabel, type OrderLink } from "./orders";
 import { ID_MONTHS, birthdayParts, birthdayYears, formatBirthdayId, type BirthdayNotice } from "./birthday";
 import { progressCopy } from "./loyalty";
-import { missionQuarters, questProgressLabel } from "./quest-stamp";
+import { missionQuarters } from "./quest-stamp";
 import { errText, okText } from "./messages";
 import { bannerLive } from "./repo";
 import { clock, feedTime, memberSince, toWibDateInput } from "./time";
 import type { DashNumbers, Lapsed, TopMember } from "./repo";
-import { brandArt, defaultStampIcon, nextRewardLine, pickHeroBanners, resolveStampIcon, rewardFace, stampFill, stampIconSrc } from "./brand-visual";
+import { brandArt, defaultStampIcon, nextRewardLine, pickHeroBanners, resolveStampIcon, stampFill, stampIconSrc } from "./brand-visual";
 import type { ActivityRow, Banner, Brand, Card, FlagRow, Member, NewsCard, Outlet } from "./types";
 
 const CUP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8h8v5a4 4 0 0 1-8 0V8z"/><path d="M15 9.5h1.8a2.2 2.2 0 0 1 0 4.4H15"/><path d="M8 20h6"/></svg>`;
@@ -77,9 +77,9 @@ function doc(title: string, inner: string, theme = "#6ea564", brandId = ""): str
 <meta name="apple-mobile-web-app-title" content="Loyalty Bos" />
 <title>${esc(title)}</title>
 <link rel="manifest" href="${manifest}" />
-<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-<link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/app.css?v=15" />
+<link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png?v=2" />
+<link rel="stylesheet" href="/app.css?v=16" />
 <script src="/brand.js?v=13"></script>
 </head>
 <body>
@@ -561,7 +561,7 @@ export function cardPage(input: {
       const banner =
         carousel(slice.banners, input.now, slice.brand.banner_ms || 3000, slice.brand.non_halal === 1, on) ||
         `<section class="reel"><div class="reel-track"><div class="slide"><div class="slide-fallback"></div><div class="slide-copy"><h3>${esc(slice.brand.name)}</h3><p>${esc(slice.brand.handle)}</p></div></div></div></section>`;
-      return `<div class="stage" data-pane="${esc(slice.brand.id)}" data-skin="${tone.style}" data-dark="${tone.dark ? "1" : "0"}"${on ? "" : " hidden"}>${banner}<p class="fine igline">${esc(slice.brand.ig_handle || slice.brand.handle)}</p></div>`;
+      return `<div class="stage" data-pane="${esc(slice.brand.id)}" data-skin="${tone.style}" data-dark="${tone.dark ? "1" : "0"}"${on ? "" : " hidden"}>${banner}${igFollow(slice.brand.ig_handle || slice.brand.handle)}</div>`;
     })
     .join("");
   const rests = slices
@@ -569,7 +569,6 @@ export function cardPage(input: {
       const on = slice.brand.id === input.brand.id;
       const rows = historyRows(slice.history);
       return `<div class="rest" data-pane="${esc(slice.brand.id)}"${on ? "" : " hidden"}>
-        ${questProgressLabel(slice.quarters) ? `<p class="fine center">${esc(questProgressLabel(slice.quarters))}</p>` : ""}
         ${birthdayBlock(slice.birthday, slice.birthdayReward, slice.brand.id, input.now)}
         ${orderBlock(slice.orders, slice.orderOutlets, slice.brand.id, slice.booking, slice.pickBooking)}
         ${bonusStamp(slice.missions, slice.brand.id)}
@@ -1597,6 +1596,20 @@ function stampChoices(selected: number): string {
   return opts.map(([label, quarters]) => `<option value="${label}"${selected === quarters ? " selected" : ""}>${label} stamp</option>`).join("");
 }
 
+function igFollow(raw: string | null | undefined): string {
+  const handle = (raw || "").trim().replace(/^@+/, "");
+  if (!handle) return "";
+  const href = `https://instagram.com/${encodeURIComponent(handle)}`;
+  return `<a class="igline" href="${esc(href)}" target="_blank" rel="noopener"><span>Follow us on IG @${esc(handle)}</span><span class="igfollow">Follow</span></a>`;
+}
+
+function rewardTitle(stored: string): string {
+  const stripped = stored.replace(/^free\s+/i, "").trim();
+  const name = stripped || stored.trim();
+  if (!name) return name;
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
 export function catalogPage(input: {
   stamps: number;
   brandName: string;
@@ -1612,12 +1625,13 @@ export function catalogPage(input: {
   const art = brandArt(input.brand);
   const rewards = input.rewards
     .map((reward) => {
-      const face = rewardFace(reward.title);
       const gap = reward.stamps - input.stamps;
+      const stamps = Math.max(0, Math.trunc(reward.stamps));
+      const onStamps = stamps === 1 ? "On 1 stamp" : `On ${stamps} stamps`;
       const action = reward.ready
         ? `<form class="redeemact" method="post" action="/tukar/stamp"><input type="hidden" name="tier" value="${esc(reward.id)}" /><input type="hidden" name="dari" value="hadiah" /><button class="textlink go" type="submit">Tukar</button></form>`
         : `<span class="soon">${reward.soldOut ? "Habis" : `Kurang ${gap} lagi`}</span>`;
-      return `<article class="redeemrow"><span class="ic">${reward.image ? `<img src="${esc(reward.image)}" alt="" />` : esc(reward.icon || "🎁")}</span><div><b>${esc(face.title)}</b> <span class="freebadge">${esc(face.badge)}</span><small>${esc(reward.cost)}</small></div>${action}</article>`;
+      return `<article class="redeemrow"><span class="ic">${reward.image ? `<img src="${esc(reward.image)}" alt="" />` : esc(reward.icon || "🎁")}</span><div class="redeemcopy"><span class="freelabel">Free</span><b>${esc(rewardTitle(reward.title))}</b><small>${esc(onStamps)}</small></div>${action}</article>`;
     })
     .join("");
   const news = (input.news || []).slice(0, 3).map((item) => {
@@ -1629,7 +1643,7 @@ export function catalogPage(input: {
     "News & Redeem",
     `<main class="phone skin with-tabs${skin.dark ? " skin-dark" : ""}" style="${skin.style}">
       <div class="brandchip">${logoSlot(input.brand)} ${esc(art.full ? input.brand.short_name : input.brandName)}</div>
-      <p class="stampbal"><b>${input.stamps}</b> stamp</p>
+      <p class="stampbal">Stamps kamu udah <b>${input.stamps}</b> nih</p>
       <h2 class="sectiontitle">Tukerin stamp lu</h2>
       <div class="redeemlist">${rewards || `<p class="fine">Belum ada redeem.</p>`}</div>
       ${flashes(input.params)}

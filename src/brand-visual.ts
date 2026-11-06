@@ -41,12 +41,6 @@ export function pickHeroBanners<T extends { slot?: number | null; active: number
   return [...live].sort((a, b) => a.sort_order - b.sort_order).slice(0, 3);
 }
 
-export function rewardFace(text: string): { title: string; badge: string } {
-  const match = text.match(/(\d+)\s*%/);
-  if (match) return { title: text, badge: `${match[1]}%` };
-  return { title: text, badge: "FREE" };
-}
-
 export function nextRewardLine(stamps: number, tiers: Array<{ stamps: number; reward: string }>): string {
   const next = [...tiers].filter((tier) => tier.stamps > stamps).sort((a, b) => a.stamps - b.stamps)[0];
   if (!next) return "Stamp penuh, gas tuker";

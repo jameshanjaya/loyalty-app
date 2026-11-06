@@ -118,6 +118,9 @@ describe("salinan dan logo", () => {
       missions: [{ id: `m-${item.id}`, title: `Misi ${item.short_name}`, blurb: item.handle, kind: "google", status: "open", reason: "" }],
       quarters: 0,
     });
+    loft.ig_handle = "@loft25.matchastudio";
+    kris.ig_handle = "@krispyporkk";
+    soto.ig_handle = "@sotooseng.bangjem";
     const html = cardPage({
       member: person(),
       brands: [loft, kris, soto],
@@ -134,6 +137,8 @@ describe("salinan dan logo", () => {
       slices: [slice(loft, "/banners/loft-1.jpg", "free matcha"), slice(kris, "/banners/krispy-1.jpg", "es krim"), slice(soto, "/banners/soto-1.jpg", "es teh")],
     });
     expect(html).toContain("Collect Stamps");
+    expect(html).toContain("Arahin kamera ke QR di kasir ya");
+    expect(html).not.toContain("menuju stamp berikutnya");
     expect(html).not.toContain("Kumpulin Stamp");
     expect(html).toContain(RESERVASI_LABEL);
     expect(html).not.toContain("Booking / Order via WA");
@@ -148,6 +153,15 @@ describe("salinan dan logo", () => {
     expect(html).toContain("/banners/loft-1.jpg");
     expect(html).toContain("/banners/krispy-1.jpg");
     expect(html).toContain("/banners/soto-1.jpg");
+    expect(html).toContain("Follow us on IG @loft25.matchastudio");
+    expect(html).toContain('href="https://instagram.com/loft25.matchastudio"');
+    expect(html).toContain("Follow us on IG @krispyporkk");
+    expect(html).toContain('href="https://instagram.com/krispyporkk"');
+    expect(html).toContain("Follow us on IG @sotooseng.bangjem");
+    expect(html).toContain('href="https://instagram.com/sotooseng.bangjem"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener"');
+    expect(html).toContain('class="igfollow">Follow<');
     expect(html).toContain("Misi Krispyporkk");
     expect(html).toContain("Misi Soto Oseng");
     expect(orderLabel("booking", "")).toBe(RESERVASI_LABEL);
@@ -164,15 +178,32 @@ describe("salinan dan logo", () => {
       brands: [{ id: "loft25", name: "Loft25", on: true }],
       rewards: [
         { id: "a", title: "Filter Coffee", stamps: 3, cost: "3 stamp", note: "", ready: true, icon: "☕", image: "", soldOut: false },
-        { id: "b", title: "Upsize", stamps: 6, cost: "6 stamp", note: "", ready: false, icon: "🎁", image: "", soldOut: false },
+        { id: "b", title: "free upsize", stamps: 6, cost: "6 stamp", note: "", ready: false, icon: "🎁", image: "", soldOut: false },
+        { id: "e", title: "FREE matcha", stamps: 8, cost: "8 stamp", note: "", ready: false, icon: "🍵", image: "", soldOut: false },
         { id: "c", title: "Matcha GUMOH", stamps: 10, cost: "10 stamp", note: "", ready: false, icon: "🍵", image: "", soldOut: false },
+        { id: "d", title: "Es teh", stamps: 1, cost: "1 stamp", note: "", ready: true, icon: "🥤", image: "", soldOut: false },
       ],
       params: new URLSearchParams(),
     });
+    expect(html).toContain("Stamps kamu udah <b>3</b> nih");
+    expect(html).not.toContain("> stamp<");
     expect(html).toContain(">Tukar<");
     expect(html).toContain("Kurang 3 lagi");
     expect(html).toContain("Kurang 7 lagi");
     expect(html).not.toContain("dikit");
+    expect(html).toContain('class="freelabel">Free<');
+    expect(html).toContain(">Filter Coffee<");
+    expect(html).toContain(">Upsize<");
+    expect(html).toContain(">Matcha<");
+    expect(html).toContain(">Matcha GUMOH<");
+    expect(html).toContain(">Es teh<");
+    expect(html).not.toContain(">free upsize<");
+    expect(html).not.toContain(">FREE matcha<");
+    expect(html).toContain("On 3 stamps");
+    expect(html).toContain("On 6 stamps");
+    expect(html).toContain("On 1 stamp");
+    expect(html).not.toContain("freebadge");
+    expect(html).not.toContain(">FREE<");
     const open = profilePage({ mode: "member", name: "Agus Salim", email: null, params: new URLSearchParams(), wa: "6281812340011" });
     expect(open).toContain("Januari");
     expect(open).toContain("Desember");
@@ -207,5 +238,18 @@ describe("salinan dan logo", () => {
     expect(css).toContain("min-height: 40px");
     expect(css).toContain("white-space: nowrap");
     expect(css).toContain(".hero-plain");
+    expect(css).toContain(".skin .hello");
+    expect(css).not.toMatch(/\.skin \.hello[^{]*\{[^}]*var\(--glass\)/);
+    expect(css).toMatch(/\.skin \.hello\s*\{[^}]*background:\s*transparent[^}]*border:\s*0[^}]*box-shadow:\s*none/);
+    expect(css).not.toMatch(/\.stampbal\s*\{[^}]*space-between/);
+    expect(css).toMatch(/\.stampbal b\s*\{[^}]*vertical-align:\s*baseline/);
+    expect(css).toMatch(/\.igfollow\s*\{[^}]*border-radius:\s*999px/);
+    const mark = readFileSync(new URL("../public/brands/loft-mark.svg", import.meta.url), "utf8");
+    expect(mark).not.toContain("<text");
+    expect(mark).toContain('aria-label="Loft25"');
+    const favicon = readFileSync(new URL("../public/favicon.svg", import.meta.url), "utf8");
+    expect(favicon).toContain("#f4efe4");
+    const manifest = readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8");
+    expect(manifest).toContain("maskable");
   });
 });

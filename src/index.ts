@@ -116,7 +116,20 @@ async function appManifest(env: Env, url: URL): Promise<Response> {
   }>();
   const asked = url.searchParams.get("merek") || "";
   const brand = (rows.results || []).find((row) => row.id === asked) || (rows.results || []).find((row) => row.icon_key) || rows.results?.[0];
-  const icon = brand?.icon_key ? `${url.origin}/media/ikon/${brand.id}` : `${url.origin}/icons/icon-192.png`;
+  const fallback192 = `${url.origin}/icons/icon-192.png?v=2`;
+  const fallback512 = `${url.origin}/icons/icon-512.png?v=2`;
+  const icon = brand?.icon_key ? `${url.origin}/media/ikon/${brand.id}` : fallback192;
+  const icons = brand?.icon_key
+    ? [
+        { src: icon, sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: fallback512, sizes: "512x512", type: "image/png", purpose: "any" },
+      ]
+    : [
+        { src: fallback192, sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: fallback512, sizes: "512x512", type: "image/png", purpose: "any" },
+        { src: fallback192, sizes: "192x192", type: "image/png", purpose: "maskable" },
+        { src: fallback512, sizes: "512x512", type: "image/png", purpose: "maskable" },
+      ];
   const body = {
     name: brand ? `Loyalty ${brand.short_name}` : "Loyalty Bos",
     short_name: brand?.short_name || "Loyalty",
@@ -126,10 +139,7 @@ async function appManifest(env: Env, url: URL): Promise<Response> {
     background_color: brand?.page_bg || "#f4efe4",
     theme_color: brand?.accent || "#143d28",
     lang: "id",
-    icons: [
-      { src: icon, sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: `${url.origin}/icons/icon-512.png`, sizes: "512x512", type: "image/png", purpose: "any" },
-    ],
+    icons,
   };
   return new Response(JSON.stringify(body), {
     headers: { "content-type": "application/manifest+json", "cache-control": "public, max-age=300" },
