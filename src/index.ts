@@ -1,4 +1,5 @@
 import { clientIp, html, json, tinyError } from "./http";
+import { privacyPage, termsPage } from "./view";
 import { cookieAlreadySet } from "./loyalty";
 import { logEvent } from "./log";
 import { COOKIE, renewMemberCookie } from "./session";
@@ -17,7 +18,10 @@ export default {
       const now = Date.now();
       let response: Response;
       if (url.pathname === "/health") response = json({ ok: true });
-      else if (url.pathname === "/app.webmanifest") response = await appManifest(env, url);
+      else if (url.pathname === "/privacy" || url.pathname === "/terms") {
+        if (request.method !== "GET") response = html(tinyError("Halaman ini cuma bisa dibuka."), 405);
+        else response = html(url.pathname === "/privacy" ? privacyPage() : termsPage());
+      } else if (url.pathname === "/app.webmanifest") response = await appManifest(env, url);
       else {
         const media = await serveMedia(env, url);
         if (media) response = media;

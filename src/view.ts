@@ -1,4 +1,5 @@
 import { esc, formatInt, maskName, maskWa, prettyWa } from "./format";
+import { privacyDocument, termsDocument } from "./legal";
 import { RESERVASI_LABEL, hiddenOrderPlatform, orderLabel, type OrderLink } from "./orders";
 import { ID_MONTHS, birthdayParts, birthdayYears, formatBirthdayId, type BirthdayNotice } from "./birthday";
 import { progressCopy } from "./loyalty";
@@ -79,7 +80,7 @@ function doc(title: string, inner: string, theme = "#6ea564", brandId = ""): str
 <link rel="manifest" href="${manifest}" />
 <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png?v=2" />
-<link rel="stylesheet" href="/app.css?v=16" />
+<link rel="stylesheet" href="/app.css?v=17" />
 <script src="/brand.js?v=13"></script>
 </head>
 <body>
@@ -380,6 +381,18 @@ export function ruleLine(brand: Brand): string {
   return `${brand.condition_label} = 1 stamp · ${brand.stamps_required} stamp = ${brand.reward_text}`;
 }
 
+function legalLinks(): string {
+  return `<p class="fine center legal-links"><a href="/privacy">Kebijakan Privasi</a> · <a href="/terms">Syarat Pakai</a></p>`;
+}
+
+export function privacyPage(): string {
+  return doc("Kebijakan Privasi", privacyDocument());
+}
+
+export function termsPage(): string {
+  return doc("Syarat Pakai", termsDocument());
+}
+
 export function messagePage(title: string, text: string, href = "/", label = "Kembali"): string {
   return doc(
     title,
@@ -400,6 +413,7 @@ export function homePage(brands: Brand[]): string {
       <header class="hero hero-plain center"><div class="checkbubble">${CUP}</div><div class="hero-big">Kartu stamp kamu</div><p class="hero-fine">1 kartu buat semua brand favorit lu. Simpan di HP, tanpa download aplikasi.</p></header>
       <section class="card"><h2>Pilih brand</h2><div class="pills">${pills}</div><a class="btn btn-solid" href="/gabung">Gabung</a><a class="btn btn-line" href="/masuk">Udah punya kartu</a></section>
       <p class="fine center" style="margin-top:16px"><a href="/kasir">Masuk kasir</a></p>
+      ${legalLinks()}
     </main>`,
   );
 }
@@ -429,6 +443,7 @@ export function joinPage(input: { brands: Brand[]; brand: Brand | null; next: st
         <button class="btn btn-solid">Simpan &amp; lihat kartu</button>
       </form>
       <p class="fine center" style="margin-top:12px">Udah terdaftar? <a href="/masuk?next=${encodeURIComponent(input.next)}">Masuk</a></p>
+      ${legalLinks()}
     </main>`,
     accent,
   );
@@ -450,6 +465,7 @@ export function loginPage(input: { next: string; params: URLSearchParams }): str
       </form>
       <a class="btn btn-google" href="/masuk/google">Masuk dengan Google</a>
       <p class="fine center" style="margin-top:12px"><a href="/gabung">Belum punya kartu</a></p>
+      ${legalLinks()}
     </main>`,
   );
 }
@@ -1262,6 +1278,7 @@ export function profilePage(input: {
               ${installPrompt()}
               <form method="post" action="/keluar"><button class="linkbtn">Keluar</button></form>`
       }
+      ${legalLinks()}
       ${skin && input.brand ? tabbar("profil", input.brand.id) : ""}
     </main>`,
     skin?.accent,

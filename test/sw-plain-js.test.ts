@@ -6,6 +6,7 @@ const source = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8")
 describe("service worker", () => {
   it("is plain JavaScript the browser can parse", () => {
     expect(() => new Function(source)).not.toThrow();
+    expect(source).toContain('const CACHE = "loyalty-bos-v18";');
   });
 
   it("never intercepts page navigations", () => {
