@@ -1,5 +1,5 @@
 // Plain browser JavaScript: this file is served as-is, so no TypeScript syntax here.
-const CACHE = "loyalty-bos-v17";
+const CACHE = "loyalty-bos-v18";
 
 self.addEventListener("install", () => {
   self.skipWaiting();

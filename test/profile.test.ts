@@ -33,7 +33,9 @@ describe("profil Google", () => {
     expect(url.origin).toBe("https://accounts.google.com");
     expect(url.searchParams.get("client_id")).toBe("client-demo.apps.googleusercontent.com");
     expect(url.searchParams.get("redirect_uri")).toBe("http://localhost:8787/auth/google/callback");
-    expect(url.searchParams.get("scope")).toContain("openid");
+    expect(url.searchParams.get("scope")).toBe("openid email profile");
+    expect(url.searchParams.get("prompt")).toBe("select_account");
+    expect(url.searchParams.has("hd")).toBe(false);
     expect(url.searchParams.get("nonce")).toBe("nonce1");
   });
 });
